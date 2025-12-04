@@ -1,0 +1,23 @@
+"""
+Workflow modules for different agentic translation configurations.
+"""
+
+from typing import Dict, Any, Optional, List
+
+# Workflow name to module mapping
+WORKFLOW_REGISTRY = {
+    "single_agent": "single_agent",
+    "single_agent_term": "single_agent_term",
+    "dual_agent": "dual_agent",
+    "triple_agent": "triple_agent",
+}
+
+
+def get_workflow(workflow_name: str):
+    """Get workflow module by name."""
+    if workflow_name not in WORKFLOW_REGISTRY:
+        raise ValueError(f"Unknown workflow: {workflow_name}. Available: {list(WORKFLOW_REGISTRY.keys())}")
+    
+    module_name = WORKFLOW_REGISTRY[workflow_name]
+    return __import__(f"workflows.{module_name}", fromlist=[module_name])
+

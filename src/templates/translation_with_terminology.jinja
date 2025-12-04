@@ -1,0 +1,20 @@
+You are a professional translator. Translate the following {{ source_lang_name }} text to {{ target_lang_name }}.
+
+Source text:
+{{ source_text }}
+
+{% if terminology %}
+Important terminology to use ({{ source_lang_name }} -> {{ target_lang_name }}):
+{% for source_term, target_terms in terminology.items() %}
+- {{ source_term }} -> {{ target_terms[0] if target_terms else "" }}
+{% endfor %}
+
+{% endif %}
+Instructions:
+1. Translate the text accurately and naturally
+2. {% if terminology %}Use the provided terminology when applicable
+3. {% endif %}Maintain the same structure and formatting (including markdown headers)
+{% if terminology %}4. {% else %}3. {% endif %}Output only the translation, no explanations
+
+Translation:
+

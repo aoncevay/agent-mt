@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+config.env
+.env
+*.env
+
+# Outputs and results
+outputs/
+data/benchmark_results/
+
+# Exclude specific files/directories
+papers/
+other_repos/
+script/
+src/benchmark_single_agent.py
+src/dummy_single_agent_mt.py
+src/utils.py
+src/BENCHMARK_README.md
+
+# Data - only include raw/
+data/sample_with_proper_term.jsonl
+data/wmt25term.*.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+
