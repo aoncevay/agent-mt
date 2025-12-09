@@ -178,6 +178,15 @@ def get_data_loader(dataset_name: str, data_dir: Path, target_languages: Optiona
 def get_available_dolfin_lang_pairs(data_dir: Path) -> List[str]:
     """Get list of available DOLFIN language pairs."""
     dolfin_dir = data_dir / "dolfin"
+    
+    # Ensure path is absolute
+    if not dolfin_dir.is_absolute():
+        dolfin_dir = dolfin_dir.resolve()
+    
+    if not dolfin_dir.exists():
+        print(f"Warning: DOLFIN directory does not exist: {dolfin_dir}")
+        return []
+    
     available_pairs = []
     
     for file_path in dolfin_dir.glob("dolfin_test_*.jsonl"):

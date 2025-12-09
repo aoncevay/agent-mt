@@ -29,8 +29,8 @@ from vars import model_name2bedrock_id
 load_dotenv("config.env")
 
 # Configuration
-BASE_DATA_DIR = Path(__file__).parent.parent / "data" / "raw"
-OUTPUT_BASE_DIR = Path(__file__).parent.parent / "outputs"
+BASE_DATA_DIR = (Path(__file__).parent.parent / "data" / "raw").resolve()
+OUTPUT_BASE_DIR = (Path(__file__).parent.parent / "outputs").resolve()
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 MAX_RETRIES = int(os.getenv("BEDROCK_MAX_RETRIES", "3"))
 INITIAL_BACKOFF = float(os.getenv("BEDROCK_INITIAL_BACKOFF", "2.0"))
@@ -67,7 +67,8 @@ def process_sample(
     data_loader,
     workflow_module,
     model_id: str,
-    sample_idx: int
+    sample_idx: int,
+    lang_pair: Optional[str] = None
 ) -> Dict[str, Any]:
     """Process a single sample through the workflow."""
     # Get translation direction
@@ -77,6 +78,9 @@ def process_sample(
     if source_lang is None or target_lang is None:
         return None
     
+    # Extract sample ID if available (for DOLFIN, WMT25, etc.)
+    sample_id = sample.get("id") or sample.get("_id") or str(sample_idx)
+    
     # Extract texts
     source_text, reference_text, terminology = data_loader.extract_texts(
         sample, source_lang, target_lang
@@ -85,8 +89,10 @@ def process_sample(
     if not source_text or not reference_text:
         return None
     
-    print(f"  Sample {sample_idx + 1}: {source_lang}->{target_lang} "
-          f"({len(source_text)} chars source, {len(reference_text)} chars reference)")
+    # Build display name for sample
+    sample_display = f"ID:{sample_id}" if sample_id != str(sample_idx) else f"#{sample_idx + 1}"
+    print(f"  Sample {sample_display} ({source_lang}->{target_lang}): "
+          f"{len(source_text)} chars source, {len(reference_text)} chars reference")
     
     try:
         # Run workflow
@@ -124,8 +130,10 @@ def process_sample(
         
         return {
             "sample_idx": sample_idx,
+            "sample_id": sample_id,  # Original ID from data
             "source_lang": source_lang,
             "target_lang": target_lang,
+            "lang_pair": lang_pair,  # Language pair (e.g., "en_es")
             "source_text": source_text,
             "reference_text": reference_text,
             "outputs": outputs,
@@ -138,10 +146,13 @@ def process_sample(
     
     except Exception as e:
         print(f"    ✗ Error: {e}")
+        sample_id = sample.get("id") or sample.get("_id") or str(sample_idx)
         return {
             "sample_idx": sample_idx,
+            "sample_id": sample_id,
             "source_lang": source_lang,
             "target_lang": target_lang,
+            "lang_pair": lang_pair,
             "source_text": source_text,
             "reference_text": reference_text,
             "outputs": [],
@@ -170,11 +181,21 @@ def save_outputs(
             continue
         
         sample_idx = result["sample_idx"]
+        sample_id = result.get("sample_id", str(sample_idx))
         outputs = result["outputs"]
+        
+        # Use sample_id in filename if it's different from sample_idx, otherwise use sample_idx
+        # For unique IDs (like DOLFIN), use the ID; for enumerated indices, use the index
+        if sample_id != str(sample_idx) and sample_id:
+            # Use sample_id but sanitize it for filename
+            safe_id = str(sample_id).replace("/", "_").replace("\\", "_")[:50]  # Limit length
+            file_prefix = f"sample_{safe_id}"
+        else:
+            file_prefix = f"sample_{sample_idx:05d}"
         
         # Save each agent's output
         for agent_id, output in enumerate(outputs):
-            output_file = output_dir / f"sample_{sample_idx:05d}_agent_{agent_id}.txt"
+            output_file = output_dir / f"{file_prefix}_agent_{agent_id}.txt"
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(output)
     
@@ -200,8 +221,10 @@ def save_outputs(
         
         sample_data = {
             "sample_idx": result["sample_idx"],
+            "sample_id": result.get("sample_id", str(result["sample_idx"])),
             "source_lang": result["source_lang"],
             "target_lang": result["target_lang"],
+            "lang_pair": result.get("lang_pair"),  # Include language pair if available
             "error": result.get("error"),
         }
         
@@ -362,7 +385,8 @@ def main():
                     data_loader=data_loader,
                     workflow_module=workflow_module,
                     model_id=model_id,
-                    sample_idx=i
+                    sample_idx=i,
+                    lang_pair=lang_pair
                 )
                 if result:
                     results.append(result)
@@ -388,7 +412,24 @@ def main():
         # For DOLFIN, get available language pairs
         from data_loaders import get_available_dolfin_lang_pairs
         
+        dolfin_data_dir = BASE_DATA_DIR / "dolfin"
+        print(f"Looking for DOLFIN files in: {dolfin_data_dir}")
+        
         available_pairs = get_available_dolfin_lang_pairs(BASE_DATA_DIR)
+        
+        if not available_pairs:
+            print(f"\nError: No DOLFIN language pair files found!")
+            print(f"  Searched in: {dolfin_data_dir}")
+            print(f"  Expected files matching pattern: dolfin_test_*.jsonl")
+            if dolfin_data_dir.exists():
+                print(f"  Directory exists. Files found:")
+                for f in dolfin_data_dir.glob("*.jsonl"):
+                    print(f"    - {f.name}")
+            else:
+                print(f"  Directory does not exist!")
+            return 1
+        
+        print(f"Found {len(available_pairs)} language pair(s): {available_pairs}")
         
         if args.target_languages:
             # Filter to requested target languages
@@ -449,7 +490,8 @@ def main():
                     data_loader=data_loader,
                     workflow_module=workflow_module,
                     model_id=model_id,
-                    sample_idx=i
+                    sample_idx=i,
+                    lang_pair=lang_pair
                 )
                 if result:
                     results.append(result)
