@@ -14,7 +14,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 # Add src to path
@@ -158,7 +158,8 @@ def save_outputs(
     output_dir: Path,
     dataset_name: str,
     workflow_name: str,
-    model_name: str
+    model_name: str,
+    max_samples: Optional[int] = None
 ):
     """Save translation outputs and generate report."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -234,8 +235,14 @@ def save_outputs(
         "max_chrf_score": max(chrf_scores) if chrf_scores else None,
     }
     
+    # Determine report filename based on max_samples
+    if max_samples is not None:
+        report_filename = f"report_{max_samples}_samples.json"
+    else:
+        report_filename = "report.json"
+    
     # Save report
-    report_file = output_dir / "report.json"
+    report_file = output_dir / report_filename
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     
@@ -367,7 +374,8 @@ def main():
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
-                model_name=args.model
+                model_name=args.model,
+                max_samples=args.max_samples
             )
             
             all_results.extend(results)
@@ -453,7 +461,8 @@ def main():
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
-                model_name=args.model
+                model_name=args.model,
+                max_samples=args.max_samples
             )
             
             all_results.extend(results)
