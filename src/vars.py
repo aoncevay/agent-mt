@@ -4,7 +4,8 @@ model_name2bedrock_id = {
     "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
     "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
     "claude-sonnet-3-7": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-    "gemma-3-12b-it": "google.gemma-3-12b-it"
+    "gemma-3-12b-it": "google.gemma-3-12b-it",
+    "gemma-3-27b-it": "google.gemma-3-27b-it"
     #"gemma-3-27b": "huggingface-vlm-gemma-3-27b-instruct",
     #"claude-sonnet-4-5": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     #"claude-opus-4-5": "anthropic.claude-opus-4-5-20251101-v1:0",
@@ -23,11 +24,28 @@ language_id2name = {
     "vi": "Vietnamese"
 }
 
-# Note: Workflow registry is now in workflows/__init__.py
-# This registry is kept for backward compatibility but is deprecated
-WORKFLOW_REGISTRY = {
-    "zero_shot": "zero_shot",
-    "zero_shot_term": "zero_shot_term",
-    "MaMT_translate_postedit": "MaMT_translate_postedit",
-    "MaMT_translate_postedit_proofread": "MaMT_translate_postedit_proofread"
+# Prompt profiles by dataset/domain
+PROMPT_PROFILES = {
+    "financial": {
+        "domain_description": "part of a financial document.",
+        "domain_guidance": (
+            "Ensure the translation is formal, precise, and consistent with "
+            "standard financial and corporate communication. Use correct "
+            "financial terminology and maintain a neutral, objective tone."
+        ),
+    },
+    "tax_legal": {
+        "domain_description": "discussing tax topics.",
+        "domain_guidance": (
+            "Ensure the translation is accurate, terminologically correct, "
+            "and clearly conveys the underlying legal and fiscal concepts "
+            "while maintaining a neutral, objective tone."
+        ),
+    },
+}
+
+DATASET_TO_PROMPT_PROFILE = {
+    "wmt25": "financial",
+    "dolfin": "financial",
+    "irs": "tax_legal",
 }
