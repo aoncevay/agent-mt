@@ -1,18 +1,18 @@
 """
-Single agent workflow with terminology - direct translation with terminology.
+Zero-shot workflow with terminology - direct translation with terminology.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from langchain_aws import ChatBedrock
 from langchain_core.messages import HumanMessage
 
 try:
     from ..translation import create_bedrock_llm
-    from ..utils import render_translation_prompt
+    from ..utils import render_translation_prompt, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
     from translation import create_bedrock_llm
-    from utils import render_translation_prompt
+    from utils import render_translation_prompt, filter_terminology_by_source_text
     from vars import language_id2name
 
 
@@ -41,15 +41,27 @@ def run_workflow(
     # Create LLM
     llm = create_bedrock_llm(model_id, region)
     
-    # Create prompt (with terminology)
+    # Filter terminology to only include terms that appear in source text
+    filtered_terminology = None
+    if terminology:
+        filtered_terminology = filter_terminology_by_source_text(
+            terminology, source_text, case_sensitive=False
+        )
+        if filtered_terminology:
+            print(f"    Using {len(filtered_terminology)} relevant terminology entries "
+                  f"(out of {len(terminology)} total)")
+        else:
+            print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
+    
+    # Create prompt (with filtered terminology)
     prompt = render_translation_prompt(
         source_text=source_text,
         source_lang=source_lang,
         target_lang=target_lang,
         language_id2name=language_id2name,
         use_terminology=True,
-        terminology=terminology,
-        max_terms=50
+        terminology=filtered_terminology,
+        max_terms=None  # No need to limit since we've already filtered
     )
     
     # Translate with retry logic
@@ -100,10 +112,9 @@ def run_workflow(
                 raise
             
             if attempt < max_retries:
-                import time as time_module
                 backoff_time = (2 ** attempt) * initial_backoff
                 print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
-                time_module.sleep(backoff_time)
+                time.sleep(backoff_time)
             else:
                 raise RuntimeError(f"Translation failed after {max_retries + 1} attempts due to timeout") from e
     

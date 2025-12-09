@@ -1,5 +1,5 @@
 """
-Single agent workflow - direct translation without terminology.
+Zero-shot workflow - direct translation without terminology.
 """
 
 from typing import Dict, Any, Optional, List
@@ -41,7 +41,7 @@ def run_workflow(
     # Create LLM
     llm = create_bedrock_llm(model_id, region)
     
-    # Create prompt (without terminology for single_agent)
+    # Create prompt (without terminology for zero-shot)
     prompt = render_translation_prompt(
         source_text=source_text,
         source_lang=source_lang,

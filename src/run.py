@@ -3,8 +3,10 @@
 Main runner script for translation experiments.
 
 Usage:
-    python src/run.py --dataset wmt25 --workflow single_agent --model qwen3-235b
-    python src/run.py --dataset dolfin_en_es --workflow single_agent_term --model qwen3-235b --max_samples 10
+    python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-235b
+    python src/run.py --dataset dolfin_en_es --workflow zero_shot_term --model qwen3-235b --max_samples 10
+    python src/run.py --dataset wmt25 --workflow MaMT_translate_postedit --model qwen3-235b
+    python src/run.py --dataset wmt25 --workflow MaMT_translate_postedit_proofread --model qwen3-235b
 """
 
 import argparse
@@ -42,15 +44,22 @@ def get_workflow_module(workflow_name: str):
     module_name = WORKFLOW_REGISTRY[workflow_name]
     
     # Import workflow module
-    if workflow_name == "single_agent":
-        from workflows import single_agent
-        return single_agent
-    elif workflow_name == "single_agent_term":
-        from workflows import single_agent_term
-        return single_agent_term
+    if workflow_name == "zero_shot":
+        from workflows import zero_shot
+        return zero_shot
+    elif workflow_name == "zero_shot_term":
+        from workflows import zero_shot_term
+        return zero_shot_term
+    elif workflow_name == "MaMT_translate_postedit":
+        import importlib
+        return importlib.import_module(f"workflows.{module_name}")
+    elif workflow_name == "MaMT_translate_postedit_proofread":
+        import importlib
+        return importlib.import_module(f"workflows.{module_name}")
     else:
         # For future workflows
-        return __import__(f"workflows.{module_name}", fromlist=[module_name])
+        import importlib
+        return importlib.import_module(f"workflows.{module_name}")
 
 
 def process_sample(
@@ -81,16 +90,25 @@ def process_sample(
     
     try:
         # Run workflow
-        result = workflow_module.run_workflow(
-            source_text=source_text,
-            source_lang=source_lang,
-            target_lang=target_lang,
-            model_id=model_id,
-            terminology=terminology,
-            region=AWS_REGION,
-            max_retries=MAX_RETRIES,
-            initial_backoff=INITIAL_BACKOFF
-        )
+        # Check if workflow supports reference parameter
+        import inspect
+        sig = inspect.signature(workflow_module.run_workflow)
+        workflow_kwargs = {
+            "source_text": source_text,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "model_id": model_id,
+            "terminology": terminology,
+            "region": AWS_REGION,
+            "max_retries": MAX_RETRIES,
+            "initial_backoff": INITIAL_BACKOFF
+        }
+        
+        # Add reference if workflow supports it
+        if "reference" in sig.parameters:
+            workflow_kwargs["reference"] = reference_text
+        
+        result = workflow_module.run_workflow(**workflow_kwargs)
         
         # Evaluate each output
         outputs = result["outputs"]

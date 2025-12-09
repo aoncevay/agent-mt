@@ -14,9 +14,11 @@ id: unique id of the segment
 
 Filtering steps:
 1. We want to extract the src_lang == "en" only, and any tgt_lang.
-2. We want to keep the entries where source_text length (English) is over 200 tokens, but less than 2000 tokens.
-For the second point, it would be good to analyse the distribution of the token leght of the source text. 
-3. Let's filter out entries that are markdown tables. We can look if the source_text starts with | and ends with |. 
+2. We want to keep the entries where source_text length (English) is over 500 tokens, but less than 3000 tokens.
+   Token counting only includes tokens that contain at least one alphabet character (excludes numbers-only and markdown separators).
+   For the second point, it would be good to analyse the distribution of the token length of the source text. 
+3. Let's filter out entries that are markdown tables. We can look if the source_text starts with | and ends with |.
+4. Filter out entries that contain markdown table rows (contains \n| or |\n) to remove embedded tables in longer texts. 
 
 Save the result data in a jsonl file per language pair (e.g. dolfin_test_en_es.jsonl)), using the structure: 
 {{src_lang}: {source_text}, {tgt_lang}: {target_text}, sub_domain: ..., id: ..., annotation: ...}}
@@ -32,10 +34,32 @@ import numpy as np
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
 def count_tokens(text: str) -> int:
-    """Count tokens in a text string."""
+    """
+    Count tokens in a text string, excluding tokens that are:
+    - Numbers only
+    - Markdown table separators (|)
+    - Tokens without at least one alphabet character
+    """
     if pd.isna(text) or not isinstance(text, str):
         return 0
-    return len(tokenizer.encode(text))
+    
+    # Encode text to tokens
+    tokens = tokenizer.encode(text)
+    
+    # Count only tokens that contain at least one alphabet character
+    count = 0
+    for token_id in tokens:
+        # Decode token to check its content
+        try:
+            token_str = tokenizer.decode([token_id])
+            # Check if token contains at least one alphabet character (a-z or A-Z)
+            if any(c.isalpha() for c in token_str):
+                count += 1
+        except Exception:
+            # If decoding fails, skip this token
+            continue
+    
+    return count
 
 def is_markdown_table(text: str) -> bool:
     """Check if text is a markdown table (starts with | and ends with |)."""
@@ -43,6 +67,12 @@ def is_markdown_table(text: str) -> bool:
         return False
     text_stripped = text.strip()
     return text_stripped.startswith('|') and text_stripped.endswith('|')
+
+def contains_markdown_table_rows(text: str) -> bool:
+    """Check if text contains markdown table rows (contains \n| or |\n)."""
+    if pd.isna(text) or not isinstance(text, str):
+        return False
+    return '\n|' in text or '|\n' in text
 
 def analyze_token_distribution(token_counts: list) -> None:
     """Analyze and print token length distribution statistics."""
@@ -102,8 +132,8 @@ def main():
     print("\nToken distribution BEFORE filtering:")
     analyze_token_distribution(df_en['source_token_count'].tolist())
     
-    # Filter: 200 < tokens < 2000
-    print("\nFiltering for 200 < token_count < 2000...")
+    # Filter: 500 < tokens < 3000
+    print("\nFiltering for 500 < token_count < 3000 (alphabet tokens only)...")
     df_filtered = df_en[
         (df_en['source_token_count'] > 500) & 
         (df_en['source_token_count'] < 3000)
@@ -119,8 +149,17 @@ def main():
     df_filtered = df_filtered[~markdown_table_mask].copy()
     print(f"Rows after markdown table filtering: {len(df_filtered)}")
     
+    # Filter: Remove entries containing markdown table rows (contains \n| or |\n)
+    print("\nFiltering out entries containing markdown table rows (contains \\n| or |\\n)...")
+    markdown_table_rows_mask = df_filtered['source_text'].apply(contains_markdown_table_rows)
+    markdown_table_rows_count = markdown_table_rows_mask.sum()
+    print(f"Found {markdown_table_rows_count} entries with markdown table rows to remove")
+    
+    df_filtered = df_filtered[~markdown_table_rows_mask].copy()
+    print(f"Rows after markdown table rows filtering: {len(df_filtered)}")
+    
     # Analyze token distribution after filtering
-    print("\nToken distribution AFTER filtering (200-2000 tokens, no markdown tables):")
+    print("\nToken distribution AFTER filtering (500-3000 alphabet tokens, no markdown tables):")
     analyze_token_distribution(df_filtered['source_token_count'].tolist())
     
     # Group by language pair and save

@@ -23,10 +23,11 @@ language_id2name = {
     "vi": "Vietnamese"
 }
 
-# Workflow name to module function mapping
+# Note: Workflow registry is now in workflows/__init__.py
+# This registry is kept for backward compatibility but is deprecated
 WORKFLOW_REGISTRY = {
-    "single_agent": "single_agent",
-    "single_agent_term": "single_agent_term",
-    "dual_agent": "dual_agent",
-    "triple_agent": "triple_agent",
+    "zero_shot": "zero_shot",
+    "zero_shot_term": "zero_shot_term",
+    "MaMT_translate_postedit": "MaMT_translate_postedit",
+    "MaMT_translate_postedit_proofread": "MaMT_translate_postedit_proofread"
 }

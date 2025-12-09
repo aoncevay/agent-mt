@@ -6,10 +6,10 @@ from typing import Dict, Any, Optional, List
 
 # Workflow name to module mapping
 WORKFLOW_REGISTRY = {
-    "single_agent": "single_agent",
-    "single_agent_term": "single_agent_term",
-    "dual_agent": "dual_agent",
-    "triple_agent": "triple_agent",
+    "zero_shot": "zero_shot",
+    "zero_shot_term": "zero_shot_term",
+    "MaMT_translate_postedit": "MaMT_translate_postedit",
+    "MaMT_translate_postedit_proofread": "MaMT_translate_postedit_proofread"
 }
 
 

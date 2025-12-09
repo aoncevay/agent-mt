@@ -1,0 +1,16 @@
+{{ source_lang_name }} source: ```{{ source_text }}```
+{{ target_lang_name }} translation: ```{{ translation }}```
+{% if reference %}(Optional) {{ target_lang_name }} reference: ```{{ reference }}```
+{% endif %}Based on the source{% if reference %} and reference{% endif %} and translation enclosed in triple backticks, identify only errors in the translation and classify each by category.
+Categories: addition, mistranslation, omission, untranslated text, grammar, inconsistency, punctuation, word order, terminology, and style. You must find at least one issue, even minor, stylistic, or subjective.
+Rate severity from 1 (minor) to 4 (severe distortion). Never select entire long phrases as an error span. Select only the exact word or short phrase where the error occurs. Suggest fixes *only* for the erroneous parts -- do not rewrite the full text.
+Format:
+{
+"<error span>": {
+"category": "<category>",
+"severity": <1-4>,
+"suggestion": "<fix>"
+},
+...
+}
+
