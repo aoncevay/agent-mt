@@ -164,16 +164,63 @@ def process_sample(
         }
 
 
+def load_existing_report(report_file: Path) -> Optional[Dict[str, Any]]:
+    """Load existing report if it exists."""
+    if report_file.exists():
+        try:
+            with open(report_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"  ⚠ Warning: Could not load existing report: {e}")
+            return None
+    return None
+
+
+def get_processed_sample_ids(existing_report: Optional[Dict[str, Any]]) -> set:
+    """Extract set of processed sample IDs from existing report."""
+    if not existing_report:
+        return set()
+    
+    processed = set()
+    for sample in existing_report.get("samples", []):
+        sample_id = sample.get("sample_id")
+        if sample_id:
+            processed.add(str(sample_id))
+        # Also track by sample_idx + lang_pair for cases without IDs
+        sample_idx = sample.get("sample_idx")
+        lang_pair = sample.get("lang_pair")
+        if sample_idx is not None and lang_pair:
+            processed.add(f"{lang_pair}_{sample_idx}")
+    
+    return processed
+
+
 def save_outputs(
     results: List[Dict[str, Any]],
     output_dir: Path,
     dataset_name: str,
     workflow_name: str,
     model_name: str,
-    max_samples: Optional[int] = None
+    max_samples: Optional[int] = None,
+    resume: bool = False
 ):
     """Save translation outputs and generate report."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Determine report filename
+    if max_samples is not None:
+        report_filename = f"report_{max_samples}_samples.json"
+    else:
+        report_filename = "report.json"
+    
+    report_file = output_dir / report_filename
+    
+    # Load existing report if resuming
+    existing_report = None
+    if resume:
+        existing_report = load_existing_report(report_file)
+        if existing_report:
+            print(f"  Resuming: Found existing report with {existing_report.get('successful_samples', 0)} successful samples")
     
     # Save individual outputs
     for result in results:
@@ -199,32 +246,59 @@ def save_outputs(
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(output)
     
-    # Generate summary report
-    report = {
-        "dataset": dataset_name,
-        "workflow": workflow_name,
-        "model": model_name,
-        "total_samples": len(results),
-        "successful_samples": sum(1 for r in results if r and not r.get("error")),
-        "failed_samples": sum(1 for r in results if r and r.get("error")),
-        "samples": []
-    }
+    # Start with existing report if resuming, otherwise create new
+    if resume and existing_report:
+        report = existing_report.copy()
+        # Get existing sample IDs to avoid duplicates
+        existing_sample_ids = get_processed_sample_ids(existing_report)
+        
+        # Start with existing totals
+        total_tokens_input = existing_report.get("summary", {}).get("total_tokens_input", 0)
+        total_tokens_output = existing_report.get("summary", {}).get("total_tokens_output", 0)
+        total_latency = existing_report.get("summary", {}).get("total_latency_seconds", 0.0)
+        chrf_scores = [s.get("chrf_scores", [0])[0] for s in existing_report.get("samples", []) 
+                      if s.get("chrf_scores") and not s.get("error")]
+    else:
+        report = {
+            "dataset": dataset_name,
+            "workflow": workflow_name,
+            "model": model_name,
+            "total_samples": 0,
+            "successful_samples": 0,
+            "failed_samples": 0,
+            "samples": []
+        }
+        existing_sample_ids = set()
+        total_tokens_input = 0
+        total_tokens_output = 0
+        total_latency = 0.0
+        chrf_scores = []
     
-    total_tokens_input = 0
-    total_tokens_output = 0
-    total_latency = 0.0
-    chrf_scores = []
+    # Process new results
+    new_samples_count = 0
+    skipped_count = 0
     
     for result in results:
         if result is None:
             continue
         
+        sample_id = result.get("sample_id", str(result["sample_idx"]))
+        lang_pair = result.get("lang_pair", "")
+        sample_key = str(sample_id) if sample_id != str(result["sample_idx"]) else f"{lang_pair}_{result['sample_idx']}"
+        
+        # Skip if already processed
+        if sample_key in existing_sample_ids:
+            skipped_count += 1
+            continue
+        
+        new_samples_count += 1
+        
         sample_data = {
             "sample_idx": result["sample_idx"],
-            "sample_id": result.get("sample_id", str(result["sample_idx"])),
+            "sample_id": sample_id,
             "source_lang": result["source_lang"],
             "target_lang": result["target_lang"],
-            "lang_pair": result.get("lang_pair"),  # Include language pair if available
+            "lang_pair": lang_pair,
             "error": result.get("error"),
         }
         
@@ -247,27 +321,30 @@ def save_outputs(
         
         report["samples"].append(sample_data)
     
-    # Add summary statistics
+    # Update report statistics
+    report["total_samples"] = len(report["samples"])
+    report["successful_samples"] = sum(1 for s in report["samples"] if not s.get("error"))
+    report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
+    
+    successful_count = report["successful_samples"]
     report["summary"] = {
         "total_tokens_input": total_tokens_input,
         "total_tokens_output": total_tokens_output,
         "total_latency_seconds": total_latency,
-        "avg_latency_seconds": total_latency / len([r for r in results if r and not r.get("error")]) if report["successful_samples"] > 0 else 0,
+        "avg_latency_seconds": total_latency / successful_count if successful_count > 0 else 0,
         "avg_chrf_score": sum(chrf_scores) / len(chrf_scores) if chrf_scores else None,
         "min_chrf_score": min(chrf_scores) if chrf_scores else None,
         "max_chrf_score": max(chrf_scores) if chrf_scores else None,
     }
     
-    # Determine report filename based on max_samples
-    if max_samples is not None:
-        report_filename = f"report_{max_samples}_samples.json"
-    else:
-        report_filename = "report.json"
-    
     # Save report
-    report_file = output_dir / report_filename
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
+    
+    if resume and skipped_count > 0:
+        print(f"  Skipped {skipped_count} already processed samples")
+    if new_samples_count > 0:
+        print(f"  Added {new_samples_count} new samples")
     
     print(f"\n✓ Report saved to {report_file}")
     print(f"  Successful: {report['successful_samples']}/{report['total_samples']}")
@@ -292,6 +369,8 @@ def main():
                         help="Maximum number of samples to process per language pair (default: all)")
     parser.add_argument("--output_dir", type=str, default=None,
                         help="Custom output directory (default: outputs/{dataset}_{workflow}_{model})")
+    parser.add_argument("--resume", action="store_true",
+                        help="Resume experiment: skip already processed samples and merge with existing report")
     
     args = parser.parse_args()
     
@@ -375,11 +454,30 @@ def main():
             # Determine output directory for this pair
             pair_output_dir = base_output_dir / lang_pair
             
+            # Check for existing processed samples if resuming
+            processed_sample_ids = set()
+            if args.resume:
+                report_filename = f"report_{args.max_samples}_samples.json" if args.max_samples else "report.json"
+                report_file = pair_output_dir / report_filename
+                existing_report = load_existing_report(report_file)
+                if existing_report:
+                    processed_sample_ids = get_processed_sample_ids(existing_report)
+                    print(f"  Found {len(processed_sample_ids)} already processed samples")
+            
             # Process samples
             print("\nProcessing samples...")
             results = []
+            skipped = 0
             
             for i, sample in enumerate(pair_samples):
+                # Check if already processed
+                sample_id = sample.get("id") or sample.get("_id") or str(i)
+                sample_key = str(sample_id) if sample_id != str(i) else f"{lang_pair}_{i}"
+                
+                if args.resume and sample_key in processed_sample_ids:
+                    skipped += 1
+                    continue
+                
                 result = process_sample(
                     sample=sample,
                     data_loader=data_loader,
@@ -391,6 +489,9 @@ def main():
                 if result:
                     results.append(result)
             
+            if skipped > 0:
+                print(f"  Skipped {skipped} already processed samples")
+            
             # Save outputs and generate report for this pair
             print(f"\nSaving outputs for {lang_pair}...")
             save_outputs(
@@ -399,7 +500,8 @@ def main():
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
                 model_name=args.model,
-                max_samples=args.max_samples
+                max_samples=args.max_samples,
+                resume=args.resume
             )
             
             all_results.extend(results)
@@ -471,6 +573,16 @@ def main():
             else:
                 pair_output_dir = OUTPUT_BASE_DIR / f"{args.dataset}.{args.workflow}.{args.model}" / lang_pair
             
+            # Check for existing processed samples if resuming
+            processed_sample_ids = set()
+            if args.resume:
+                report_filename = f"report_{args.max_samples}_samples.json" if args.max_samples else "report.json"
+                report_file = pair_output_dir / report_filename
+                existing_report = load_existing_report(report_file)
+                if existing_report:
+                    processed_sample_ids = get_processed_sample_ids(existing_report)
+                    print(f"  Found {len(processed_sample_ids)} already processed samples")
+            
             # Load samples
             print(f"\nLoading samples from {lang_pair}...")
             samples = data_loader.load_samples(max_samples=args.max_samples)
@@ -483,8 +595,17 @@ def main():
             # Process samples
             print("\nProcessing samples...")
             results = []
+            skipped = 0
             
             for i, sample in enumerate(samples):
+                # Check if already processed
+                sample_id = sample.get("id") or sample.get("_id") or str(i)
+                sample_key = str(sample_id) if sample_id != str(i) else f"{lang_pair}_{i}"
+                
+                if args.resume and sample_key in processed_sample_ids:
+                    skipped += 1
+                    continue
+                
                 result = process_sample(
                     sample=sample,
                     data_loader=data_loader,
@@ -496,6 +617,9 @@ def main():
                 if result:
                     results.append(result)
             
+            if skipped > 0:
+                print(f"  Skipped {skipped} already processed samples")
+            
             # Save outputs and generate report for this pair
             print(f"\nSaving outputs for {lang_pair}...")
             save_outputs(
@@ -504,7 +628,8 @@ def main():
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
                 model_name=args.model,
-                max_samples=args.max_samples
+                max_samples=args.max_samples,
+                resume=args.resume
             )
             
             all_results.extend(results)
