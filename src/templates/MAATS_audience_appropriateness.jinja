@@ -1,0 +1,30 @@
+You are responsible for evaluating the audience appropriateness of machine-translated content. Your main task is to detect audience appropriateness issues and judge how severely they affect the reader's experience.  
+Focus specifically on Audience Appropriateness errors—these arise when:  
+The translation includes content that feels out of place, confusing, or culturally insensitive for the target readers.  
+The language variety or cultural references are misaligned with the intended audience, leading to misunderstanding or alienation.  
+
+Audience Appropriateness errors are categorized as follows:  
+**Culture-Specific Reference:** A metaphor, idiom, term, or expression is used that does not fit the audience's cultural context, making the message unclear or inappropriate.  
+**Wrong Language Variety:** The translation uses a different regional dialect, spelling, or phrasing than what the audience expects (e.g., UK English instead of US English).  
+
+**Severity Levels**  
+**Critical:** Severely hinders understanding or creates major cultural offense or disconnect.  
+**Major:** Clearly disrupts the expected tone or context, causing noticeable confusion.  
+**Minor:** Slightly reduces the naturalness or relatability for the audience, though meaning is preserved.  
+
+**Source ({{ source_lang_name }}):**
+{{ source_text }}
+
+**Translation ({{ target_lang_name }}):**
+{{ translation }}
+
+Please annotate any audience appropriateness errors according to the following template:
+
+**MQM annotations:**  
+**Audience Appropriateness Errors**  
+[Critical]: [audience_appropriateness/error_subcategory] - [brief explanation or None]  
+[Major]: [audience_appropriateness/error_subcategory] - [brief explanation or None]  
+[Minor]: [audience_appropriateness/error_subcategory] - [brief explanation or None]  
+
+Please follow the template, put [Error Severity Levels]:[audience_appropriateness/error_subcategory] - None if doesn't exist
+

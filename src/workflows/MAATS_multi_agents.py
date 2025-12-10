@@ -1,0 +1,308 @@
+"""
+MAATS Multi-Agent workflow: Zero-shot -> 7 specialized MQM evaluators -> Refinement.
+Based on "MAATS: A Multi-Agent Automated Translation System Based on MQM Evaluation"
+
+Workflow:
+1. Zero-shot translation
+2. 7 specialized agents (each evaluates one dimension independently):
+   - Terminology
+   - Accuracy
+   - Linguistic Conventions
+   - Locale Conventions
+   - Design and Markup
+   - Style
+   - Audience Appropriateness
+3. Refinement agent (receives ALL annotations from all 7 agents)
+"""
+
+from typing import Dict, Any, Optional, List
+from langchain_core.messages import HumanMessage
+import json
+
+try:
+    from ..translation import create_bedrock_llm
+    from ..utils import load_template, get_language_name, render_translation_prompt
+    from ..vars import language_id2name
+except ImportError:
+    from translation import create_bedrock_llm
+    from utils import load_template, get_language_name, render_translation_prompt
+    from vars import language_id2name
+
+
+# Dimension agents in order
+DIMENSION_AGENTS = [
+    "terminology",
+    "accuracy",
+    "linguistic_conventions",
+    "locale_conventions",
+    "design_and_markup",
+    "style",
+    "audience_appropriateness"
+]
+
+
+def render_dimension_prompt(
+    dimension: str,
+    source_text: str,
+    translation: str,
+    source_lang: str,
+    target_lang: str
+) -> str:
+    """Render prompt for a specific dimension agent."""
+    template = load_template(f"MAATS_{dimension}.jinja")
+    return template.render(
+        source_text=source_text,
+        translation=translation,
+        source_lang_name=get_language_name(source_lang, language_id2name),
+        target_lang_name=get_language_name(target_lang, language_id2name)
+    )
+
+
+def render_refine_prompt(
+    source_text: str,
+    translation: str,
+    annotations: Dict[str, str],
+    source_lang: str,
+    target_lang: str
+) -> str:
+    """Render refinement prompt with all annotations."""
+    template = load_template("MAATS_refine.jinja")
+    # Format annotations as JSON for clarity
+    annotations_text = json.dumps(annotations, indent=2, ensure_ascii=False)
+    return template.render(
+        source_text=source_text,
+        translation=translation,
+        annotations=annotations_text,
+        source_lang_name=get_language_name(source_lang, language_id2name),
+        target_lang_name=get_language_name(target_lang, language_id2name)
+    )
+
+
+def run_workflow(
+    source_text: str,
+    source_lang: str,
+    target_lang: str,
+    model_id: str,
+    terminology: Optional[Dict[str, list]] = None,
+    region: Optional[str] = None,
+    max_retries: int = 3,
+    initial_backoff: float = 2.0,
+    reference: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Run MAATS multi-agent translation workflow.
+    
+    Args:
+        source_text: Source text to translate
+        source_lang: Source language code
+        target_lang: Target language code
+        model_id: Bedrock model ID
+        terminology: Optional terminology dictionary (not used in this workflow)
+        region: AWS region
+        max_retries: Maximum retry attempts
+        initial_backoff: Initial backoff delay
+        reference: Optional reference translation (not used in this workflow)
+    
+    Returns:
+        Dictionary with:
+        - 'outputs': List of agent outputs [zero_shot, terminology_annotation, accuracy_annotation, ..., refined_translation]
+        - 'tokens_input': Total input tokens
+        - 'tokens_output': Total output tokens
+        - 'latency': Total workflow time in seconds
+    """
+    import time
+    
+    # Create LLM
+    llm = create_bedrock_llm(model_id, region)
+    
+    total_tokens_input = 0
+    total_tokens_output = 0
+    start_time = time.time()
+    outputs = []
+    
+    try:
+        from botocore.exceptions import ReadTimeoutError, ClientError
+    except ImportError:
+        ReadTimeoutError = Exception
+        ClientError = Exception
+    
+    # Step 1: Zero-shot translation
+    print("    [Agent 0/9] Zero-shot translation...")
+    zero_shot_prompt = render_translation_prompt(
+        source_text=source_text,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        language_id2name=language_id2name,
+        use_terminology=False,
+        terminology=None,
+        max_terms=50
+    )
+    
+    translation = None
+    for attempt in range(max_retries + 1):
+        try:
+            message = HumanMessage(content=zero_shot_prompt)
+            response = llm.invoke([message])
+            
+            translation = response.content.strip()
+            
+            # Get token counts
+            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+            
+            if tokens_input == 0:
+                tokens_input = len(zero_shot_prompt) // 4
+            if tokens_output == 0:
+                tokens_output = len(translation) // 4
+            
+            total_tokens_input += tokens_input
+            total_tokens_output += tokens_output
+            
+            break
+        
+        except (ReadTimeoutError, ClientError) as e:
+            error_str = str(e).lower()
+            is_timeout = (
+                "timeout" in error_str or 
+                "read timeout" in error_str or
+                isinstance(e, ReadTimeoutError)
+            )
+            
+            if not is_timeout:
+                raise
+            
+            if attempt < max_retries:
+                backoff_time = (2 ** attempt) * initial_backoff
+                print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                time.sleep(backoff_time)
+            else:
+                raise RuntimeError(f"Zero-shot translation failed after {max_retries + 1} attempts due to timeout") from e
+    
+    if translation is None:
+        raise RuntimeError("Zero-shot translation step failed")
+    
+    outputs.append(translation)
+    
+    # Steps 2-8: Dimension evaluator agents (each evaluates independently)
+    annotations = {}
+    
+    for i, dimension in enumerate(DIMENSION_AGENTS, start=1):
+        print(f"    [Agent {i}/9] {dimension.replace('_', ' ').title()} evaluation...")
+        dimension_prompt = render_dimension_prompt(
+            dimension=dimension,
+            source_text=source_text,
+            translation=translation,
+            source_lang=source_lang,
+            target_lang=target_lang
+        )
+        
+        annotation = None
+        for attempt in range(max_retries + 1):
+            try:
+                message = HumanMessage(content=dimension_prompt)
+                response = llm.invoke([message])
+                
+                annotation = response.content.strip()
+                
+                # Get token counts
+                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                
+                if tokens_input == 0:
+                    tokens_input = len(dimension_prompt) // 4
+                if tokens_output == 0:
+                    tokens_output = len(annotation) // 4
+                
+                total_tokens_input += tokens_input
+                total_tokens_output += tokens_output
+                
+                break
+            
+            except (ReadTimeoutError, ClientError) as e:
+                error_str = str(e).lower()
+                is_timeout = (
+                    "timeout" in error_str or 
+                    "read timeout" in error_str or
+                    isinstance(e, ReadTimeoutError)
+                )
+                
+                if not is_timeout:
+                    raise
+                
+                if attempt < max_retries:
+                    backoff_time = (2 ** attempt) * initial_backoff
+                    print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                    time.sleep(backoff_time)
+                else:
+                    raise RuntimeError(f"{dimension} evaluation failed after {max_retries + 1} attempts due to timeout") from e
+        
+        if annotation is None:
+            annotation = f"No annotation available for {dimension}."
+        
+        annotations[dimension] = annotation
+        outputs.append(annotation)
+    
+    # Step 9: Refinement agent (receives ALL annotations)
+    print("    [Agent 9/9] Refinement...")
+    refine_prompt = render_refine_prompt(
+        source_text=source_text,
+        translation=translation,
+        annotations=annotations,
+        source_lang=source_lang,
+        target_lang=target_lang
+    )
+    
+    refined_translation = None
+    for attempt in range(max_retries + 1):
+        try:
+            message = HumanMessage(content=refine_prompt)
+            response = llm.invoke([message])
+            
+            refined_translation = response.content.strip()
+            
+            # Get token counts
+            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+            
+            if tokens_input == 0:
+                tokens_input = len(refine_prompt) // 4
+            if tokens_output == 0:
+                tokens_output = len(refined_translation) // 4
+            
+            total_tokens_input += tokens_input
+            total_tokens_output += tokens_output
+            
+            break
+        
+        except (ReadTimeoutError, ClientError) as e:
+            error_str = str(e).lower()
+            is_timeout = (
+                "timeout" in error_str or 
+                "read timeout" in error_str or
+                isinstance(e, ReadTimeoutError)
+            )
+            
+            if not is_timeout:
+                raise
+            
+            if attempt < max_retries:
+                backoff_time = (2 ** attempt) * initial_backoff
+                print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                time.sleep(backoff_time)
+            else:
+                raise RuntimeError(f"Refinement failed after {max_retries + 1} attempts due to timeout") from e
+    
+    if refined_translation is None:
+        raise RuntimeError("Refinement step failed")
+    
+    outputs.append(refined_translation)
+    
+    latency = time.time() - start_time
+    
+    return {
+        "outputs": outputs,  # [zero_shot, term_annotation, accuracy_annotation, ..., refined]
+        "tokens_input": total_tokens_input,
+        "tokens_output": total_tokens_output,
+        "latency": latency
+    }
+

@@ -1,0 +1,32 @@
+You are responsible for evaluating the design and markup integrity of machine-translated content. Your main task is to detect design or formatting issues and judge how severely they impact the clarity, layout, or usability of the translation.  
+Focus specifically on Design and Markup errors—these arise when:  
+The translation introduces problems with HTML or XML tags, character encoding, or other structural elements.  
+Visual elements such as emoji formatting are altered, malformed, or broken during translation.  
+
+Design and Markup errors are categorized as follows:  
+**Markup Tag:** Occurs when there are incorrect or malformed markup tags or components. This includes:  
+- Improperly escaped HTML entities (e.g., & #160; instead of &#160;)  
+- Inconsistent or broken emoji representations  
+- Extra spaces inserted within HTML symbols or code  
+
+**Severity Levels**  
+**Critical:** Severely affects readability, layout, or breaks content structure (e.g., broken HTML tags that cause rendering failures).  
+**Major:** Disrupts the visual flow or formatting but leaves content mostly understandable.  
+**Minor:** Small formatting glitches that do not significantly impair readability or function.  
+
+**Source ({{ source_lang_name }}):**
+{{ source_text }}
+
+**Translation ({{ target_lang_name }}):**
+{{ translation }}
+
+Please annotate any design and markup errors according to the following template:
+
+**MQM annotations:**  
+**Design and Markup Errors**  
+[Critical]: [design_and_markup/error_subcategory] - [brief explanation or None]  
+[Major]: [design_and_markup/error_subcategory] - [brief explanation or None]  
+[Minor]: [design_and_markup/error_subcategory] - [brief explanation or None]  
+
+Please follow the template, put [Error Severity Levels]:[design_and_markup/error_subcategory] - None if doesn't exist
+

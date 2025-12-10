@@ -38,16 +38,16 @@ python src/run.py --dataset wmt25 --workflow single_agent --model qwen3-235b
 python src/run.py --dataset wmt25 --workflow single_agent_term --model qwen3-235b --target_languages zht
 
 # WMT25 dataset - only zht->en direction
-python src/run.py --dataset wmt25 --workflow single_agent --model qwen3-235b --target_languages en
+python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-235b --target_languages en
 
 # DOLFIN dataset - all language pairs
-python src/run.py --dataset dolfin --workflow single_agent --model qwen3-235b
+python src/run.py --dataset dolfin --workflow zero_shot --model qwen3-235b
 
 # DOLFIN dataset - specific language pairs
-python src/run.py --dataset dolfin --workflow single_agent --model qwen3-235b --target_languages es de
+python src/run.py --dataset dolfin --workflow zero_shot --model qwen3-235b --target_languages es de
 
 # Limit number of samples per language pair
-python src/run.py --dataset wmt25 --workflow single_agent --model qwen3-235b --max_samples 10
+python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-235b --max_samples 5
 ```
 
 ### Arguments
