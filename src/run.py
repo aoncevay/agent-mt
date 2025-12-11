@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from data_loaders import get_data_loader
 from workflows import WORKFLOW_REGISTRY
-from evaluation import compute_chrf
+from evaluation import compute_chrf, compute_bleu, compute_term_success_rate
 from vars import model_name2bedrock_id
 from workflow_acronyms import build_output_dir
 
@@ -116,9 +116,20 @@ def process_sample(
         
         for i, output in enumerate(outputs):
             chrf_result = compute_chrf(output, reference_text)
+            bleu_result = compute_bleu(output, reference_text, target_lang)
+            
+            # Compute term success rate if terminology is available
+            term_success_rate = -1.0
+            if use_terminology and terminology:
+                term_success_rate = compute_term_success_rate(
+                    source_text, output, reference_text, terminology, lowercase=True
+                )
+            
             evaluations.append({
                 "agent_id": i,
                 "chrf_score": chrf_result["score"],
+                "bleu_score": bleu_result["score"],
+                "term_success_rate": term_success_rate,
                 "translation": output
             })
         
@@ -250,8 +261,23 @@ def save_outputs(
         total_tokens_input = existing_report.get("summary", {}).get("total_tokens_input", 0)
         total_tokens_output = existing_report.get("summary", {}).get("total_tokens_output", 0)
         total_latency = existing_report.get("summary", {}).get("total_latency_seconds", 0.0)
-        chrf_scores = [s.get("chrf_scores", [0])[0] for s in existing_report.get("samples", []) 
-                      if s.get("chrf_scores") and not s.get("error")]
+        
+        # Collect existing scores
+        chrf_scores = []
+        bleu_scores = []
+        term_success_rates = []
+        for s in existing_report.get("samples", []):
+            if not s.get("error"):
+                if s.get("chrf_scores"):
+                    chrf_scores.append(s["chrf_scores"][-1])  # Use last agent's score
+                if s.get("bleu_scores"):
+                    last_bleu = s["bleu_scores"][-1]
+                    if last_bleu is not None:
+                        bleu_scores.append(last_bleu)
+                if s.get("term_success_rates"):
+                    last_term = s["term_success_rates"][-1]
+                    if last_term >= 0:
+                        term_success_rates.append(last_term)
     else:
         report = {
             "dataset": dataset_name,
@@ -299,6 +325,8 @@ def save_outputs(
         if not result.get("error"):
             sample_data.update({
                 "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
+                "bleu_scores": [e.get("bleu_score") for e in result["evaluations"]],
+                "term_success_rates": [e.get("term_success_rate", -1.0) for e in result["evaluations"]],
                 "tokens_input": result["tokens_input"],
                 "tokens_output": result["tokens_output"],
                 "latency": result["latency"]
@@ -309,9 +337,14 @@ def save_outputs(
             if result["latency"]:
                 total_latency += result["latency"]
             
-            # Collect chrF scores (use first agent's score for now)
+            # Collect scores (use last agent's score, which is typically the final translation)
             if result["evaluations"]:
-                chrf_scores.append(result["evaluations"][0]["chrf_score"])
+                last_eval = result["evaluations"][-1]
+                chrf_scores.append(last_eval["chrf_score"])
+                if last_eval.get("bleu_score") is not None:
+                    bleu_scores.append(last_eval["bleu_score"])
+                if last_eval.get("term_success_rate", -1.0) >= 0:
+                    term_success_rates.append(last_eval["term_success_rate"])
         
         report["samples"].append(sample_data)
     
@@ -329,6 +362,12 @@ def save_outputs(
         "avg_chrf_score": sum(chrf_scores) / len(chrf_scores) if chrf_scores else None,
         "min_chrf_score": min(chrf_scores) if chrf_scores else None,
         "max_chrf_score": max(chrf_scores) if chrf_scores else None,
+        "avg_bleu_score": sum(bleu_scores) / len(bleu_scores) if bleu_scores else None,
+        "min_bleu_score": min(bleu_scores) if bleu_scores else None,
+        "max_bleu_score": max(bleu_scores) if bleu_scores else None,
+        "avg_term_success_rate": sum(term_success_rates) / len(term_success_rates) if term_success_rates else None,
+        "min_term_success_rate": min(term_success_rates) if term_success_rates else None,
+        "max_term_success_rate": max(term_success_rates) if term_success_rates else None,
     }
     
     # Save report
@@ -344,6 +383,10 @@ def save_outputs(
     print(f"  Successful: {report['successful_samples']}/{report['total_samples']}")
     if chrf_scores:
         print(f"  Average chrF++: {report['summary']['avg_chrf_score']:.2f}")
+    if bleu_scores:
+        print(f"  Average BLEU-4: {report['summary']['avg_bleu_score']:.2f}")
+    if term_success_rates:
+        print(f"  Average Term Success Rate: {report['summary']['avg_term_success_rate']:.4f}")
     print(f"  Total tokens (input/output): {total_tokens_input}/{total_tokens_output}")
     print(f"  Average latency: {report['summary']['avg_latency_seconds']:.2f}s")
 
