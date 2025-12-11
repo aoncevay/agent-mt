@@ -18,11 +18,11 @@ import random
 
 try:
     from ..translation import create_bedrock_llm
-    from ..utils import load_template, get_language_name
+    from ..utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
     from translation import create_bedrock_llm
-    from utils import load_template, get_language_name
+    from utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from vars import language_id2name
 
 
@@ -157,21 +157,44 @@ def render_document_translator_prompt(
     proper_noun_records: str,
     source_context: str,
     target_context: str,
-    relevant_instances: str
+    relevant_instances: str,
+    terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False
 ) -> str:
-    """Render prompt for document translation."""
-    template = load_template("DeLTA/document_translator.jinja")
-    return template.render(
-        source_sentence=source_sentence,
-        source_lang_name=get_language_name(source_lang, language_id2name),
-        target_lang_name=get_language_name(target_lang, language_id2name),
-        source_summary=source_summary or "N/A",
-        target_summary=target_summary or "N/A",
-        proper_noun_records=proper_noun_records or "N/A",
-        source_context=source_context or "N/A",
-        target_context=target_context or "N/A",
-        relevant_instances=relevant_instances or "N/A"
-    )
+    """Render prompt for document translation (with optional terminology)."""
+    if use_terminology and terminology:
+        template = load_template("DeLTA/document_translator_term.jinja")
+        # Format and filter terminology if available
+        formatted_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+        if formatted_terminology:
+            formatted_terminology = filter_terminology_by_source_text(
+                formatted_terminology, source_sentence, case_sensitive=False
+            )
+        return template.render(
+            source_sentence=source_sentence,
+            source_lang_name=get_language_name(source_lang, language_id2name),
+            target_lang_name=get_language_name(target_lang, language_id2name),
+            source_summary=source_summary or "N/A",
+            target_summary=target_summary or "N/A",
+            proper_noun_records=proper_noun_records or "N/A",
+            source_context=source_context or "N/A",
+            target_context=target_context or "N/A",
+            relevant_instances=relevant_instances or "N/A",
+            terminology=formatted_terminology
+        )
+    else:
+        template = load_template("DeLTA/document_translator.jinja")
+        return template.render(
+            source_sentence=source_sentence,
+            source_lang_name=get_language_name(source_lang, language_id2name),
+            target_lang_name=get_language_name(target_lang, language_id2name),
+            source_summary=source_summary or "N/A",
+            target_summary=target_summary or "N/A",
+            proper_noun_records=proper_noun_records or "N/A",
+            source_context=source_context or "N/A",
+            target_context=target_context or "N/A",
+            relevant_instances=relevant_instances or "N/A"
+        )
 
 
 def run_workflow(
@@ -180,6 +203,7 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
@@ -197,7 +221,8 @@ def run_workflow(
         source_lang: Source language code
         target_lang: Target language code
         model_id: Bedrock model ID
-        terminology: Optional terminology dictionary (not used in this workflow)
+        terminology: Optional terminology dictionary (used in document translator if use_terminology=True)
+        use_terminology: If True, use terminology dictionary in document translator step
         region: AWS region
         max_retries: Maximum retry attempts
         initial_backoff: Initial backoff delay

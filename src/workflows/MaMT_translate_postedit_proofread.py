@@ -13,7 +13,11 @@ try:
         render_postedit_prompt,
         render_proofread_prompt,
         parse_postedit_response,
-        apply_postedit_corrections
+        apply_postedit_corrections,
+        load_template,
+        get_language_name,
+        format_terminology_dict,
+        filter_terminology_by_source_text
     )
     from ..vars import language_id2name
 except ImportError:
@@ -23,9 +27,46 @@ except ImportError:
         render_postedit_prompt,
         render_proofread_prompt,
         parse_postedit_response,
-        apply_postedit_corrections
+        apply_postedit_corrections,
+        load_template,
+        get_language_name,
+        format_terminology_dict,
+        filter_terminology_by_source_text
     )
     from vars import language_id2name
+
+
+def render_proofread_prompt_with_terminology(
+    source_text: str,
+    translation: str,
+    source_lang: str,
+    target_lang: str,
+    language_id2name: Dict[str, str],
+    domain: str = "general",
+    terminology: Optional[Dict[str, list]] = None
+) -> str:
+    """Render a proofread prompt with terminology (if available) using Jinja template."""
+    template = load_template("MaMT_proofread_term.jinja")
+    
+    # Format and filter terminology if available
+    formatted_terminology = None
+    if terminology:
+        formatted_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+        if formatted_terminology:
+            formatted_terminology = filter_terminology_by_source_text(
+                formatted_terminology, source_text, case_sensitive=False
+            )
+            if formatted_terminology:
+                print(f"    Using {len(formatted_terminology)} relevant terminology entries in proofreading")
+    
+    return template.render(
+        source_text=source_text,
+        translation=translation,
+        source_lang_name=get_language_name(source_lang, language_id2name),
+        target_lang_name=get_language_name(target_lang, language_id2name),
+        domain=domain,
+        terminology=formatted_terminology
+    )
 
 
 def run_workflow(
@@ -34,6 +75,7 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
@@ -48,7 +90,8 @@ def run_workflow(
         source_lang: Source language code
         target_lang: Target language code
         model_id: Bedrock model ID
-        terminology: Optional terminology dictionary (not used in this workflow)
+        terminology: Optional terminology dictionary (used in proofreading step if use_terminology=True)
+        use_terminology: If True, use terminology dictionary in proofreading step
         region: AWS region
         max_retries: Maximum retry attempts
         initial_backoff: Initial backoff delay
@@ -192,14 +235,25 @@ def run_workflow(
     
     # Step 3: Proofread Agent
     print("    [Agent 3/3] Proofread...")
-    proofread_prompt = render_proofread_prompt(
-        source_text=source_text,
-        translation=postedit_output,
-        source_lang=source_lang,
-        target_lang=target_lang,
-        language_id2name=language_id2name,
-        domain=domain
-    )
+    if use_terminology and terminology:
+        proofread_prompt = render_proofread_prompt_with_terminology(
+            source_text=source_text,
+            translation=postedit_output,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            domain=domain,
+            terminology=terminology
+        )
+    else:
+        proofread_prompt = render_proofread_prompt(
+            source_text=source_text,
+            translation=postedit_output,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            domain=domain
+        )
     
     proofread_output = None
     for attempt in range(max_retries + 1):

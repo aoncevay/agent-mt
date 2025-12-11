@@ -12,11 +12,11 @@ import json
 
 try:
     from ..translation import create_bedrock_llm
-    from ..utils import load_template, get_language_name, render_translation_prompt
+    from ..utils import load_template, get_language_name, render_translation_prompt, format_terminology_dict, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
     from translation import create_bedrock_llm
-    from utils import load_template, get_language_name, render_translation_prompt
+    from utils import load_template, get_language_name, render_translation_prompt, format_terminology_dict, filter_terminology_by_source_text
     from vars import language_id2name
 
 
@@ -60,6 +60,7 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
@@ -73,7 +74,8 @@ def run_workflow(
         source_lang: Source language code
         target_lang: Target language code
         model_id: Bedrock model ID
-        terminology: Optional terminology dictionary (not used in this workflow)
+        terminology: Optional terminology dictionary (used in zero-shot translation if use_terminology=True)
+        use_terminology: If True, use terminology dictionary in zero-shot translation step
         region: AWS region
         max_retries: Maximum retry attempts
         initial_backoff: Initial backoff delay
@@ -102,16 +104,31 @@ def run_workflow(
         ReadTimeoutError = Exception
         ClientError = Exception
     
-    # Step 1: Zero-shot translation
+    # Step 1: Zero-shot translation (with terminology if use_terminology=True)
     print("    [Agent 1/3] Zero-shot translation...")
+    
+    # Filter terminology to only include terms that appear in source text
+    filtered_terminology = None
+    if use_terminology and terminology:
+        filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+        if filtered_terminology:
+            filtered_terminology = filter_terminology_by_source_text(
+                filtered_terminology, source_text, case_sensitive=False
+            )
+            if filtered_terminology:
+                print(f"    Using {len(filtered_terminology)} relevant terminology entries "
+                      f"(out of {len(terminology)} total)")
+            else:
+                print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
+    
     zero_shot_prompt = render_translation_prompt(
         source_text=source_text,
         source_lang=source_lang,
         target_lang=target_lang,
         language_id2name=language_id2name,
-        use_terminology=False,
-        terminology=None,
-        max_terms=50
+        use_terminology=filtered_terminology is not None,
+        terminology=filtered_terminology,
+        max_terms=None if filtered_terminology else 50
     )
     
     translation = None

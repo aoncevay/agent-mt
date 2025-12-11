@@ -10,18 +10,12 @@ WORKFLOW_REGISTRY = {
     "zero_shot_term": "zero_shot_term",
     "MaMT_translate_postedit": "MaMT_translate_postedit",
     "MaMT_translate_postedit_proofread": "MaMT_translate_postedit_proofread",
-    "MaMT_translate_postedit_proofread_term": "MaMT_translate_postedit_proofread_term",
     "SbS_step_by_step": "SbS_step_by_step",
     "SbS_chat_step_by_step": "SbS_chat_step_by_step",
-    "SbS_chat_step_by_step_term": "SbS_chat_step_by_step_term",
     "MAATS_multi_agents": "MAATS_multi_agents",
-    "MAATS_multi_agents_term": "MAATS_multi_agents_term",
     "MAATS_single_agent": "MAATS_single_agent",
-    "MAATS_single_agent_term": "MAATS_single_agent_term",
     "IRB_refine": "IRB_refine",
-    "IRB_refine_term": "IRB_refine_term",
-    "DeLTA_multi_agents": "DeLTA_multi_agents",
-    "DeLTA_multi_agents_term": "DeLTA_multi_agents_term"
+    "DeLTA_multi_agents": "DeLTA_multi_agents"
 }
 
 

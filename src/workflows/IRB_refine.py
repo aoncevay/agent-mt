@@ -61,11 +61,12 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
-    reasoning_words: int = 300
+    reasoning_words: int = 500
 ) -> Dict[str, Any]:
     """
     Run IRB two-stage self-refine translation workflow.
@@ -75,7 +76,8 @@ def run_workflow(
         source_lang: Source language code
         target_lang: Target language code
         model_id: Bedrock model ID
-        terminology: Optional terminology dictionary (not used in this workflow)
+        terminology: Optional terminology dictionary (used in initial translation if use_terminology=True)
+        use_terminology: If True, use terminology dictionary in initial translation step
         region: AWS region
         max_retries: Maximum retry attempts
         initial_backoff: Initial backoff delay

@@ -12,11 +12,11 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 try:
     from ..translation import create_bedrock_llm
-    from ..utils import load_template, get_language_name
+    from ..utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
     from translation import create_bedrock_llm
-    from utils import load_template, get_language_name
+    from utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from vars import language_id2name
 
 
@@ -42,14 +42,44 @@ def render_chat_refinement_prompt() -> str:
     return template.render()
 
 
-def render_chat_proofread_prompt(source_text: str, draft_translation: str, refined_translation: str) -> str:
+def render_chat_proofread_prompt(
+    source_text: str,
+    draft_translation: str,
+    refined_translation: str,
+    terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
+    source_lang: str = "en",
+    target_lang: str = "es"
+) -> str:
     """Render the proofreading prompt (same as standalone - proofreading is always standalone per paper)."""
-    template = load_template("SbS/proofread.jinja")
-    return template.render(
-        source_text=source_text,
-        draft_translation=draft_translation,
-        refined_translation=refined_translation
-    )
+    # Use terminology template if use_terminology is True and terminology is available
+    if use_terminology and terminology:
+        template = load_template("SbS/proofread_term.jinja")
+        
+        # Format and filter terminology if available
+        formatted_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+        if formatted_terminology:
+            formatted_terminology = filter_terminology_by_source_text(
+                formatted_terminology, source_text, case_sensitive=False
+            )
+            if formatted_terminology:
+                print(f"    Using {len(formatted_terminology)} relevant terminology entries in proofreading")
+        
+        return template.render(
+            source_text=source_text,
+            draft_translation=draft_translation,
+            refined_translation=refined_translation,
+            terminology=formatted_terminology,
+            source_lang_name=get_language_name(source_lang, language_id2name),
+            target_lang_name=get_language_name(target_lang, language_id2name)
+        )
+    else:
+        template = load_template("SbS/proofread.jinja")
+        return template.render(
+            source_text=source_text,
+            draft_translation=draft_translation,
+            refined_translation=refined_translation
+        )
 
 
 def run_workflow(
@@ -58,6 +88,7 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
@@ -74,7 +105,8 @@ def run_workflow(
         source_lang: Source language code
         target_lang: Target language code
         model_id: Bedrock model ID
-        terminology: Optional terminology dictionary (not used in this workflow)
+        terminology: Optional terminology dictionary (used in proofreading step if use_terminology=True)
+        use_terminology: If True, use terminology dictionary in proofreading step
         region: AWS region
         max_retries: Maximum retry attempts
         initial_backoff: Initial backoff delay
@@ -269,7 +301,11 @@ def run_workflow(
     # Paper says: "proofreading requires a new perspective after a break from revising"
     # and "we found that continuing the conversation improved performance" EXCEPT for proofreading
     print("    [Agent 4/4] Proofreading...")
-    proofread_prompt = render_chat_proofread_prompt(source_text, draft_output, refinement_output)
+    proofread_prompt = render_chat_proofread_prompt(
+        source_text, draft_output, refinement_output,
+        terminology=terminology, use_terminology=use_terminology,
+        source_lang=source_lang, target_lang=target_lang
+    )
     
     proofread_output = None
     for attempt in range(max_retries + 1):

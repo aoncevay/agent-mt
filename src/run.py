@@ -4,7 +4,7 @@ Main runner script for translation experiments.
 
 Usage:
     python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-235b
-    python src/run.py --dataset dolfin_en_es --workflow zero_shot_term --model qwen3-235b --max_samples 10
+    python src/run.py --dataset dolfin_en_es --workflow zero_shot --model qwen3-235b --max_samples 10
     python src/run.py --dataset wmt25 --workflow MaMT_translate_postedit --model qwen3-235b
     python src/run.py --dataset wmt25 --workflow MaMT_translate_postedit_proofread --model qwen3-235b
 """
@@ -47,17 +47,8 @@ def get_workflow_module(workflow_name: str):
     if workflow_name == "zero_shot":
         from workflows import zero_shot
         return zero_shot
-    elif workflow_name == "zero_shot_term":
-        from workflows import zero_shot_term
-        return zero_shot_term
-    elif workflow_name == "MaMT_translate_postedit":
-        import importlib
-        return importlib.import_module(f"workflows.{module_name}")
-    elif workflow_name == "MaMT_translate_postedit_proofread":
-        import importlib
-        return importlib.import_module(f"workflows.{module_name}")
     else:
-        # For future workflows
+        # For all other workflows, use dynamic import
         import importlib
         return importlib.import_module(f"workflows.{module_name}")
 
@@ -68,7 +59,8 @@ def process_sample(
     workflow_module,
     model_id: str,
     sample_idx: int,
-    lang_pair: Optional[str] = None
+    lang_pair: Optional[str] = None,
+    use_terminology: bool = False
 ) -> Dict[str, Any]:
     """Process a single sample through the workflow."""
     # Get translation direction
@@ -104,7 +96,8 @@ def process_sample(
             "source_lang": source_lang,
             "target_lang": target_lang,
             "model_id": model_id,
-            "terminology": terminology,
+            "terminology": terminology if use_terminology else None,
+            "use_terminology": use_terminology,
             "region": AWS_REGION,
             "max_retries": MAX_RETRIES,
             "initial_backoff": INITIAL_BACKOFF
@@ -371,6 +364,8 @@ def main():
                         help="Custom output directory (default: outputs/{dataset}_{workflow}_{model})")
     parser.add_argument("--resume", action="store_true",
                         help="Resume experiment: skip already processed samples and merge with existing report")
+    parser.add_argument("--use_terminology", action="store_true",
+                        help="Use terminology dictionary if available (only for datasets that support it, e.g., wmt25)")
     
     args = parser.parse_args()
     
@@ -484,7 +479,8 @@ def main():
                     workflow_module=workflow_module,
                     model_id=model_id,
                     sample_idx=i,
-                    lang_pair=lang_pair
+                    lang_pair=lang_pair,
+                    use_terminology=args.use_terminology
                 )
                 if result:
                     results.append(result)
@@ -513,6 +509,12 @@ def main():
     elif args.dataset == "dolfin":
         # For DOLFIN, get available language pairs
         from data_loaders import get_available_dolfin_lang_pairs
+        
+        # DOLFIN doesn't support terminology - disable if set
+        if args.use_terminology:
+            print(f"\n⚠ Warning: DOLFIN dataset does not support terminology dictionaries.")
+            print(f"  Disabling --use_terminology flag for this dataset.")
+            args.use_terminology = False
         
         dolfin_data_dir = BASE_DATA_DIR / "dolfin"
         print(f"Looking for DOLFIN files in: {dolfin_data_dir}")
@@ -612,7 +614,8 @@ def main():
                     workflow_module=workflow_module,
                     model_id=model_id,
                     sample_idx=i,
-                    lang_pair=lang_pair
+                    lang_pair=lang_pair,
+                    use_terminology=args.use_terminology
                 )
                 if result:
                     results.append(result)
