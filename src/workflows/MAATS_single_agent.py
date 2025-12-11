@@ -41,16 +41,31 @@ def render_single_agent_refine_prompt(
     translation: str,
     annotations: str,
     source_lang: str,
-    target_lang: str
+    target_lang: str,
+    terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False
 ) -> str:
-    """Render refinement prompt for single-agent workflow."""
-    template = load_template("MAATS/single_agent_refine.jinja")
+    """Render refinement prompt for single-agent workflow (with optional terminology)."""
+    # Use terminology template if use_terminology is True and terminology is available
+    if use_terminology and terminology:
+        template = load_template("MAATS/single_agent_refine_term.jinja")
+        # Format and filter terminology if available
+        formatted_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+        if formatted_terminology:
+            formatted_terminology = filter_terminology_by_source_text(
+                formatted_terminology, source_text, case_sensitive=False
+            )
+    else:
+        template = load_template("MAATS/single_agent_refine.jinja")
+        formatted_terminology = None
+    
     return template.render(
         source_text=source_text,
         translation=translation,
         annotations=annotations,
         source_lang_name=get_language_name(source_lang, language_id2name),
-        target_lang_name=get_language_name(target_lang, language_id2name)
+        target_lang_name=get_language_name(target_lang, language_id2name),
+        terminology=formatted_terminology
     )
 
 
@@ -237,7 +252,9 @@ def run_workflow(
         translation=translation,
         annotations=annotations,
         source_lang=source_lang,
-        target_lang=target_lang
+        target_lang=target_lang,
+        terminology=filtered_terminology,
+        use_terminology=use_terminology
     )
     
     refined_translation = None
