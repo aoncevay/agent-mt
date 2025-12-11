@@ -368,6 +368,35 @@ Each experiment computes:
 
 Metrics are computed per sample and aggregated in the report summary.
 
+## Configuration
+
+### Temperature Setting
+
+Temperature settings are workflow-specific, following the original papers:
+
+**Per-Workflow Settings:**
+- **MaMT** (`MaMT_translate_postedit`, `MaMT_translate_postedit_proofread`):
+  - Translation: `temperature=0.0` (reproducibility)
+  - Postedit: `temperature=1.0` (exploration, encourages broader error detection)
+  - Proofread: `temperature=0.0` (reproducibility)
+- **IRB**: `temperature=0.0` (no sampling, reproducibility)
+- **MAATS**: `temperature=0.0` (paper uses 0-0.3, we use 0.0 for consistency)
+- **SbS, DeLTA, ADT**: `temperature=0.0` (no paper specification, default for reproducibility)
+
+**Rationale:**
+- **IRB-WMT25**: "temperature was set to 0 (no sampling)" for reproducibility
+- **MaMT**: Uses `temperature=1` for postedit (exploration), `temperature=0` for translation/proofread (reproducibility)
+- **MAATS**: "temperature low (between 0 and 0.3)" for deterministic improvements
+- **SbS, DeLTA, ADT**: No temperature specification in papers, default to 0.0 for reproducibility
+
+**To change temperature:**
+Edit the workflow file (e.g., `src/workflows/MaMT_translate_postedit.py`) or `src/translation.py` → `create_bedrock_llm()` function:
+```python
+llm = create_bedrock_llm(model_id, region, temperature=0.0)  # Explicit temperature
+```
+
+**Note:** Some Bedrock models may not accept exactly 0.0. If you encounter errors, try 0.1 as a fallback (near-deterministic).
+
 ## Troubleshooting
 
 **"Module not found" errors:**
@@ -378,6 +407,7 @@ Metrics are computed per sample and aggregated in the report summary.
 - Verify `config.env` has correct credentials
 - Check AWS region matches your Bedrock endpoint
 - Ensure model is available in your AWS region
+- If temperature=0.0 causes errors, try temperature=0.1
 
 **Out of memory:**
 - Reduce `MAX_PARALLEL` in `run_all_per_model.sh`

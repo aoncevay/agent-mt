@@ -61,8 +61,11 @@ def run_workflow(
     """
     import time
     
-    # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    # Create LLMs with different temperatures per paper:
+    # - Translation: temperature=0 (reproducibility)
+    # - Postedit: temperature=1 (exploration, encourages broader error detection)
+    llm_translate = create_bedrock_llm(model_id, region, temperature=0.0)
+    llm_postedit = create_bedrock_llm(model_id, region, temperature=1.0)
     
     total_tokens_input = 0
     total_tokens_output = 0
@@ -74,7 +77,7 @@ def run_workflow(
         ReadTimeoutError = Exception
         ClientError = Exception
     
-    # Step 1: Translate Agent
+    # Step 1: Translate Agent (temperature=0 for reproducibility)
     print("    [Agent 1/2] Translate...")
     translate_prompt = render_translation_prompt(
         source_text=source_text,
@@ -90,7 +93,7 @@ def run_workflow(
     for attempt in range(max_retries + 1):
         try:
             message = HumanMessage(content=translate_prompt)
-            response = llm.invoke([message])
+            response = llm_translate.invoke([message])
             
             translation = response.content.strip()
             
@@ -129,7 +132,7 @@ def run_workflow(
     if translation is None:
         raise RuntimeError("Translation step failed")
     
-    # Step 2: Postedit Agent
+    # Step 2: Postedit Agent (temperature=1 for exploration, as per paper)
     print("    [Agent 2/2] Postedit...")
     postedit_prompt = render_postedit_prompt(
         source_text=source_text,
@@ -144,7 +147,7 @@ def run_workflow(
     for attempt in range(max_retries + 1):
         try:
             message = HumanMessage(content=postedit_prompt)
-            response = llm.invoke([message])
+            response = llm_postedit.invoke([message])
             
             postedit_response_text = response.content.strip()
             

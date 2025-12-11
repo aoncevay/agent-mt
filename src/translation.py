@@ -37,8 +37,23 @@ class TranslationState(TypedDict):
     use_terminology: bool
 
 
-def create_bedrock_llm(model_id: str, region: Optional[str] = None) -> ChatBedrock:
-    """Create a Bedrock LLM instance."""
+def create_bedrock_llm(model_id: str, region: Optional[str] = None, temperature: float = 0.0) -> ChatBedrock:
+    """
+    Create a Bedrock LLM instance with configurable temperature.
+    
+    Args:
+        model_id: Bedrock model ID (e.g., "qwen.qwen3-32b-v1:0")
+        region: AWS region (defaults to AWS_REGION env var or us-east-2)
+        temperature: Sampling temperature (default: 0.0 for reproducibility)
+                    - 0.0: Deterministic, reproducible (recommended for experiments)
+                    - 0.1: Near-deterministic fallback if 0.0 causes issues
+                    - Higher values: More creative but less reproducible
+    
+    Note:
+        Papers use temperature=0 for reproducibility (IRB-WMT25, MaMT final translation).
+        Some papers use temperature=1 for exploration (MaMT postedit), but we default to 0.0
+        for consistency and reproducibility across all workflows.
+    """
     aws_region = region or os.getenv("AWS_REGION", "us-east-2")
     
     bedrock_llm = ChatBedrock(
@@ -46,7 +61,7 @@ def create_bedrock_llm(model_id: str, region: Optional[str] = None) -> ChatBedro
         region_name=aws_region,
         credentials_profile_name=None,
         model_kwargs={
-            "temperature": 0.0,
+            "temperature": temperature,
             "max_tokens": 4096,
         },
     )
