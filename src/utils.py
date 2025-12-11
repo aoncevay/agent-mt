@@ -5,58 +5,8 @@ Utility functions for translation workflows.
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from jinja2 import Environment, FileSystemLoader, Template
-
-
-# Functions used by deprecated scripts (kept for backward compatibility)
-def load_jsonl_data(file_path: Path) -> List[Dict[str, Any]]:
-    """Load data from a JSONL file."""
-    data = []
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                data.append(json.loads(line))
-    return data
-
-
-def determine_translation_direction(year: int) -> Tuple[str, str]:
-    """
-    Determine translation direction based on year.
-    Odd years: en -> zht
-    Even years: zht -> en
-    """
-    if year % 2 == 1:  # Odd year
-        return "en", "zht"
-    else:  # Even year
-        return "zht", "en"
-
-
-def extract_text_from_data(
-    data: Dict[str, Any], 
-    source_lang: str, 
-    target_lang: str
-) -> Tuple[str, str, Optional[Dict[str, List[str]]]]:
-    """
-    Extract source text, target text (reference), and terminology from data.
-    Handles both en->zht (en/zh keys) and zht->en (zh/en keys) cases.
-    """
-    # Map language codes to possible keys in the data
-    lang_key_map = {
-        "en": "en",
-        "zht": "zh",  # Files use "zh" but we refer to it as "zht"
-        "zh": "zh"
-    }
-    
-    source_key = lang_key_map.get(source_lang, source_lang)
-    target_key = lang_key_map.get(target_lang, target_lang)
-    
-    source_text = data.get(source_key, "")
-    target_text = data.get(target_key, "")
-    terminology = data.get("proper", {})
-    
-    return source_text, target_text, terminology
 
 
 def get_language_name(lang_code: str, language_id2name: Dict[str, str]) -> str:
