@@ -133,9 +133,9 @@ def main():
     analyze_token_distribution(df_en['source_token_count'].tolist())
     
     # Filter: 500 < tokens < 3000
-    print("\nFiltering for 500 < token_count < 3000 (alphabet tokens only)...")
+    print("\nFiltering for 1000 < token_count < 3000 (alphabet tokens only)...")
     df_filtered = df_en[
-        (df_en['source_token_count'] > 500) & 
+        (df_en['source_token_count'] > 1000) & 
         (df_en['source_token_count'] < 3000)
     ].copy()
     print(f"Rows after token length filtering: {len(df_filtered)}")
