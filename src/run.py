@@ -119,11 +119,18 @@ def process_sample(
             bleu_result = compute_bleu(output, reference_text, target_lang)
             
             # Compute term success rate if terminology is available
+            # For WMT25, always compute it (dataset always has terminology)
+            # For other datasets, only compute if use_terminology is True
             term_success_rate = -1.0
-            if use_terminology and terminology:
-                term_success_rate = compute_term_success_rate(
-                    source_text, output, reference_text, terminology, lowercase=True
-                )
+            if terminology:  # If terminology exists in the data
+                dataset_name = data_loader.get_dataset_name()
+                # WMT25 always has terminology, so compute term success rate even without --use_terminology
+                # For DOLFIN and other datasets, only compute if explicitly requested
+                # Check if dataset name starts with "wmt25" (exact match) or use_terminology flag
+                if dataset_name == "wmt25" or use_terminology:
+                    term_success_rate = compute_term_success_rate(
+                        source_text, output, reference_text, terminology, lowercase=True
+                    )
             
             evaluations.append({
                 "agent_id": i,
@@ -293,6 +300,8 @@ def save_outputs(
         total_tokens_output = 0
         total_latency = 0.0
         chrf_scores = []
+        bleu_scores = []
+        term_success_rates = []
     
     # Process new results
     new_samples_count = 0

@@ -32,6 +32,7 @@ def run_workflow(
     target_lang: str,
     model_id: str,
     terminology: Optional[Dict[str, list]] = None,
+    use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
