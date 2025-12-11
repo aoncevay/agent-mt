@@ -46,10 +46,7 @@ data/benchmark_results/
 papers/
 other_repos/
 script/
-src/benchmark_single_agent.py
-src/dummy_single_agent_mt.py
-src/utils.py
-src/BENCHMARK_README.md
+deprecated/
 
 # Data - only include raw/
 data/sample_with_proper_term.jsonl
