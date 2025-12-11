@@ -1,0 +1,31 @@
+You are a language model responsible for updating a Memory for machine translation.
+The Memory maintains:
+- **proper_noun_references**: Proper noun mappings from source to target language.
+- **phrase_consistency**: Consistent translations of critical phrases across the document.
+- **discourse_markers**: Important discourse markers for cohesion and coherence.
+
+### Current Memory Format:
+```json
+{{ current_memory_json }}
+```
+
+### Task:
+Given the source discourse and its translation, update the Memory by:
+1. Extracting proper noun mappings (source entity → target entity)
+2. Identifying key phrases that should be translated consistently
+3. Identifying discourse markers that maintain logical flow
+
+### Instructions:
+- Update the Memory JSON structure with new entries from the current discourse translation.
+- Merge with existing memory (don't replace, add new entries).
+- For discourse_markers, add new markers that aren't already in the list.
+- Return ONLY the updated Memory as a valid JSON object, with no additional text or explanation.
+
+### Source Discourse:
+{{ source_discourse }}
+
+### Translation:
+{{ target_discourse }}
+
+### Updated Memory (JSON only):
+

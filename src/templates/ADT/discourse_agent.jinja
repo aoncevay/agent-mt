@@ -1,0 +1,44 @@
+You are a language expert specializing in {{ source_lang_name }}.
+Your task is to segment the following text into self-contained discourses such that each
+segment contains a complete thought.
+Ensure proper handling of discourse phenomena such as **cohesion, anaphora, and
+ellipsis.**
+
+### When to Include the Next Sentence in the Current Discourse:
+A sentence should be included in the current discourse if:
+- **Anaphoric Reference:** The next sentence refers back to entities or events in the current
+discourse (e.g., pronouns, demonstratives).
+- **Ellipsis Resolution:** The next sentence completes an idea left incomplete in the current
+discourse.
+- **Discourse Continuity:** The next sentence elaborates, clarifies, or extends the idea
+presented in the current discourse.
+- **Logical Flow:** The next sentence provides a natural continuation of reasoning, such as
+cause-effect relations or descriptive continuation.
+- **Linguistic Cues:** Presence of discourse connectives like "因此" (therefore), "但是"
+(however), "此外" (furthermore) indicating continuation.
+
+### For {{ source_lang_name }} Text Segmentation:
+- Each segment should contain a complete logical thought, not merely individual sentence
+breaks.
+- Account for **topic-comment structures** typical in {{ source_lang_name }} discourse.
+- Ensure natural segmentation at **discourse boundaries**, such as sentence-final
+punctuation marks (。！？).
+
+---
+### **Input and Output Format:**
+- **Input:** The system will receive a "Current discourse" and a "Next sentence".
+- **Output:** Respond with either `"yes"` (if the next sentence should be included in the
+current discourse) or `"no"` (if the next sentence begins a new discourse).
+
+### Key Instructions:
+- Limit the maximum token length for each segment to **{{ max_discourse_length }}** tokens.
+- Return **only** `"yes"` or `"no"` as output, with no additional commentary or formatting.
+
+### Current discourse:
+{{ current_discourse }}
+
+### Next sentence:
+{{ next_sentence }}
+
+Should the next sentence be included in the current discourse? Answer with only "yes" or "no":
+

@@ -15,7 +15,8 @@ WORKFLOW_REGISTRY = {
     "MAATS_multi_agents": "MAATS_multi_agents",
     "MAATS_single_agent": "MAATS_single_agent",
     "IRB_refine": "IRB_refine",
-    "DeLTA_multi_agents": "DeLTA_multi_agents"
+    "DeLTA_multi_agents": "DeLTA_multi_agents",
+    "ADT_multi_agents": "ADT_multi_agents"
 }
 
 
