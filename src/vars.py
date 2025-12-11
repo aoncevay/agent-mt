@@ -1,15 +1,16 @@
 model_name2bedrock_id = {
     "qwen3-32b": "qwen.qwen3-32b-v1:0",
     "qwen3-235b": "qwen.qwen3-235b-a22b-2507-v1:0",
+
     "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
     "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
-    "claude-sonnet-3-7": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-    "gemma-3-12b-it": "google.gemma-3-12b-it",
-    "gemma-3-27b-it": "google.gemma-3-27b-it"
-    #"gemma-3-27b": "huggingface-vlm-gemma-3-27b-instruct",
+
+    #"claude-sonnet-3-7": "anthropic.claude-3-7-sonnet-20250219-v1:0",
     #"claude-sonnet-4-5": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     #"claude-opus-4-5": "anthropic.claude-opus-4-5-20251101-v1:0",
 }
+# CLAUDE MODELS ARE NOT WORKING ON EXTERNAL AWS MACHINES
+# WE SHOULD ADD OPENAI MODELS (GPT4.1, o4-mini)
 
 language_id2name = {
     "en": "English",
