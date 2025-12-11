@@ -24,6 +24,7 @@ from data_loaders import get_data_loader
 from workflows import WORKFLOW_REGISTRY
 from evaluation import compute_chrf
 from vars import model_name2bedrock_id
+from workflow_acronyms import build_output_dir
 
 # Load environment variables
 load_dotenv("config.env")
@@ -397,12 +398,6 @@ def main():
             print(f"Error loading dataset: {e}")
             return 1
         
-        # Determine base output directory
-        if args.output_dir:
-            base_output_dir = Path(args.output_dir)
-        else:
-            base_output_dir = OUTPUT_BASE_DIR / f"{args.dataset}.{args.workflow}.{args.model}"
-        
         print("=" * 80)
         print("Translation Experiment")
         print("=" * 80)
@@ -410,7 +405,6 @@ def main():
         print(f"Workflow: {args.workflow}")
         print(f"Model: {args.model} ({model_id})")
         print(f"Target languages: {target_langs if target_langs else 'all (both directions)'}")
-        print(f"Output directory: {base_output_dir}")
         print("=" * 80)
         
         # Load samples
@@ -447,7 +441,17 @@ def main():
             print(f"{'='*80}")
             
             # Determine output directory for this pair
-            pair_output_dir = base_output_dir / lang_pair
+            if args.output_dir:
+                pair_output_dir = Path(args.output_dir) / lang_pair
+            else:
+                pair_output_dir = build_output_dir(
+                    dataset=args.dataset,
+                    lang_pair=lang_pair,
+                    workflow_name=args.workflow,
+                    model_name=args.model,
+                    use_terminology=args.use_terminology
+                )
+            print(f"Output directory: {pair_output_dir}")
             
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
@@ -573,7 +577,14 @@ def main():
             if args.output_dir:
                 pair_output_dir = Path(args.output_dir) / lang_pair
             else:
-                pair_output_dir = OUTPUT_BASE_DIR / f"{args.dataset}.{args.workflow}.{args.model}" / lang_pair
+                pair_output_dir = build_output_dir(
+                    dataset=args.dataset,
+                    lang_pair=lang_pair,
+                    workflow_name=args.workflow,
+                    model_name=args.model,
+                    use_terminology=args.use_terminology
+                )
+            print(f"Output directory: {pair_output_dir}")
             
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
