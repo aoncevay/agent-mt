@@ -21,7 +21,7 @@ except ImportError:
 
 def render_research_prompt(source_text: str, source_lang: str, target_lang: str) -> str:
     """Render the pre-translation research prompt."""
-    template = load_template("SbS_research.jinja")
+    template = load_template("SbS/research.jinja")
     return template.render(
         source_text=source_text,
         source_lang_name=get_language_name(source_lang, language_id2name),
@@ -31,13 +31,13 @@ def render_research_prompt(source_text: str, source_lang: str, target_lang: str)
 
 def render_chat_draft_prompt(source_text: str) -> str:
     """Render the drafting prompt (chat version - doesn't include research output, uses conversation history)."""
-    template = load_template("SbS_chat_draft.jinja")
+    template = load_template("SbS/chat_draft.jinja")
     return template.render(source_text=source_text)
 
 
 def render_chat_refinement_prompt() -> str:
     """Render the refinement prompt (chat version - doesn't include draft output, uses conversation history)."""
-    template = load_template("SbS_chat_refinement.jinja")
+    template = load_template("SbS/chat_refinement.jinja")
     return template.render()
 
 
@@ -50,7 +50,7 @@ def render_chat_proofread_prompt_term(
     target_lang: str = "es"
 ) -> str:
     """Render the proofreading prompt with terminology (if available)."""
-    template = load_template("SbS_proofread_term.jinja")
+    template = load_template("SbS/proofread_term.jinja")
     
     # Format and filter terminology if available
     formatted_terminology = None

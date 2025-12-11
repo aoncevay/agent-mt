@@ -27,7 +27,7 @@ def render_single_agent_prompt(
     target_lang: str
 ) -> str:
     """Render prompt for single agent that evaluates all dimensions."""
-    template = load_template("MAATS_single_agent.jinja")
+    template = load_template("MAATS/single_agent.jinja")
     return template.render(
         source_text=source_text,
         translation=translation,
@@ -44,7 +44,7 @@ def render_single_agent_refine_prompt(
     target_lang: str
 ) -> str:
     """Render refinement prompt for single-agent workflow."""
-    template = load_template("MAATS_single_agent_refine.jinja")
+    template = load_template("MAATS/single_agent_refine.jinja")
     return template.render(
         source_text=source_text,
         translation=translation,

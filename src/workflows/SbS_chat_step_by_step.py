@@ -22,7 +22,7 @@ except ImportError:
 
 def render_research_prompt(source_text: str, source_lang: str, target_lang: str) -> str:
     """Render the pre-translation research prompt."""
-    template = load_template("SbS_research.jinja")
+    template = load_template("SbS/research.jinja")
     return template.render(
         source_text=source_text,
         source_lang_name=get_language_name(source_lang, language_id2name),
@@ -32,19 +32,19 @@ def render_research_prompt(source_text: str, source_lang: str, target_lang: str)
 
 def render_chat_draft_prompt(source_text: str) -> str:
     """Render the drafting prompt (chat version - doesn't include research output, uses conversation history)."""
-    template = load_template("SbS_chat_draft.jinja")
+    template = load_template("SbS/chat_draft.jinja")
     return template.render(source_text=source_text)
 
 
 def render_chat_refinement_prompt() -> str:
     """Render the refinement prompt (chat version - doesn't include draft output, uses conversation history)."""
-    template = load_template("SbS_chat_refinement.jinja")
+    template = load_template("SbS/chat_refinement.jinja")
     return template.render()
 
 
 def render_chat_proofread_prompt(source_text: str, draft_translation: str, refined_translation: str) -> str:
     """Render the proofreading prompt (same as standalone - proofreading is always standalone per paper)."""
-    template = load_template("SbS_proofread.jinja")
+    template = load_template("SbS/proofread.jinja")
     return template.render(
         source_text=source_text,
         draft_translation=draft_translation,

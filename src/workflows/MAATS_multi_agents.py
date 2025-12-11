@@ -49,7 +49,7 @@ def render_dimension_prompt(
     target_lang: str
 ) -> str:
     """Render prompt for a specific dimension agent."""
-    template = load_template(f"MAATS_{dimension}.jinja")
+    template = load_template(f"MAATS/{dimension}.jinja")
     return template.render(
         source_text=source_text,
         translation=translation,
@@ -66,7 +66,7 @@ def render_refine_prompt(
     target_lang: str
 ) -> str:
     """Render refinement prompt with all annotations."""
-    template = load_template("MAATS_refine.jinja")
+    template = load_template("MAATS/refine.jinja")
     # Format annotations as JSON for clarity
     annotations_text = json.dumps(annotations, indent=2, ensure_ascii=False)
     return template.render(
