@@ -7,11 +7,11 @@ from langchain_aws import ChatBedrock
 from langchain_core.messages import HumanMessage
 
 try:
-    from ..translation import create_bedrock_llm
+    from ..translation import create_bedrock_llm, create_llm
     from ..utils import render_translation_prompt
     from ..vars import language_id2name
 except ImportError:
-    from translation import create_bedrock_llm
+    from translation import create_bedrock_llm, create_llm
     from utils import render_translation_prompt
     from vars import language_id2name
 
@@ -26,7 +26,8 @@ def run_workflow(
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
-    model_provider: Optional[str] = None
+    model_provider: Optional[str] = None,
+    model_type: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run single agent translation workflow.
@@ -40,8 +41,11 @@ def run_workflow(
     """
     import time
     
-    # Create LLM
-    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
+    # Create LLM (supports both Bedrock and OpenAI via cdao)
+    if model_type:
+        llm = create_llm(model_id, region, model_provider=model_provider, model_type=model_type)
+    else:
+        llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     # Create prompt (with terminology if requested)
     # Filter terminology to only include terms that appear in source text

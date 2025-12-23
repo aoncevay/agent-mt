@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data_loaders import get_data_loader
 from workflows import WORKFLOW_REGISTRY
 from evaluation import compute_chrf, compute_bleu, compute_term_success_rate
-from vars import model_name2bedrock_id, model_name2bedrock_arn, model_name2provider
+from vars import model_name2bedrock_id, model_name2bedrock_arn, model_name2provider, model_name2openai_id
 from workflow_acronyms import build_output_dir
 
 # Load environment variables
@@ -64,7 +64,8 @@ def process_sample(
     sample_idx: int,
     lang_pair: Optional[str] = None,
     use_terminology: bool = False,
-    model_provider: Optional[str] = None
+    model_provider: Optional[str] = None,
+    model_type: Optional[str] = None
 ) -> Dict[str, Any]:
     """Process a single sample through the workflow."""
     # Get translation direction
@@ -102,18 +103,28 @@ def process_sample(
             "model_id": model_id,
             "terminology": terminology if use_terminology else None,
             "use_terminology": use_terminology,
-            "region": AWS_REGION,
             "max_retries": MAX_RETRIES,
             "initial_backoff": INITIAL_BACKOFF
         }
+        
+        # Add region only for Bedrock models
+        if "region" in sig.parameters:
+            if model_type == "bedrock" and AWS_REGION:
+                workflow_kwargs["region"] = AWS_REGION
+            else:
+                workflow_kwargs["region"] = None  # OpenAI models don't need region
         
         # Add reference if workflow supports it
         if "reference" in sig.parameters:
             workflow_kwargs["reference"] = reference_text
         
-        # Add model_provider if workflow supports it and we have one
+        # Add model_provider if workflow supports it and we have one (Bedrock ARNs only)
         if model_provider and "model_provider" in sig.parameters:
             workflow_kwargs["model_provider"] = model_provider
+        
+        # Add model_type if workflow supports it
+        if model_type and "model_type" in sig.parameters:
+            workflow_kwargs["model_type"] = model_type
         
         result = workflow_module.run_workflow(**workflow_kwargs)
         
@@ -436,14 +447,31 @@ def main():
     model_id = None
     model_provider = None
     model_name = None
+    model_type = "bedrock"  # "bedrock" or "openai"
     
     if args.model:
-        if args.model not in model_name2bedrock_id:
+        # Check if it's an OpenAI model first
+        if args.model in model_name2openai_id:
+            model_id = model_name2openai_id[args.model]
+            model_name = args.model
+            model_type = "openai"
+            # Check if cdao is available
+            try:
+                import cdao  # noqa: F401
+            except ImportError:
+                print(f"Error: OpenAI model '{args.model}' requires 'cdao' library.")
+                print(f"  This library is only available in internal environments.")
+                print(f"  Please use a Bedrock model instead, or ensure cdao is installed.")
+                return 1
+        elif args.model in model_name2bedrock_id:
+            model_id = model_name2bedrock_id[args.model]
+            model_name = args.model
+            model_type = "bedrock"
+        else:
             print(f"Error: Unknown model '{args.model}'")
-            print(f"Available models: {list(model_name2bedrock_id.keys())}")
+            print(f"Available Bedrock models: {list(model_name2bedrock_id.keys())}")
+            print(f"Available OpenAI models: {list(model_name2openai_id.keys())}")
             return 1
-        model_id = model_name2bedrock_id[args.model]
-        model_name = args.model
     elif args.model_arn:
         if args.model_arn not in model_name2bedrock_arn:
             print(f"Error: Unknown model ARN '{args.model_arn}'")
@@ -452,13 +480,21 @@ def main():
         model_id = model_name2bedrock_arn[args.model_arn]
         model_provider = model_name2provider.get(args.model_arn)
         model_name = args.model_arn
+        model_type = "bedrock"
     
     # Set AWS_REGION: us-east-1 for ARNs, us-east-2 for model IDs (unless env var is set)
-    if not os.getenv("AWS_REGION"):
-        if model_provider:  # ARN case
-            AWS_REGION = "us-east-1"
-        else:  # Model ID case
-            AWS_REGION = "us-east-2"
+    # Only relevant for Bedrock models
+    if model_type == "bedrock":
+        if not os.getenv("AWS_REGION"):
+            if model_provider:  # ARN case
+                AWS_REGION = "us-east-1"
+            else:  # Model ID case
+                AWS_REGION = "us-east-2"
+        else:
+            AWS_REGION = os.getenv("AWS_REGION")
+    else:
+        # OpenAI models don't need AWS_REGION
+        AWS_REGION = None
     
     # Validate workflow
     try:

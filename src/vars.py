@@ -4,7 +4,9 @@ model_name2bedrock_id = {
 
     "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
     "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
+}
 
+model_name2openai_id = {
     "gpt-4-1-mini": "gpt-4.1-mini-2025-04-14",
     "gpt-4-1": "gpt-4.1-2025-04-14",
     "o4-mini": "o4-mini-2025-04-16",

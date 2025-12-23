@@ -1,12 +1,12 @@
 """
-Translation functions using LangChain/LangGraph with Amazon Bedrock.
+Translation functions using LangChain/LangGraph with Amazon Bedrock and OpenAI (via cdao).
 """
 
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Union
 from langchain_aws import ChatBedrock
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langgraph.graph import StateGraph, END
 from typing import TypedDict
 
@@ -18,13 +18,21 @@ except ImportError:
     ReadTimeoutError = Exception
     ClientError = Exception
 
+# Try to import cdao (optional, only needed for OpenAI models in internal environments)
+try:
+    import cdao
+    CDAO_AVAILABLE = True
+except ImportError:
+    CDAO_AVAILABLE = False
+    cdao = None
+
 try:
     from .utils import render_translation_prompt
-    from .vars import language_id2name
+    from .vars import language_id2name, model_name2openai_id
 except ImportError:
     # For direct script execution
     from utils import render_translation_prompt
-    from vars import language_id2name
+    from vars import language_id2name, model_name2openai_id
 
 
 class TranslationState(TypedDict):
@@ -35,6 +43,151 @@ class TranslationState(TypedDict):
     terminology: Optional[Dict[str, list]]
     translation: str
     use_terminology: bool
+
+
+class ChatCDAO:
+    """
+    Wrapper class for cdao Azure OpenAI client that mimics ChatBedrock interface.
+    This allows workflows to use OpenAI models (via cdao) without code changes.
+    """
+    
+    def __init__(self, model_id: str, temperature: float = 0.0):
+        """
+        Initialize cdao client.
+        
+        Args:
+            model_id: OpenAI model ID (e.g., "gpt-4.1-mini-2025-04-14")
+            temperature: Sampling temperature (default: 0.0)
+        """
+        if not CDAO_AVAILABLE:
+            raise ImportError(
+                "cdao library is not available. "
+                "OpenAI models require cdao to be installed in internal environments."
+            )
+        
+        self.model_id = model_id
+        self.temperature = temperature
+        self.client = cdao.azure_openai_client(api_version='2024-12-01-preview')
+        # Store response metadata for token counting
+        self._last_response_metadata = {}
+    
+    def invoke(self, messages: List[BaseMessage]) -> 'CDAOResponse':
+        """
+        Invoke the model with messages.
+        
+        Args:
+            messages: List of LangChain messages (HumanMessage, AIMessage, etc.)
+        
+        Returns:
+            CDAOResponse object with .content and .response_metadata
+        """
+        # Convert LangChain messages to cdao format
+        cdao_messages = []
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                cdao_messages.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                cdao_messages.append({"role": "assistant", "content": msg.content})
+            else:
+                # Fallback: try to get content
+                cdao_messages.append({"role": "user", "content": str(msg.content)})
+        
+        # Call cdao
+        response = self.client.chat.completions.create(
+            model=self.model_id,
+            messages=cdao_messages,
+            temperature=self.temperature
+        )
+        
+        # Extract content
+        content = response.choices[0].message.content
+        
+        # Approximate token counts (cdao doesn't provide usage info)
+        # Estimate: ~4 characters per token (rough approximation)
+        total_chars = sum(len(msg.get("content", "")) for msg in cdao_messages)
+        prompt_tokens = total_chars // 4
+        completion_tokens = len(content) // 4
+        
+        # Store metadata
+        self._last_response_metadata = {
+            'token_usage': {
+                'prompt_tokens': prompt_tokens,
+                'completion_tokens': completion_tokens,
+                'total_tokens': prompt_tokens + completion_tokens
+            }
+        }
+        
+        return CDAOResponse(content, self._last_response_metadata)
+    
+    @property
+    def response_metadata(self):
+        """Get response metadata (for compatibility with ChatBedrock interface)."""
+        return self._last_response_metadata
+
+
+class CDAOResponse:
+    """
+    Response object that mimics ChatBedrock response interface.
+    """
+    
+    def __init__(self, content: str, response_metadata: Dict[str, Any]):
+        self.content = content
+        self.response_metadata = response_metadata
+
+
+def create_llm(
+    model_id: str, 
+    region: Optional[str] = None, 
+    temperature: float = 0.0,
+    model_provider: Optional[str] = None,
+    model_type: Optional[str] = None  # "bedrock" or "openai", auto-detect if None
+) -> Union[ChatBedrock, ChatCDAO]:
+    """
+    Create an LLM instance (Bedrock or OpenAI via cdao) with configurable temperature.
+    Automatically detects model type if not specified.
+    
+    Args:
+        model_id: Model ID (Bedrock model ID/ARN or OpenAI model ID)
+        region: AWS region (only used for Bedrock, defaults based on model type)
+        temperature: Sampling temperature (default: 0.0 for reproducibility)
+        model_provider: Provider name (e.g., "anthropic") - required when using Bedrock ARNs
+        model_type: "bedrock" or "openai" - auto-detected if None
+    
+    Returns:
+        ChatBedrock or ChatCDAO instance
+    """
+    # Auto-detect model type if not specified
+    if model_type is None:
+        # Check if it's an OpenAI model ID
+        if model_id in model_name2openai_id.values():
+            model_type = "openai"
+        elif model_id.startswith("arn:aws:bedrock:"):
+            model_type = "bedrock"
+        else:
+            # Default to bedrock for backward compatibility
+            model_type = "bedrock"
+    
+    if model_type == "openai":
+        return create_openai_llm(model_id, temperature)
+    else:
+        return create_bedrock_llm(model_id, region, temperature, model_provider)
+
+
+def create_openai_llm(
+    model_id: str,
+    temperature: float = 0.0
+) -> ChatCDAO:
+    """
+    Create an OpenAI LLM instance via cdao with configurable temperature.
+    
+    Args:
+        model_id: OpenAI model ID (e.g., "gpt-4.1-mini-2025-04-14")
+        temperature: Sampling temperature (default: 0.0 for reproducibility)
+    
+    Returns:
+        ChatCDAO instance
+    """
+    return ChatCDAO(model_id, temperature)
 
 
 def create_bedrock_llm(

@@ -15,11 +15,11 @@ from langchain_core.messages import HumanMessage
 import re
 
 try:
-    from ..translation import create_bedrock_llm
+    from ..translation import create_bedrock_llm, create_llm
     from ..utils import load_template, render_translation_prompt, format_terminology_dict, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
-    from translation import create_bedrock_llm
+    from translation import create_bedrock_llm, create_llm
     from utils import load_template, render_translation_prompt, format_terminology_dict, filter_terminology_by_source_text
     from vars import language_id2name
 
@@ -67,7 +67,8 @@ def run_workflow(
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
     model_provider: Optional[str] = None,
-    reasoning_words: int = 500
+    reasoning_words: int = 500,
+    model_type: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run IRB two-stage self-refine translation workflow.
@@ -94,8 +95,11 @@ def run_workflow(
     """
     import time
     
-    # Create LLM
-    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
+    # Create LLM (supports both Bedrock and OpenAI via cdao)
+    if model_type:
+        llm = create_llm(model_id, region, model_provider=model_provider, model_type=model_type)
+    else:
+        llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

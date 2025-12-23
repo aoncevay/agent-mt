@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from langchain_core.messages import HumanMessage
 
 try:
-    from ..translation import create_bedrock_llm
+    from ..translation import create_bedrock_llm, create_llm
     from ..utils import (
         render_translation_prompt,
         render_postedit_prompt,
@@ -21,7 +21,7 @@ try:
     )
     from ..vars import language_id2name
 except ImportError:
-    from translation import create_bedrock_llm
+    from translation import create_bedrock_llm, create_llm
     from utils import (
         render_translation_prompt,
         render_postedit_prompt,
@@ -81,7 +81,8 @@ def run_workflow(
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
     domain: str = "general",
-    model_provider: Optional[str] = None
+    model_provider: Optional[str] = None,
+    model_type: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run three-agent translation workflow: Translate -> Postedit -> Proofread.
@@ -112,9 +113,14 @@ def run_workflow(
     # - Translation: temperature=0 (reproducibility)
     # - Postedit: temperature=1 (exploration, encourages broader error detection)
     # - Proofread: temperature=0 (reproducibility)
-    llm_translate = create_bedrock_llm(model_id, region, temperature=0.0, model_provider=model_provider)
-    llm_postedit = create_bedrock_llm(model_id, region, temperature=1.0, model_provider=model_provider)
-    llm_proofread = create_bedrock_llm(model_id, region, temperature=0.0, model_provider=model_provider)
+    if model_type:
+        llm_translate = create_llm(model_id, region, temperature=0.0, model_provider=model_provider, model_type=model_type)
+        llm_postedit = create_llm(model_id, region, temperature=1.0, model_provider=model_provider, model_type=model_type)
+        llm_proofread = create_llm(model_id, region, temperature=0.0, model_provider=model_provider, model_type=model_type)
+    else:
+        llm_translate = create_bedrock_llm(model_id, region, temperature=0.0, model_provider=model_provider)
+        llm_postedit = create_bedrock_llm(model_id, region, temperature=1.0, model_provider=model_provider)
+        llm_proofread = create_bedrock_llm(model_id, region, temperature=0.0, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

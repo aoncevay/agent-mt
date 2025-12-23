@@ -17,11 +17,11 @@ import re
 import random
 
 try:
-    from ..translation import create_bedrock_llm
+    from ..translation import create_bedrock_llm, create_llm
     from ..utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from ..vars import language_id2name
 except ImportError:
-    from translation import create_bedrock_llm
+    from translation import create_bedrock_llm, create_llm
     from utils import load_template, get_language_name, format_terminology_dict, filter_terminology_by_source_text
     from vars import language_id2name
 
@@ -212,7 +212,8 @@ def run_workflow(
     long_window: int = DEFAULT_LONG_WINDOW,
     model_provider: Optional[str] = None,
     short_window: int = DEFAULT_SHORT_WINDOW,
-    top_k: int = DEFAULT_TOP_K
+    top_k: int = DEFAULT_TOP_K,
+    model_type: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run DeLTA document-level translation workflow.
@@ -242,8 +243,11 @@ def run_workflow(
     """
     import time
     
-    # Create LLM
-    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
+    # Create LLM (supports both Bedrock and OpenAI via cdao)
+    if model_type:
+        llm = create_llm(model_id, region, model_provider=model_provider, model_type=model_type)
+    else:
+        llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0
