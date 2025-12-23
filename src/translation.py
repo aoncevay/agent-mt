@@ -67,9 +67,17 @@ class ChatCDAO:
         
         self.model_id = model_id
         self.temperature = temperature
-        self.client = cdao.azure_openai_client(api_version='2024-12-01-preview')
+        # Lazy initialization: create client on first use (may help with environment timing)
+        self._client = None
         # Store response metadata for token counting
         self._last_response_metadata = {}
+    
+    @property
+    def client(self):
+        """Lazy initialization of cdao client."""
+        if self._client is None:
+            self._client = cdao.azure_openai_client(api_version='2024-12-01-preview')
+        return self._client
     
     def invoke(self, messages: List[BaseMessage]) -> 'CDAOResponse':
         """
@@ -108,6 +116,8 @@ class ChatCDAO:
             raise ValueError("No messages provided to ChatCDAO.invoke()")
         
         # Call cdao (exactly matching the working example)
+        # Note: The error "Provider gpt-4 model does not support chat" suggests
+        # the model ID might be parsed incorrectly by Azure OpenAI SDK
         try:
             response = self.client.chat.completions.create(
                 model=self.model_id,
@@ -119,9 +129,13 @@ class ChatCDAO:
             error_msg = str(e)
             print(f"    ⚠ cdao error details:")
             print(f"       Model ID: {self.model_id}")
+            print(f"       Model ID type: {type(self.model_id)}")
+            print(f"       Model ID repr: {repr(self.model_id)}")
             print(f"       Messages count: {len(cdao_messages)}")
+            print(f"       First message: {cdao_messages[0] if cdao_messages else 'None'}")
             print(f"       Temperature: {self.temperature}")
             print(f"       Error: {error_msg}")
+            print(f"       Error type: {type(e).__name__}")
             raise
         
         # Extract content
