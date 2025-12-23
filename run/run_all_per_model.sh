@@ -4,7 +4,9 @@
 # Note: set -e is not used here because we handle errors per-job in parallel execution
 
 MODEL="qwen3-32b"
-# MODEL options: qwen3-32b, qwen3-235b, gpt-oss-20b, gpt-oss-120b
+# MODEL options: qwen3-32b, qwen3-235b, gpt-oss-20b, gpt-oss-120b, gpt-4-1-mini, gpt-4-1, o4-mini
+# For ARNs: claude-sonnet-4, claude-sonnet-4-5
+MODEL_TYPE="model"  # Use "model" for standard model IDs or "model_arn" for Application Inference Profile ARNs
 DATASET="wmt25"
 # DATASET options: wmt25, dolfin
 MAX_PARALLEL=3  # Number of workflows to run in parallel (adjust based on your system/API limits)
@@ -25,13 +27,21 @@ run_workflow() {
     local workflow=$1
     local use_term=$2
     local term_flag=""
+    local model_flag=""
     
     if [ "$use_term" == "true" ]; then
         term_flag="--use_terminology"
     fi
     
+    # Set model flag based on MODEL_TYPE
+    if [ "$MODEL_TYPE" == "model_arn" ]; then
+        model_flag="--model_arn"
+    else
+        model_flag="--model"
+    fi
+    
     echo "[$(date +'%H:%M:%S')] Starting: $workflow $term_flag"
-    python src/run.py --dataset $DATASET --workflow $workflow --model $MODEL $term_flag
+    python src/run.py --dataset $DATASET --workflow $workflow $model_flag $MODEL $term_flag
     
     if [ $? -eq 0 ]; then
         echo "[$(date +'%H:%M:%S')] ✓ Completed: $workflow $term_flag"
@@ -43,11 +53,12 @@ run_workflow() {
 
 # Export function for parallel execution
 export -f run_workflow
-export MODEL DATASET
+export MODEL MODEL_TYPE DATASET
 
 echo "=========================================="
 echo "Running workflows in parallel (max $MAX_PARALLEL at a time)"
 echo "Model: $MODEL"
+echo "Model Type: $MODEL_TYPE"
 echo "Dataset: $DATASET"
 echo "Workflows: ${#WORKFLOWS[@]} (without terminology) + ${#WORKFLOWS[@]} (with terminology if wmt25)"
 echo "=========================================="
