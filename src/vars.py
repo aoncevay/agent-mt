@@ -5,12 +5,23 @@ model_name2bedrock_id = {
     "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
     "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
 
-    #"claude-sonnet-3-7": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-    #"claude-sonnet-4-5": "anthropic.claude-sonnet-4-5-20250929-v1:0",
-    #"claude-opus-4-5": "anthropic.claude-opus-4-5-20251101-v1:0",
+    "gpt-4-1-mini": "gpt-4.1-mini-2025-04-14",
+    "gpt-4-1": "gpt-4.1-2025-04-14",
+    "o4-mini": "o4-mini-2025-04-16",
 }
-# CLAUDE MODELS ARE NOT WORKING ON EXTERNAL AWS MACHINES
-# WE SHOULD ADD OPENAI MODELS (GPT4.1, o4-mini)
+
+# Mapping of model names to Bedrock Application Inference Profile ARNs
+# These ARNs require model_provider to be specified when using ChatBedrock
+model_name2bedrock_arn = {
+    "claude-sonnet-4": "arn:aws:bedrock:us-east-1:145023110438:application-inference-profile/69rh5jj9ixo6",
+    "claude-sonnet-4-5": "arn:aws:bedrock:us-east-1:145023110438:application-inference-profile/5bczxc9bbzmo",
+}
+
+# Mapping of model names to their providers (required when using ARNs)
+model_name2provider = {
+    "claude-sonnet-4": "anthropic",
+    "claude-sonnet-4-5": "anthropic",
+}
 
 language_id2name = {
     "en": "English",

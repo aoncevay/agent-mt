@@ -283,7 +283,8 @@ def run_workflow(
     max_retries: int = 3,
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
-    max_discourse_length: int = DEFAULT_MAX_DISCOURSE_LENGTH
+    max_discourse_length: int = DEFAULT_MAX_DISCOURSE_LENGTH,
+    model_provider: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Algorithm 1: Agentic Document-Level Translation Workflow.
@@ -294,7 +295,7 @@ def run_workflow(
     import time
     
     # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

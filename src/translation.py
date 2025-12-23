@@ -37,34 +37,60 @@ class TranslationState(TypedDict):
     use_terminology: bool
 
 
-def create_bedrock_llm(model_id: str, region: Optional[str] = None, temperature: float = 0.0) -> ChatBedrock:
+def create_bedrock_llm(
+    model_id: str, 
+    region: Optional[str] = None, 
+    temperature: float = 0.0,
+    model_provider: Optional[str] = None
+) -> ChatBedrock:
     """
     Create a Bedrock LLM instance with configurable temperature.
     
     Args:
-        model_id: Bedrock model ID (e.g., "qwen.qwen3-32b-v1:0")
-        region: AWS region (defaults to AWS_REGION env var or us-east-2)
+        model_id: Bedrock model ID (e.g., "qwen.qwen3-32b-v1:0") or ARN
+        region: AWS region (defaults to AWS_REGION env var or us-east-2 for model IDs, us-east-1 for ARNs)
         temperature: Sampling temperature (default: 0.0 for reproducibility)
                     - 0.0: Deterministic, reproducible (recommended for experiments)
                     - 0.1: Near-deterministic fallback if 0.0 causes issues
                     - Higher values: More creative but less reproducible
+        model_provider: Provider name (e.g., "anthropic") - required when using ARNs
     
     Note:
         Papers use temperature=0 for reproducibility (IRB-WMT25, MaMT final translation).
         Some papers use temperature=1 for exploration (MaMT postedit), but we default to 0.0
         for consistency and reproducibility across all workflows.
+        
+        When using ARNs (application-inference-profile), model_provider must be specified.
+        Default region for ARNs is us-east-1, for model IDs it's us-east-2.
     """
-    aws_region = region or os.getenv("AWS_REGION", "us-east-2")
+    # Determine if model_id is an ARN
+    is_arn = model_id.startswith("arn:aws:bedrock:")
     
-    bedrock_llm = ChatBedrock(
-        model_id=model_id,
-        region_name=aws_region,
-        credentials_profile_name=None,
-        model_kwargs={
+    # Set default region: us-east-1 for ARNs, us-east-2 for model IDs
+    if region is None:
+        if is_arn:
+            aws_region = os.getenv("AWS_REGION", "us-east-1")
+        else:
+            aws_region = os.getenv("AWS_REGION", "us-east-2")
+    else:
+        aws_region = region
+    
+    # Build ChatBedrock kwargs
+    bedrock_kwargs = {
+        "model_id": model_id,
+        "region_name": aws_region,
+        "credentials_profile_name": None,
+        "model_kwargs": {
             "temperature": temperature,
             "max_tokens": 4096,
         },
-    )
+    }
+    
+    # Add model_provider if provided (required for ARNs)
+    if model_provider:
+        bedrock_kwargs["model_provider"] = model_provider
+    
+    bedrock_llm = ChatBedrock(**bedrock_kwargs)
     
     return bedrock_llm
 

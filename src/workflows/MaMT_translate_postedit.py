@@ -36,7 +36,8 @@ def run_workflow(
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
-    reference: Optional[str] = None
+    reference: Optional[str] = None,
+    model_provider: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run two-agent translation workflow: Translate -> Postedit.
@@ -64,8 +65,8 @@ def run_workflow(
     # Create LLMs with different temperatures per paper:
     # - Translation: temperature=0 (reproducibility)
     # - Postedit: temperature=1 (exploration, encourages broader error detection)
-    llm_translate = create_bedrock_llm(model_id, region, temperature=0.0)
-    llm_postedit = create_bedrock_llm(model_id, region, temperature=1.0)
+    llm_translate = create_bedrock_llm(model_id, region, temperature=0.0, model_provider=model_provider)
+    llm_postedit = create_bedrock_llm(model_id, region, temperature=1.0, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

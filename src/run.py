@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data_loaders import get_data_loader
 from workflows import WORKFLOW_REGISTRY
 from evaluation import compute_chrf, compute_bleu, compute_term_success_rate
-from vars import model_name2bedrock_id
+from vars import model_name2bedrock_id, model_name2bedrock_arn, model_name2provider
 from workflow_acronyms import build_output_dir
 
 # Load environment variables
@@ -32,9 +32,11 @@ load_dotenv("config.env")
 # Configuration
 BASE_DATA_DIR = (Path(__file__).parent.parent / "data" / "raw").resolve()
 OUTPUT_BASE_DIR = (Path(__file__).parent.parent / "outputs").resolve()
-AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 MAX_RETRIES = int(os.getenv("BEDROCK_MAX_RETRIES", "3"))
 INITIAL_BACKOFF = float(os.getenv("BEDROCK_INITIAL_BACKOFF", "2.0"))
+# AWS_REGION will be set after parsing args (default: us-east-2, but us-east-1 for ARNs)
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
+# AWS_REGION will be set after parsing args (depends on model vs ARN)
 
 
 def get_workflow_module(workflow_name: str):
@@ -61,7 +63,8 @@ def process_sample(
     model_id: str,
     sample_idx: int,
     lang_pair: Optional[str] = None,
-    use_terminology: bool = False
+    use_terminology: bool = False,
+    model_provider: Optional[str] = None
 ) -> Dict[str, Any]:
     """Process a single sample through the workflow."""
     # Get translation direction
@@ -107,6 +110,10 @@ def process_sample(
         # Add reference if workflow supports it
         if "reference" in sig.parameters:
             workflow_kwargs["reference"] = reference_text
+        
+        # Add model_provider if workflow supports it and we have one
+        if model_provider and "model_provider" in sig.parameters:
+            workflow_kwargs["model_provider"] = model_provider
         
         result = workflow_module.run_workflow(**workflow_kwargs)
         
@@ -406,8 +413,11 @@ def main():
                         help="Dataset name: 'wmt25' or 'dolfin'")
     parser.add_argument("--workflow", type=str, required=True,
                         help=f"Workflow name (available: {list(WORKFLOW_REGISTRY.keys())})")
-    parser.add_argument("--model", type=str, required=True,
+    model_group = parser.add_mutually_exclusive_group(required=True)
+    model_group.add_argument("--model", type=str, default=None,
                         help=f"Model name (available: {list(model_name2bedrock_id.keys())})")
+    model_group.add_argument("--model_arn", type=str, default=None,
+                        help=f"Model ARN name (available: {list(model_name2bedrock_arn.keys())})")
     parser.add_argument("--target_languages", type=str, nargs="+", default=None,
                         help="Target languages to process (e.g., 'es de' for dolfin, 'zht' for wmt25). "
                              "If not specified, processes all available.")
@@ -422,13 +432,33 @@ def main():
     
     args = parser.parse_args()
     
-    # Validate model
-    if args.model not in model_name2bedrock_id:
-        print(f"Error: Unknown model '{args.model}'")
-        print(f"Available models: {list(model_name2bedrock_id.keys())}")
-        return 1
+    # Validate and get model_id/model_arn
+    model_id = None
+    model_provider = None
+    model_name = None
     
-    model_id = model_name2bedrock_id[args.model]
+    if args.model:
+        if args.model not in model_name2bedrock_id:
+            print(f"Error: Unknown model '{args.model}'")
+            print(f"Available models: {list(model_name2bedrock_id.keys())}")
+            return 1
+        model_id = model_name2bedrock_id[args.model]
+        model_name = args.model
+    elif args.model_arn:
+        if args.model_arn not in model_name2bedrock_arn:
+            print(f"Error: Unknown model ARN '{args.model_arn}'")
+            print(f"Available model ARNs: {list(model_name2bedrock_arn.keys())}")
+            return 1
+        model_id = model_name2bedrock_arn[args.model_arn]
+        model_provider = model_name2provider.get(args.model_arn)
+        model_name = args.model_arn
+    
+    # Set AWS_REGION: us-east-1 for ARNs, us-east-2 for model IDs (unless env var is set)
+    if not os.getenv("AWS_REGION"):
+        if model_provider:  # ARN case
+            AWS_REGION = "us-east-1"
+        else:  # Model ID case
+            AWS_REGION = "us-east-2"
     
     # Validate workflow
     try:
@@ -455,7 +485,9 @@ def main():
         print("=" * 80)
         print(f"Dataset: {args.dataset}")
         print(f"Workflow: {args.workflow}")
-        print(f"Model: {args.model} ({model_id})")
+        print(f"Model: {model_name} ({model_id})")
+        if model_provider:
+            print(f"Model Provider: {model_provider}")
         print(f"Target languages: {target_langs if target_langs else 'all (both directions)'}")
         print("=" * 80)
         
@@ -500,7 +532,7 @@ def main():
                     dataset=args.dataset,
                     lang_pair=lang_pair,
                     workflow_name=args.workflow,
-                    model_name=args.model,
+                    model_name=model_name,
                     use_terminology=args.use_terminology
                 )
             print(f"Output directory: {pair_output_dir}")
@@ -536,7 +568,8 @@ def main():
                     model_id=model_id,
                     sample_idx=i,
                     lang_pair=lang_pair,
-                    use_terminology=args.use_terminology
+                    use_terminology=args.use_terminology,
+                    model_provider=model_provider
                 )
                 if result:
                     results.append(result)
@@ -551,7 +584,7 @@ def main():
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
-                model_name=args.model,
+                model_name=model_name,
                 max_samples=args.max_samples,
                 resume=args.resume
             )
@@ -609,7 +642,9 @@ def main():
         print("=" * 80)
         print(f"Dataset: {args.dataset}")
         print(f"Workflow: {args.workflow}")
-        print(f"Model: {args.model} ({model_id})")
+        print(f"Model: {model_name} ({model_id})")
+        if model_provider:
+            print(f"Model Provider: {model_provider}")
         print(f"Language pairs: {lang_pairs}")
         print("=" * 80)
         
@@ -633,7 +668,7 @@ def main():
                     dataset=args.dataset,
                     lang_pair=lang_pair,
                     workflow_name=args.workflow,
-                    model_name=args.model,
+                    model_name=model_name,
                     use_terminology=args.use_terminology
                 )
             print(f"Output directory: {pair_output_dir}")
@@ -678,7 +713,8 @@ def main():
                     model_id=model_id,
                     sample_idx=i,
                     lang_pair=lang_pair,
-                    use_terminology=args.use_terminology
+                    use_terminology=args.use_terminology,
+                    model_provider=model_provider
                 )
                 if result:
                     results.append(result)
@@ -693,7 +729,7 @@ def main():
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
-                model_name=args.model,
+                model_name=model_name,
                 max_samples=args.max_samples,
                 resume=args.resume
             )

@@ -210,6 +210,7 @@ def run_workflow(
     reference: Optional[str] = None,
     summary_step: int = DEFAULT_SUMMARY_STEP,
     long_window: int = DEFAULT_LONG_WINDOW,
+    model_provider: Optional[str] = None,
     short_window: int = DEFAULT_SHORT_WINDOW,
     top_k: int = DEFAULT_TOP_K
 ) -> Dict[str, Any]:
@@ -242,7 +243,7 @@ def run_workflow(
     import time
     
     # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

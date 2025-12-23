@@ -25,7 +25,8 @@ def run_workflow(
     use_terminology: bool = False,
     region: Optional[str] = None,
     max_retries: int = 3,
-    initial_backoff: float = 2.0
+    initial_backoff: float = 2.0,
+    model_provider: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run single agent translation workflow.
@@ -40,7 +41,7 @@ def run_workflow(
     import time
     
     # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     # Create prompt (with terminology if requested)
     # Filter terminology to only include terms that appear in source text

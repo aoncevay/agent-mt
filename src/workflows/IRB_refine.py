@@ -66,6 +66,7 @@ def run_workflow(
     max_retries: int = 3,
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
+    model_provider: Optional[str] = None,
     reasoning_words: int = 500
 ) -> Dict[str, Any]:
     """
@@ -94,7 +95,7 @@ def run_workflow(
     import time
     
     # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0

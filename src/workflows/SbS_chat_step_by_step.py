@@ -92,7 +92,8 @@ def run_workflow(
     region: Optional[str] = None,
     max_retries: int = 3,
     initial_backoff: float = 2.0,
-    reference: Optional[str] = None
+    reference: Optional[str] = None,
+    model_provider: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run four-agent step-by-step translation workflow with conversation history: Research -> Draft -> Refinement -> Proofreading.
@@ -122,7 +123,7 @@ def run_workflow(
     import time
     
     # Create LLM
-    llm = create_bedrock_llm(model_id, region)
+    llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     total_tokens_input = 0
     total_tokens_output = 0
