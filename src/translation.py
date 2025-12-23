@@ -89,6 +89,7 @@ class ChatCDAO:
         Returns:
             CDAOResponse object with .content and .response_metadata
         """
+        print(f"    [DEBUG] ChatCDAO.invoke() called with model_id={self.model_id}")
         # Convert LangChain messages to cdao format
         cdao_messages = []
         for msg in messages:
@@ -206,9 +207,11 @@ def create_llm(
             # Default to bedrock for backward compatibility
             model_type = "bedrock"
     
+    print(f"    [DEBUG] create_llm: model_id={model_id}, model_type={model_type}, temperature={temperature}")
     if model_type == "openai":
         return create_openai_llm(model_id, temperature)
     else:
+        print(f"    [DEBUG] Using Bedrock (not cdao)")
         return create_bedrock_llm(model_id, region, temperature, model_provider)
 
 
@@ -226,6 +229,7 @@ def create_openai_llm(
     Returns:
         ChatCDAO instance
     """
+    print(f"    [DEBUG] Creating ChatCDAO with model_id={model_id}, temperature={temperature}")
     return ChatCDAO(model_id, temperature)
 
 
