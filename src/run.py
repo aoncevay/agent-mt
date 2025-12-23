@@ -463,6 +463,13 @@ def main():
                 print(f"  This library is only available in internal environments.")
                 print(f"  Please use a Bedrock model instead, or ensure cdao is installed.")
                 return 1
+        # Check if it's a Bedrock ARN model
+        elif args.model in model_name2bedrock_arn:
+            model_id = model_name2bedrock_arn[args.model]  # Use ARN as model_id
+            model_provider = model_name2provider.get(args.model)  # Get provider for ARN
+            model_name = args.model
+            model_type = "bedrock"
+        # Check if it's a regular Bedrock model ID
         elif args.model in model_name2bedrock_id:
             model_id = model_name2bedrock_id[args.model]
             model_name = args.model
@@ -470,6 +477,7 @@ def main():
         else:
             print(f"Error: Unknown model '{args.model}'")
             print(f"Available Bedrock models: {list(model_name2bedrock_id.keys())}")
+            print(f"Available Bedrock ARNs: {list(model_name2bedrock_arn.keys())}")
             print(f"Available OpenAI models: {list(model_name2openai_id.keys())}")
             return 1
     elif args.model_arn:
