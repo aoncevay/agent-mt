@@ -89,7 +89,6 @@ class ChatCDAO:
         Returns:
             CDAOResponse object with .content and .response_metadata
         """
-        print(f"    [DEBUG] ChatCDAO.invoke() called with model_id={self.model_id}")
         # Convert LangChain messages to cdao format
         cdao_messages = []
         for msg in messages:
@@ -126,18 +125,11 @@ class ChatCDAO:
                 temperature=self.temperature
             )
         except Exception as e:
-            # Add debug info to help diagnose the issue
+            # Re-raise with context
             error_msg = str(e)
-            print(f"    ⚠ cdao error details:")
-            print(f"       Model ID: {self.model_id}")
-            print(f"       Model ID type: {type(self.model_id)}")
-            print(f"       Model ID repr: {repr(self.model_id)}")
-            print(f"       Messages count: {len(cdao_messages)}")
-            print(f"       First message: {cdao_messages[0] if cdao_messages else 'None'}")
-            print(f"       Temperature: {self.temperature}")
-            print(f"       Error: {error_msg}")
-            print(f"       Error type: {type(e).__name__}")
-            raise
+            raise RuntimeError(
+                f"cdao chat completion failed for model {self.model_id}: {error_msg}"
+            ) from e
         
         # Extract content
         content = response.choices[0].message.content
@@ -207,11 +199,9 @@ def create_llm(
             # Default to bedrock for backward compatibility
             model_type = "bedrock"
     
-    print(f"    [DEBUG] create_llm: model_id={model_id}, model_type={model_type}, temperature={temperature}")
     if model_type == "openai":
         return create_openai_llm(model_id, temperature)
     else:
-        print(f"    [DEBUG] Using Bedrock (not cdao)")
         return create_bedrock_llm(model_id, region, temperature, model_provider)
 
 
@@ -229,7 +219,6 @@ def create_openai_llm(
     Returns:
         ChatCDAO instance
     """
-    print(f"    [DEBUG] Creating ChatCDAO with model_id={model_id}, temperature={temperature}")
     return ChatCDAO(model_id, temperature)
 
 

@@ -42,12 +42,9 @@ def run_workflow(
     import time
     
     # Create LLM (supports both Bedrock and OpenAI via cdao)
-    print(f"    [DEBUG zero_shot] model_type={model_type}, model_id={model_id}")
     if model_type:
-        print(f"    [DEBUG zero_shot] Calling create_llm with model_type={model_type}")
         llm = create_llm(model_id, region, model_provider=model_provider, model_type=model_type)
     else:
-        print(f"    [DEBUG zero_shot] model_type is None/empty, using create_bedrock_llm")
         llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
     
     # Create prompt (with terminology if requested)

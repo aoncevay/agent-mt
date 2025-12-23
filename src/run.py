@@ -123,12 +123,8 @@ def process_sample(
             workflow_kwargs["model_provider"] = model_provider
         
         # Add model_type if workflow supports it
-        print(f"    [DEBUG run.py] model_type={model_type}, has model_type param: {'model_type' in sig.parameters}")
         if model_type and "model_type" in sig.parameters:
             workflow_kwargs["model_type"] = model_type
-            print(f"    [DEBUG run.py] Added model_type={model_type} to workflow_kwargs")
-        else:
-            print(f"    [DEBUG run.py] NOT adding model_type (model_type={model_type}, in params: {'model_type' in sig.parameters})")
         
         result = workflow_module.run_workflow(**workflow_kwargs)
         
@@ -453,16 +449,12 @@ def main():
     model_name = None
     model_type = "bedrock"  # "bedrock" or "openai"
     
-    print(f"[DEBUG main] Initial model_type={model_type}, args.model={args.model}")
-    
     if args.model:
         # Check if it's an OpenAI model first
-        print(f"[DEBUG main] Checking if '{args.model}' is in model_name2openai_id: {args.model in model_name2openai_id}")
         if args.model in model_name2openai_id:
             model_id = model_name2openai_id[args.model]
             model_name = args.model
             model_type = "openai"
-            print(f"[DEBUG main] Set model_type='openai', model_id={model_id}")
             # Check if cdao is available
             try:
                 import cdao  # noqa: F401
@@ -562,8 +554,6 @@ def main():
         
         # Process each language pair
         all_results = []
-        
-        print(f"[DEBUG main] Before processing loop: model_type={model_type}, model_id={model_id}")
         
         for lang_pair, pair_samples in samples_by_pair.items():
             print(f"\n{'='*80}")
