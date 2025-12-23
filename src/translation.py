@@ -251,6 +251,13 @@ def create_bedrock_llm(
     # Determine if model_id is an ARN
     is_arn = model_id.startswith("arn:aws:bedrock:")
     
+    # If using ARN and model_provider not provided, raise error
+    if is_arn and not model_provider:
+        raise ValueError(
+            f"model_provider is required when using ARN as model_id. "
+            f"Received ARN: {model_id}, model_provider: {model_provider}"
+        )
+    
     # Set default region: us-east-1 for ARNs, us-east-2 for model IDs
     if region is None:
         if is_arn:
@@ -272,8 +279,12 @@ def create_bedrock_llm(
     }
     
     # Add model_provider if provided (required for ARNs)
+    # Try both as top-level parameter and in model_kwargs (LangChain versions differ)
     if model_provider:
+        # Try as top-level parameter first (older/newer versions)
         bedrock_kwargs["model_provider"] = model_provider
+        # Also add to model_kwargs (some versions expect it here)
+        bedrock_kwargs["model_kwargs"]["model_provider"] = model_provider
     
     bedrock_llm = ChatBedrock(**bedrock_kwargs)
     
