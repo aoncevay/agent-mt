@@ -424,11 +424,10 @@ def main():
                         help="Dataset name: 'wmt25' or 'dolfin'")
     parser.add_argument("--workflow", type=str, required=True,
                         help=f"Workflow name (available: {list(WORKFLOW_REGISTRY.keys())})")
-    model_group = parser.add_mutually_exclusive_group(required=True)
-    model_group.add_argument("--model", type=str, default=None,
-                        help=f"Model name (available: {list(model_name2bedrock_id.keys())})")
-    model_group.add_argument("--model_arn", type=str, default=None,
-                        help=f"Model ARN name (available: {list(model_name2bedrock_arn.keys())})")
+    parser.add_argument("--model", type=str, required=True,
+                        help=f"Model name (available Bedrock models: {list(model_name2bedrock_id.keys())}, "
+                             f"Bedrock ARNs: {list(model_name2bedrock_arn.keys())}, "
+                             f"OpenAI models: {list(model_name2openai_id.keys())})")
     parser.add_argument("--target_languages", type=str, nargs="+", default=None,
                         help="Target languages to process (e.g., 'es de' for dolfin, 'zht' for wmt25). "
                              "If not specified, processes all available.")
@@ -443,7 +442,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Validate and get model_id/model_arn
+    # Validate and get model_id (supports Bedrock model IDs, ARNs, and OpenAI models)
     model_id = None
     model_provider = None
     model_name = None
@@ -480,15 +479,6 @@ def main():
             print(f"Available Bedrock ARNs: {list(model_name2bedrock_arn.keys())}")
             print(f"Available OpenAI models: {list(model_name2openai_id.keys())}")
             return 1
-    elif args.model_arn:
-        if args.model_arn not in model_name2bedrock_arn:
-            print(f"Error: Unknown model ARN '{args.model_arn}'")
-            print(f"Available model ARNs: {list(model_name2bedrock_arn.keys())}")
-            return 1
-        model_id = model_name2bedrock_arn[args.model_arn]
-        model_provider = model_name2provider.get(args.model_arn)
-        model_name = args.model_arn
-        model_type = "bedrock"
     
     # Set AWS_REGION: us-east-1 for ARNs, us-east-2 for model IDs (unless env var is set)
     # Only relevant for Bedrock models

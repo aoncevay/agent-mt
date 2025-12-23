@@ -44,7 +44,7 @@ python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-32b --resum
 
 **Using model ARN (for Application Inference Profiles):**
 ```bash
-python src/run.py --dataset wmt25 --workflow zero_shot --model_arn claude-sonnet-4-5 --max_samples 10
+python src/run.py --dataset wmt25 --workflow zero_shot --model claude-sonnet-4-5 --max_samples 10
 ```
 
 **Run all workflows (testing with few samples):**
@@ -191,7 +191,7 @@ model_name2provider = {
 
 **Usage:**
 ```bash
-python src/run.py --dataset wmt25 --workflow zero_shot --model_arn claude-sonnet-4
+python src/run.py --dataset wmt25 --workflow zero_shot --model claude-sonnet-4
 ```
 
 **Notes:**
@@ -362,9 +362,11 @@ Complementary workflows (for ablation if needed):
 - `gpt-4-1` - GPT-4.1
 - `o4-mini` - O4 Mini
 
-### Model ARNs (Application Inference Profiles)
-- `claude-sonnet-4` - Claude Sonnet 4 (via ARN)
-- `claude-sonnet-4-5` - Claude Sonnet 4.5 (via ARN)
+### Bedrock Model ARNs (Application Inference Profiles)
+- `claude-sonnet-4` - Claude Sonnet 4 (via Application Inference Profile ARN)
+- `claude-sonnet-4-5` - Claude Sonnet 4.5 (via Application Inference Profile ARN)
+
+**Note:** ARN models are used the same way as regular models with `--model`. The system automatically detects ARNs and handles them appropriately.
 
 See `src/vars.py` for the complete list and to add new models.
 
@@ -388,7 +390,7 @@ See `src/vars.py` for the complete list and to add new models.
 python src/run.py \
   --dataset {wmt25|dolfin} \
   --workflow {workflow_name} \
-  (--model {model_name} | --model_arn {model_arn_name}) \
+  --model {model_name} \
   [--target_languages {lang1 lang2 ...}] \
   [--max_samples {N}] \
   [--use_terminology] \
@@ -398,15 +400,12 @@ python src/run.py \
 
 - `--dataset`: Dataset name (`wmt25` or `dolfin`)
 - `--workflow`: Workflow name (see Available Workflows)
-- `--model`: Model name using standard Bedrock model IDs (see Available Models)
-- `--model_arn`: Model name using Application Inference Profile ARNs (mutually exclusive with `--model`)
+- `--model`: Model name (supports Bedrock model IDs, Bedrock ARNs, and OpenAI models - see Available Models)
 - `--target_languages`: Filter specific language pairs (optional)
 - `--max_samples`: Limit number of samples per language pair (optional)
 - `--use_terminology`: Enable terminology (WMT25 only)
 - `--resume`: Resume interrupted experiment
 - `--output_dir`: Custom output directory (optional)
-
-**Note:** You must specify either `--model` or `--model_arn`, but not both.
 
 ## Evaluation Metrics
 
