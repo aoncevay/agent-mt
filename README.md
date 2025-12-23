@@ -42,6 +42,11 @@ python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-32b --use_t
 python src/run.py --dataset wmt25 --workflow zero_shot --model qwen3-32b --resume
 ```
 
+**Using model ARN (for Application Inference Profiles):**
+```bash
+python src/run.py --dataset wmt25 --workflow zero_shot --model_arn claude-sonnet-4-5 --max_samples 10
+```
+
 **Run all workflows (testing with few samples):**
 ```bash
 cd run
@@ -147,6 +152,8 @@ Each experiment generates a `report.json` with:
 
 ## Adding New Models
 
+### Using Model IDs (Standard Foundation Models)
+
 Edit `src/vars.py` and add your model to `model_name2bedrock_id`:
 
 ```python
@@ -160,6 +167,37 @@ model_name2bedrock_id = {
 **Finding Bedrock model IDs:**
 - AWS Console → Bedrock → Foundation models
 - Format: `provider.model-name:version` (e.g., `qwen.qwen3-32b-v1:0`)
+
+**Usage:**
+```bash
+python src/run.py --dataset wmt25 --workflow zero_shot --model your-model-name
+```
+
+### Using Model ARNs (Application Inference Profiles)
+
+For models accessed via Application Inference Profile ARNs (e.g., in internal AWS environments), add to `model_name2bedrock_arn` and `model_name2provider`:
+
+```python
+model_name2bedrock_arn = {
+    "claude-sonnet-4": "arn:aws:bedrock:us-east-1:ACCOUNT_ID:application-inference-profile/PROFILE_ID",
+    "your-model-arn-name": "arn:aws:bedrock:region:account:application-inference-profile/profile-id",  # Add here
+}
+
+model_name2provider = {
+    "claude-sonnet-4": "anthropic",  # Provider name (anthropic, amazon, meta, etc.)
+    "your-model-arn-name": "provider-name",  # Add here
+}
+```
+
+**Usage:**
+```bash
+python src/run.py --dataset wmt25 --workflow zero_shot --model_arn claude-sonnet-4
+```
+
+**Notes:**
+- ARNs default to `us-east-1` region (unless `AWS_REGION` env var is set)
+- Model IDs default to `us-east-2` region
+- The `model_provider` is required when using ARNs and is automatically passed to Bedrock
 
 **For OpenAI models:**
 - A new module or code might need to be implemented for this
@@ -315,10 +353,18 @@ Complementary workflows (for ablation if needed):
 
 ## Available Models
 
+### Model IDs (Standard Foundation Models)
 - `qwen3-32b` - Qwen 3 32B
 - `qwen3-235b` - Qwen 3 235B
 - `gpt-oss-20b` - GPT-OSS 20B
 - `gpt-oss-120b` - GPT-OSS 120B
+- `gpt-4-1-mini` - GPT-4.1 Mini
+- `gpt-4-1` - GPT-4.1
+- `o4-mini` - O4 Mini
+
+### Model ARNs (Application Inference Profiles)
+- `claude-sonnet-4` - Claude Sonnet 4 (via ARN)
+- `claude-sonnet-4-5` - Claude Sonnet 4.5 (via ARN)
 
 See `src/vars.py` for the complete list and to add new models.
 
@@ -342,7 +388,7 @@ See `src/vars.py` for the complete list and to add new models.
 python src/run.py \
   --dataset {wmt25|dolfin} \
   --workflow {workflow_name} \
-  --model {model_name} \
+  (--model {model_name} | --model_arn {model_arn_name}) \
   [--target_languages {lang1 lang2 ...}] \
   [--max_samples {N}] \
   [--use_terminology] \
@@ -352,12 +398,15 @@ python src/run.py \
 
 - `--dataset`: Dataset name (`wmt25` or `dolfin`)
 - `--workflow`: Workflow name (see Available Workflows)
-- `--model`: Model name (see Available Models)
+- `--model`: Model name using standard Bedrock model IDs (see Available Models)
+- `--model_arn`: Model name using Application Inference Profile ARNs (mutually exclusive with `--model`)
 - `--target_languages`: Filter specific language pairs (optional)
 - `--max_samples`: Limit number of samples per language pair (optional)
 - `--use_terminology`: Enable terminology (WMT25 only)
 - `--resume`: Resume interrupted experiment
 - `--output_dir`: Custom output directory (optional)
+
+**Note:** You must specify either `--model` or `--model_arn`, but not both.
 
 ## Evaluation Metrics
 
