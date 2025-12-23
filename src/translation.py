@@ -84,20 +84,45 @@ class ChatCDAO:
         # Convert LangChain messages to cdao format
         cdao_messages = []
         for msg in messages:
-            if isinstance(msg, HumanMessage):
-                cdao_messages.append({"role": "user", "content": msg.content})
-            elif isinstance(msg, AIMessage):
-                cdao_messages.append({"role": "assistant", "content": msg.content})
+            # Get content, handling None or empty cases
+            if hasattr(msg, 'content'):
+                content = msg.content
             else:
-                # Fallback: try to get content
-                cdao_messages.append({"role": "user", "content": str(msg.content)})
+                content = str(msg)
+            
+            # Skip empty messages
+            if not content or not str(content).strip():
+                continue
+            
+            # Determine role based on message type
+            if isinstance(msg, HumanMessage):
+                cdao_messages.append({"role": "user", "content": str(content)})
+            elif isinstance(msg, AIMessage):
+                cdao_messages.append({"role": "assistant", "content": str(content)})
+            else:
+                # Fallback: default to user role
+                cdao_messages.append({"role": "user", "content": str(content)})
         
-        # Call cdao
-        response = self.client.chat.completions.create(
-            model=self.model_id,
-            messages=cdao_messages,
-            temperature=self.temperature
-        )
+        # Ensure we have at least one message
+        if not cdao_messages:
+            raise ValueError("No messages provided to ChatCDAO.invoke()")
+        
+        # Call cdao (exactly matching the working example)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=cdao_messages,
+                temperature=self.temperature
+            )
+        except Exception as e:
+            # Add debug info to help diagnose the issue
+            error_msg = str(e)
+            print(f"    ⚠ cdao error details:")
+            print(f"       Model ID: {self.model_id}")
+            print(f"       Messages count: {len(cdao_messages)}")
+            print(f"       Temperature: {self.temperature}")
+            print(f"       Error: {error_msg}")
+            raise
         
         # Extract content
         content = response.choices[0].message.content
