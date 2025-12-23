@@ -278,13 +278,15 @@ def create_bedrock_llm(
         },
     }
     
-    # Add model_provider if provided (required for ARNs)
-    # Try both as top-level parameter and in model_kwargs (LangChain versions differ)
+    # Add provider for ARNs
+    # Based on LangChain ChatBedrock docs, when using ARNs, provider should be top-level
+    # The warning "model_provider was transferred to model_kwargs" is misleading - 
+    # it's actually expected as a top-level parameter called "provider" or "model_provider"
     if model_provider:
-        # Try as top-level parameter first (older/newer versions)
+        # Try "provider" first (common name in AWS SDKs)
+        bedrock_kwargs["provider"] = model_provider
+        # Also set "model_provider" in case that's what it expects
         bedrock_kwargs["model_provider"] = model_provider
-        # Also add to model_kwargs (some versions expect it here)
-        bedrock_kwargs["model_kwargs"]["model_provider"] = model_provider
     
     bedrock_llm = ChatBedrock(**bedrock_kwargs)
     
