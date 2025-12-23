@@ -609,7 +609,8 @@ def main():
                     sample_idx=i,
                     lang_pair=lang_pair,
                     use_terminology=args.use_terminology,
-                    model_provider=model_provider
+                    model_provider=model_provider,
+                    model_type=model_type
                 )
                 if result:
                     results.append(result)
@@ -754,7 +755,8 @@ def main():
                     sample_idx=i,
                     lang_pair=lang_pair,
                     use_terminology=args.use_terminology,
-                    model_provider=model_provider
+                    model_provider=model_provider,
+                    model_type=model_type
                 )
                 if result:
                     results.append(result)
