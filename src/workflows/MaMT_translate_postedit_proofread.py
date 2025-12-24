@@ -208,6 +208,12 @@ def run_workflow(
             
             # Parse corrections and apply them
             corrections = parse_postedit_response(postedit_response_text)
+            
+            # Check if parsing failed (empty dict means parsing error)
+            if not corrections and attempt < max_retries:
+                print(f"    ⚠ Failed to parse JSON response (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                continue
+            
             postedit_output = apply_postedit_corrections(translation, corrections)
             
             # Get token counts

@@ -474,11 +474,11 @@ def main():
             model_name = args.model
             model_type = "bedrock"
         else:
-            print(f"Error: Unknown model '{args.model}'")
+        print(f"Error: Unknown model '{args.model}'")
             print(f"Available Bedrock models: {list(model_name2bedrock_id.keys())}")
             print(f"Available Bedrock ARNs: {list(model_name2bedrock_arn.keys())}")
             print(f"Available OpenAI models: {list(model_name2openai_id.keys())}")
-            return 1
+        return 1
     
     # Set AWS_REGION: us-east-1 for ARNs, us-east-2 for model IDs (unless env var is set)
     # Only relevant for Bedrock models
