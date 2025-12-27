@@ -32,19 +32,13 @@ DEFAULT_MAX_DISCOURSE_LENGTH = 1024  # Maximum token length per discourse (L_max
 def split_sentences(text: str, lang: str) -> List[str]:
     """
     Split text into sentences based on language.
-    Uses pysbd for most languages, jieba for Chinese.
+    Uses punctuation marks for Chinese, pysbd for other languages.
     """
     if lang.startswith("zh"):
-        # Use jieba for Chinese segmentation
-        try:
-            import jieba
-            sentences = list(jieba.cut(text, cut_all=False))
-            return [sentence.strip() for sentence in sentences if sentence.strip()]
-        except ImportError:
-            print("    ⚠ Warning: jieba not installed. Install with: pip install jieba")
-            # Fallback: split by Chinese punctuation
-            sentences = re.split(r'[。！？\n]', text)
-            return [s.strip() for s in sentences if s.strip()]
+        # Split by Chinese punctuation marks (correct sentence segmentation)
+        # Note: jieba.cut() is for word segmentation, not sentence segmentation
+        sentences = re.split(r'[。！？\n]', text)
+        return [s.strip() for s in sentences if s.strip()]
     else:
         try:
             import pysbd

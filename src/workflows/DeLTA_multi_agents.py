@@ -259,26 +259,19 @@ def run_workflow(
         ReadTimeoutError = Exception
         ClientError = Exception
     
-    # Split source text into sentences using DeLTA's exact method
-    # For Chinese: use jieba, for other languages: use pysbd
+    # Split source text into sentences
+    # For Chinese: split by punctuation marks (。！？), for other languages: use pysbd
     def split_sentences_delta(text: str, lang: str) -> List[str]:
         """
-        Split sentences based on the language (exact implementation from DeLTA):
-        - Chinese (lang starts with 'zh'): Use jieba for segmentation by punctuation.
+        Split sentences based on the language:
+        - Chinese (lang starts with 'zh'): Split by punctuation marks (。！？).
         - Other languages: Use pysbd's Segmenter.
         """
         if lang.startswith("zh"):
-            # Use jieba to segment Chinese sentences
-            try:
-                import jieba
-                sentences = list(jieba.cut(text, cut_all=False))
-                return [sentence.strip() for sentence in sentences if sentence.strip()]
-            except ImportError:
-                print("    ⚠ Warning: jieba not installed. Install with: pip install jieba")
-                # Fallback: split by Chinese punctuation
-                import re
-                sentences = re.split(r'[。！？\n]', text)
-                return [s.strip() for s in sentences if s.strip()]
+            # Split by Chinese punctuation marks (correct sentence segmentation)
+            # Note: jieba.cut() is for word segmentation, not sentence segmentation
+            sentences = re.split(r'[。！？\n]', text)
+            return [s.strip() for s in sentences if s.strip()]
         else:
             try:
                 import pysbd
