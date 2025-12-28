@@ -120,11 +120,16 @@ def generate_report(
         workflow = report_data.get('workflow', 'unknown')
         model = report_data.get('model', 'unknown')
         
-        # Parse lang_pair from path or report
+        # Parse lang_pair and terminology status from path
         parts = report_path.parts
+        use_terminology = False
         try:
             outputs_idx = parts.index('outputs')
             lang_pair = parts[outputs_idx + 2]
+            workflow_dir = parts[outputs_idx + 3]
+            # Check if this is a terminology experiment
+            if workflow_dir.endswith('.term'):
+                use_terminology = True
         except (ValueError, IndexError):
             lang_pair = report_data.get('lang_pair', 'unknown')
         
@@ -141,7 +146,8 @@ def generate_report(
             'completed': is_completed,
             'total': total,
             'successful': successful,
-            'failed': report_data.get('failed_samples', 0)
+            'failed': report_data.get('failed_samples', 0),
+            'use_terminology': use_terminology
         })
     
     # Print report
@@ -173,12 +179,15 @@ def generate_report(
                 for lang_pair in sorted(by_dataset[dataset][workflow][model].keys()):
                     for status in by_dataset[dataset][workflow][model][lang_pair]:
                         model_total += 1
+                        term_suffix = " (term)" if status['use_terminology'] else ""
                         if status['completed']:
                             model_completed += 1
-                            lang_pairs_status.append(f"  ✓ {lang_pair}: {status['successful']}/{status['total']} samples")
+                            lang_pairs_status.append(
+                                f"  ✓ {lang_pair}{term_suffix}: {status['successful']}/{status['total']} samples"
+                            )
                         else:
                             lang_pairs_status.append(
-                                f"  ✗ {lang_pair}: {status['successful']}/{status['total']} samples "
+                                f"  ✗ {lang_pair}{term_suffix}: {status['successful']}/{status['total']} samples "
                                 f"({status['failed']} failed)"
                             )
                 
