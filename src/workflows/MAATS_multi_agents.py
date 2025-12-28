@@ -105,7 +105,8 @@ def run_workflow(
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
     model_provider: Optional[str] = None,
-    model_type: Optional[str] = None
+    model_type: Optional[str] = None,
+    base_translation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run MAATS multi-agent translation workflow.
@@ -149,76 +150,91 @@ def run_workflow(
         ClientError = Exception
     
     # Step 1: Zero-shot translation (with terminology if use_terminology=True)
-    print("    [Agent 0/9] Zero-shot translation...")
-    
-    # Filter terminology to only include terms that appear in source text
-    filtered_terminology = None
-    if use_terminology and terminology:
-        filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
-        if filtered_terminology:
-            filtered_terminology = filter_terminology_by_source_text(
-                filtered_terminology, source_text, case_sensitive=False
-            )
+    # Use base_translation if provided, otherwise generate translation
+    if base_translation is not None:
+        print("    [Agent 0/9] Using base translation (skipping zero-shot translation step)...")
+        translation = base_translation
+        # Filter terminology for later use in refinement
+        filtered_terminology = None
+        if use_terminology and terminology:
+            filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
             if filtered_terminology:
-                print(f"    Using {len(filtered_terminology)} relevant terminology entries "
-                      f"(out of {len(terminology)} total)")
-            else:
-                print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
-    
-    zero_shot_prompt = render_translation_prompt(
-        source_text=source_text,
-        source_lang=source_lang,
-        target_lang=target_lang,
-        language_id2name=language_id2name,
-        use_terminology=filtered_terminology is not None,
-        terminology=filtered_terminology,
-        max_terms=None if filtered_terminology else 50
-    )
-    
-    translation = None
-    for attempt in range(max_retries + 1):
-        try:
-            message = HumanMessage(content=zero_shot_prompt)
-            response = llm.invoke([message])
-            
-            translation = response.content.strip()
-            
-            # Get token counts
-            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-            
-            if tokens_input == 0:
-                tokens_input = len(zero_shot_prompt) // 4
-            if tokens_output == 0:
-                tokens_output = len(translation) // 4
-            
-            total_tokens_input += tokens_input
-            total_tokens_output += tokens_output
-            
-            break
+                filtered_terminology = filter_terminology_by_source_text(
+                    filtered_terminology, source_text, case_sensitive=False
+                )
+        # No tokens consumed for base translation (already generated)
+        outputs.append(translation)
+    else:
+        print("    [Agent 0/9] Zero-shot translation...")
         
-        except (ReadTimeoutError, ClientError) as e:
-            error_str = str(e).lower()
-            is_timeout = (
-                "timeout" in error_str or 
-                "read timeout" in error_str or
-                isinstance(e, ReadTimeoutError)
-            )
+        # Filter terminology to only include terms that appear in source text
+        filtered_terminology = None
+        if use_terminology and terminology:
+            filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+            if filtered_terminology:
+                filtered_terminology = filter_terminology_by_source_text(
+                    filtered_terminology, source_text, case_sensitive=False
+                )
+                if filtered_terminology:
+                    print(f"    Using {len(filtered_terminology)} relevant terminology entries "
+                          f"(out of {len(terminology)} total)")
+                else:
+                    print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
+        
+        zero_shot_prompt = render_translation_prompt(
+            source_text=source_text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            use_terminology=filtered_terminology is not None,
+            terminology=filtered_terminology,
+            max_terms=None if filtered_terminology else 50
+        )
+        
+        translation = None
+        for attempt in range(max_retries + 1):
+            try:
+                message = HumanMessage(content=zero_shot_prompt)
+                response = llm.invoke([message])
+                
+                translation = response.content.strip()
+                
+                # Get token counts
+                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                
+                if tokens_input == 0:
+                    tokens_input = len(zero_shot_prompt) // 4
+                if tokens_output == 0:
+                    tokens_output = len(translation) // 4
+                
+                total_tokens_input += tokens_input
+                total_tokens_output += tokens_output
+                
+                break
             
-            if not is_timeout:
-                raise
-            
-            if attempt < max_retries:
-                backoff_time = (2 ** attempt) * initial_backoff
-                print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
-                time.sleep(backoff_time)
-            else:
-                raise RuntimeError(f"Zero-shot translation failed after {max_retries + 1} attempts due to timeout") from e
-    
-    if translation is None:
-        raise RuntimeError("Zero-shot translation step failed")
-    
-    outputs.append(translation)
+            except (ReadTimeoutError, ClientError) as e:
+                error_str = str(e).lower()
+                is_timeout = (
+                    "timeout" in error_str or 
+                    "read timeout" in error_str or
+                    isinstance(e, ReadTimeoutError)
+                )
+                
+                if not is_timeout:
+                    raise
+                
+                if attempt < max_retries:
+                    backoff_time = (2 ** attempt) * initial_backoff
+                    print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                    time.sleep(backoff_time)
+                else:
+                    raise RuntimeError(f"Zero-shot translation failed after {max_retries + 1} attempts due to timeout") from e
+        
+        if translation is None:
+            raise RuntimeError("Zero-shot translation step failed")
+        
+        outputs.append(translation)
     
     # Steps 2-8: Dimension evaluator agents (each evaluates independently)
     annotations = {}

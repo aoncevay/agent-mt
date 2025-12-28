@@ -68,7 +68,8 @@ def run_workflow(
     reference: Optional[str] = None,
     model_provider: Optional[str] = None,
     reasoning_words: int = 500,
-    model_type: Optional[str] = None
+    model_type: Optional[str] = None,
+    base_translation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run IRB two-stage self-refine translation workflow.
@@ -113,75 +114,92 @@ def run_workflow(
         ClientError = Exception
     
     # Step 1: Initial translation (with terminology if available)
-    print("    [Agent 1/2] Initial translation...")
-    
-    # Filter terminology to only include terms that appear in source text
-    filtered_terminology = None
-    if use_terminology and terminology:
-        filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
-        if filtered_terminology:
-            filtered_terminology = filter_terminology_by_source_text(
-                filtered_terminology, source_text, case_sensitive=False
-            )
-            if filtered_terminology:
-                print(f"    Using {len(filtered_terminology)} relevant terminology entries "
-                      f"(out of {len(terminology)} total)")
-            else:
-                print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
-    
-    translation_prompt = render_translation_prompt(
-        source_text=source_text,
-        source_lang=source_lang,
-        target_lang=target_lang,
-        language_id2name=language_id2name,
-        use_terminology=filtered_terminology is not None,
-        terminology=filtered_terminology,
-        max_terms=None if filtered_terminology else 50
-    )
-    
-    initial_translation = None
-    for attempt in range(max_retries + 1):
-        try:
-            message = HumanMessage(content=translation_prompt)
-            response = llm.invoke([message])
-            
-            initial_translation = response.content.strip()
-            
-            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-            
-            if tokens_input == 0:
-                tokens_input = len(translation_prompt) // 4
-            if tokens_output == 0:
-                tokens_output = len(initial_translation) // 4
-            
-            total_tokens_input += tokens_input
-            total_tokens_output += tokens_output
-            
-            break
+    # Use base_translation if provided, otherwise generate translation
+    if base_translation is not None:
+        print("    [Agent 1/2] Using base translation (skipping initial translation step)...")
+        initial_translation = base_translation
+        # Still need translation_prompt for refinement step
+        translation_prompt = render_translation_prompt(
+            source_text=source_text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            use_terminology=False,
+            terminology=None,
+            max_terms=50
+        )
+        # No tokens consumed for base translation (already generated)
+        outputs.append(initial_translation)
+    else:
+        print("    [Agent 1/2] Initial translation...")
         
-        except (ReadTimeoutError, ClientError) as e:
-            error_str = str(e).lower()
-            is_timeout = (
-                "timeout" in error_str or 
-                "read timeout" in error_str or
-                isinstance(e, ReadTimeoutError)
-            )
+        # Filter terminology to only include terms that appear in source text
+        filtered_terminology = None
+        if use_terminology and terminology:
+            filtered_terminology = format_terminology_dict(terminology, source_lang, target_lang, max_terms=50)
+            if filtered_terminology:
+                filtered_terminology = filter_terminology_by_source_text(
+                    filtered_terminology, source_text, case_sensitive=False
+                )
+                if filtered_terminology:
+                    print(f"    Using {len(filtered_terminology)} relevant terminology entries "
+                          f"(out of {len(terminology)} total)")
+                else:
+                    print(f"    No terminology entries found in source text (out of {len(terminology)} total)")
+        
+        translation_prompt = render_translation_prompt(
+            source_text=source_text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            use_terminology=filtered_terminology is not None,
+            terminology=filtered_terminology,
+            max_terms=None if filtered_terminology else 50
+        )
+        
+        initial_translation = None
+        for attempt in range(max_retries + 1):
+            try:
+                message = HumanMessage(content=translation_prompt)
+                response = llm.invoke([message])
+                
+                initial_translation = response.content.strip()
+                
+                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                
+                if tokens_input == 0:
+                    tokens_input = len(translation_prompt) // 4
+                if tokens_output == 0:
+                    tokens_output = len(initial_translation) // 4
+                
+                total_tokens_input += tokens_input
+                total_tokens_output += tokens_output
+                
+                break
             
-            if not is_timeout:
-                raise
-            
-            if attempt < max_retries:
-                backoff_time = (2 ** attempt) * initial_backoff
-                print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
-                time.sleep(backoff_time)
-            else:
-                raise RuntimeError(f"Initial translation failed after {max_retries + 1} attempts due to timeout") from e
-    
-    if initial_translation is None:
-        raise RuntimeError("Initial translation step failed")
-    
-    outputs.append(initial_translation)
+            except (ReadTimeoutError, ClientError) as e:
+                error_str = str(e).lower()
+                is_timeout = (
+                    "timeout" in error_str or 
+                    "read timeout" in error_str or
+                    isinstance(e, ReadTimeoutError)
+                )
+                
+                if not is_timeout:
+                    raise
+                
+                if attempt < max_retries:
+                    backoff_time = (2 ** attempt) * initial_backoff
+                    print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                    time.sleep(backoff_time)
+                else:
+                    raise RuntimeError(f"Initial translation failed after {max_retries + 1} attempts due to timeout") from e
+        
+        if initial_translation is None:
+            raise RuntimeError("Initial translation step failed")
+        
+        outputs.append(initial_translation)
     
     # Step 2: Refinement agent
     print("    [Agent 2/2] Refinement...")

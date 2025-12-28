@@ -32,11 +32,13 @@ def build_output_dir(
     workflow_name: str,
     model_name: str,
     use_terminology: bool = False,
-    base_dir: Optional[Path] = None
+    base_dir: Optional[Path] = None,
+    base_model_name: Optional[str] = None
 ) -> Path:
     """
     Build output directory path following the structure:
     outputs/{dataset}/{lang_pair}/{workflow_acronym}{.term}/{model}
+    If base_model_name is provided, model_name becomes: {base_model_name}+{model_name}
     
     Args:
         dataset: Dataset name (e.g., "wmt25", "dolfin")
@@ -45,9 +47,11 @@ def build_output_dir(
         model_name: Model name (e.g., "qwen3-235b")
         use_terminology: Whether terminology is enabled
         base_dir: Base output directory (defaults to outputs/ relative to project root)
+        base_model_name: Optional base model name (if provided, model_name becomes base_model+model)
     
     Returns:
         Path to the output directory: outputs/{dataset}/{lang_pair}/{acronym}{.term}/{model}
+        If base_model_name is provided: outputs/{dataset}/{lang_pair}/{acronym}{.term}/{base_model}+{model}
     """
     if base_dir is None:
         # Compute base dir relative to this file to avoid circular imports
@@ -64,6 +68,12 @@ def build_output_dir(
     else:
         workflow_dir = acronym
     
+    # Combine model names if base_model is provided
+    if base_model_name:
+        final_model_name = f"{base_model_name}+{model_name}"
+    else:
+        final_model_name = model_name
+    
     # Full path: outputs/{dataset}/{lang_pair}/{acronym}{.term}/{model}
-    return base_dir / dataset / lang_pair / workflow_dir / model_name
+    return base_dir / dataset / lang_pair / workflow_dir / final_model_name
 

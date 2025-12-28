@@ -38,7 +38,8 @@ def run_workflow(
     initial_backoff: float = 2.0,
     reference: Optional[str] = None,
     model_provider: Optional[str] = None,
-    model_type: Optional[str] = None
+    model_type: Optional[str] = None,
+    base_translation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Run two-agent translation workflow: Translate -> Postedit.
@@ -84,59 +85,65 @@ def run_workflow(
         ClientError = Exception
     
     # Step 1: Translate Agent (temperature=0 for reproducibility)
-    print("    [Agent 1/2] Translate...")
-    translate_prompt = render_translation_prompt(
-        source_text=source_text,
-        source_lang=source_lang,
-        target_lang=target_lang,
-        language_id2name=language_id2name,
-        use_terminology=False,
-        terminology=None,
-        max_terms=50
-    )
-    
-    translation = None
-    for attempt in range(max_retries + 1):
-        try:
-            message = HumanMessage(content=translate_prompt)
-            response = llm_translate.invoke([message])
-            
-            translation = response.content.strip()
-            
-            # Get token counts
-            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-            
-            if tokens_input == 0:
-                tokens_input = len(translate_prompt) // 4
-            if tokens_output == 0:
-                tokens_output = len(translation) // 4
-            
-            total_tokens_input += tokens_input
-            total_tokens_output += tokens_output
-            
-            break
+    # Use base_translation if provided, otherwise generate translation
+    if base_translation is not None:
+        print("    [Agent 1/2] Using base translation (skipping translation step)...")
+        translation = base_translation
+        # No tokens consumed for base translation (already generated)
+    else:
+        print("    [Agent 1/2] Translate...")
+        translate_prompt = render_translation_prompt(
+            source_text=source_text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            language_id2name=language_id2name,
+            use_terminology=False,
+            terminology=None,
+            max_terms=50
+        )
         
-        except (ReadTimeoutError, ClientError) as e:
-            error_str = str(e).lower()
-            is_timeout = (
-                "timeout" in error_str or 
-                "read timeout" in error_str or
-                isinstance(e, ReadTimeoutError)
-            )
+        translation = None
+        for attempt in range(max_retries + 1):
+            try:
+                message = HumanMessage(content=translate_prompt)
+                response = llm_translate.invoke([message])
+                
+                translation = response.content.strip()
+                
+                # Get token counts
+                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                
+                if tokens_input == 0:
+                    tokens_input = len(translate_prompt) // 4
+                if tokens_output == 0:
+                    tokens_output = len(translation) // 4
+                
+                total_tokens_input += tokens_input
+                total_tokens_output += tokens_output
+                
+                break
             
-            if not is_timeout:
-                raise
-            
-            if attempt < max_retries:
-                backoff_time = (2 ** attempt) * initial_backoff
-                print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
-                time.sleep(backoff_time)
-            else:
-                raise RuntimeError(f"Translation failed after {max_retries + 1} attempts due to timeout") from e
-    
-    if translation is None:
-        raise RuntimeError("Translation step failed")
+            except (ReadTimeoutError, ClientError) as e:
+                error_str = str(e).lower()
+                is_timeout = (
+                    "timeout" in error_str or 
+                    "read timeout" in error_str or
+                    isinstance(e, ReadTimeoutError)
+                )
+                
+                if not is_timeout:
+                    raise
+                
+                if attempt < max_retries:
+                    backoff_time = (2 ** attempt) * initial_backoff
+                    print(f"    ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                    time.sleep(backoff_time)
+                else:
+                    raise RuntimeError(f"Translation failed after {max_retries + 1} attempts due to timeout") from e
+        
+        if translation is None:
+            raise RuntimeError("Translation step failed")
     
     # Step 2: Postedit Agent (temperature=1 for exploration, as per paper)
     print("    [Agent 2/2] Postedit...")
