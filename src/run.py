@@ -711,14 +711,17 @@ def main():
             if args.output_dir:
                 pair_output_dir = Path(args.output_dir) / lang_pair
             else:
-                pair_output_dir = build_output_dir(
-                    dataset=args.dataset,
-                    lang_pair=lang_pair,
-                    workflow_name=args.workflow,
-                    model_name=model_name,
-                    use_terminology=args.use_terminology,
-                    base_model_name=args.base_model
-                )
+                build_kwargs = {
+                    "dataset": args.dataset,
+                    "lang_pair": lang_pair,
+                    "workflow_name": args.workflow,
+                    "model_name": model_name,
+                    "use_terminology": args.use_terminology
+                }
+                # Only add base_model_name if provided
+                if args.base_model:
+                    build_kwargs["base_model_name"] = args.base_model
+                pair_output_dir = build_output_dir(**build_kwargs)
             print(f"Output directory: {pair_output_dir}")
             
             # Check for existing processed samples if resuming
@@ -861,14 +864,17 @@ def main():
             if args.output_dir:
                 pair_output_dir = Path(args.output_dir) / lang_pair
             else:
-                pair_output_dir = build_output_dir(
-                    dataset=args.dataset,
-                    lang_pair=lang_pair,
-                    workflow_name=args.workflow,
-                    model_name=model_name,
-                    use_terminology=args.use_terminology,
-                    base_model_name=args.base_model
-                )
+                build_kwargs = {
+                    "dataset": args.dataset,
+                    "lang_pair": lang_pair,
+                    "workflow_name": args.workflow,
+                    "model_name": model_name,
+                    "use_terminology": args.use_terminology
+                }
+                # Only add base_model_name if provided
+                if args.base_model:
+                    build_kwargs["base_model_name"] = args.base_model
+                pair_output_dir = build_output_dir(**build_kwargs)
             print(f"Output directory: {pair_output_dir}")
             
             # Check for existing processed samples if resuming
