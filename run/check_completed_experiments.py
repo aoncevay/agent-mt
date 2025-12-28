@@ -213,22 +213,28 @@ def generate_report(
     total_completed = sum(
         sum(
             sum(
-                sum(1 for status in by_dataset[d][w][m][lp] if status['completed'])
-                for lp in by_dataset[d][w][m].keys()
+                sum(
+                    sum(1 for status in by_dataset[d][w][m][lp] if status['completed'])
+                    for lp in by_dataset[d][w][m].keys()
+                )
+                for m in by_dataset[d][w].keys()
             )
-            for m in by_dataset[d][w].keys()
+            for w in by_dataset[d].keys()
         )
-        for w in by_dataset[d].keys()
+        for d in by_dataset.keys()
     )
     total_experiments = sum(
         sum(
             sum(
-                len(by_dataset[d][w][m][lp])
-                for lp in by_dataset[d][w][m].keys()
+                sum(
+                    len(by_dataset[d][w][m][lp])
+                    for lp in by_dataset[d][w][m].keys()
+                )
+                for m in by_dataset[d][w].keys()
             )
-            for m in by_dataset[d][w].keys()
+            for w in by_dataset[d].keys()
         )
-        for w in by_dataset[d].keys()
+        for d in by_dataset.keys()
     )
     
     print("=" * 80)
