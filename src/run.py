@@ -65,7 +65,10 @@ def process_sample(
     lang_pair: Optional[str] = None,
     use_terminology: bool = False,
     model_provider: Optional[str] = None,
-    model_type: Optional[str] = None
+    model_type: Optional[str] = None,
+    base_model_name: Optional[str] = None,
+    dataset: Optional[str] = None,
+    workflow_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """Process a single sample through the workflow."""
     # Get translation direction
@@ -91,6 +94,38 @@ def process_sample(
     print(f"  Sample {sample_display} ({source_lang}->{target_lang}): "
           f"{len(source_text)} chars source, {len(reference_text)} chars reference")
     
+    # Load base translation if base_model is provided
+    base_translation = None
+    if base_model_name and dataset:
+        try:
+            print(f"    Loading base translation from {base_model_name}...")
+            base_translation = load_base_translation(
+                base_model_name=base_model_name,
+                dataset=dataset,
+                lang_pair=lang_pair or f"{source_lang}-{target_lang}",
+                sample_idx=sample_idx,
+                sample_id=sample_id,
+                use_terminology=use_terminology
+            )
+            print(f"    ✓ Loaded base translation ({len(base_translation)} chars)")
+        except FileNotFoundError as e:
+            print(f"    ✗ Error: {e}")
+            return {
+                "sample_idx": sample_idx,
+                "sample_id": sample_id,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "lang_pair": lang_pair,
+                "source_text": source_text,
+                "reference_text": reference_text,
+                "outputs": [],
+                "evaluations": [],
+                "tokens_input": 0,
+                "tokens_output": 0,
+                "latency": None,
+                "error": str(e)
+            }
+    
     try:
         # Run workflow
         # Check if workflow supports reference parameter
@@ -106,6 +141,21 @@ def process_sample(
             "max_retries": MAX_RETRIES,
             "initial_backoff": INITIAL_BACKOFF
         }
+        
+        # Add base_translation if provided and workflow supports it
+        if base_translation is not None and "base_translation" in sig.parameters:
+            workflow_kwargs["base_translation"] = base_translation
+        elif base_translation is not None:
+            # Workflow doesn't support base_translation parameter
+            # This means the workflow hasn't been updated to support base translations
+            workflow_display = workflow_name or getattr(workflow_module, '__name__', 'unknown')
+            raise ValueError(
+                f"Workflow '{workflow_display}' does not support --base_model. "
+                f"Only workflows that have been updated to accept a 'base_translation' parameter can use base translations. "
+                f"Supported workflows: MaMT_translate_postedit, MaMT_translate_postedit_proofread, "
+                f"IRB_refine, MAATS_multi_agents. "
+                f"ADT and DeLTA workflows process documents incrementally and cannot use base translations."
+            )
         
         # Add region only for Bedrock models
         if "region" in sig.parameters:
@@ -207,12 +257,22 @@ def load_existing_report(report_file: Path) -> Optional[Dict[str, Any]]:
 
 
 def get_processed_sample_ids(existing_report: Optional[Dict[str, Any]]) -> set:
-    """Extract set of processed sample IDs from existing report."""
+    """
+    Extract set of processed sample IDs from existing report.
+    Only includes samples that completed successfully (no error).
+    Samples with errors will be re-run when using --resume.
+    """
     if not existing_report:
         return set()
     
     processed = set()
     for sample in existing_report.get("samples", []):
+        # Only add samples that completed successfully (no error)
+        error = sample.get("error")
+        if error is not None and error != "":
+            # Sample has an error, skip it (will be re-run)
+            continue
+        
         sample_id = sample.get("sample_id")
         if sample_id:
             processed.add(str(sample_id))
@@ -223,6 +283,62 @@ def get_processed_sample_ids(existing_report: Optional[Dict[str, Any]]) -> set:
             processed.add(f"{lang_pair}_{sample_idx}")
     
     return processed
+
+
+def load_base_translation(
+    base_model_name: str,
+    dataset: str,
+    lang_pair: str,
+    sample_idx: int,
+    sample_id: str,
+    use_terminology: bool = False
+) -> Optional[str]:
+    """
+    Load zero-shot translation from base_model output.
+    
+    Args:
+        base_model_name: Name of the base model
+        dataset: Dataset name (e.g., "wmt25", "dolfin")
+        lang_pair: Language pair (e.g., "en-zht", "en-es")
+        sample_idx: Sample index
+        sample_id: Sample ID (may differ from sample_idx)
+        use_terminology: Whether terminology was used (affects output directory)
+    
+    Returns:
+        Base translation text, or None if file not found
+    
+    Raises:
+        FileNotFoundError: If the base translation file does not exist
+    """
+    # Build path to base model's zero-shot output
+    base_output_dir = build_output_dir(
+        dataset=dataset,
+        lang_pair=lang_pair,
+        workflow_name="zero_shot",
+        model_name=base_model_name,
+        use_terminology=use_terminology
+    )
+    
+    # Determine filename (same logic as save_outputs)
+    if sample_id != str(sample_idx) and sample_id:
+        safe_id = str(sample_id).replace("/", "_").replace("\\", "_")[:50]
+        file_prefix = f"sample_{safe_id}"
+    else:
+        file_prefix = f"sample_{sample_idx:05d}"
+    
+    # Zero-shot workflow saves as agent_0
+    base_file = base_output_dir / f"{file_prefix}_agent_0.txt"
+    
+    if not base_file.exists():
+        raise FileNotFoundError(
+            f"Base translation file not found: {base_file}\n"
+            f"Please ensure zero-shot translation exists for base_model '{base_model_name}' "
+            f"for dataset '{dataset}', lang_pair '{lang_pair}', sample {sample_idx}"
+        )
+    
+    # Load and return the translation
+    with open(base_file, "r", encoding="utf-8") as f:
+        return f.read().strip()
 
 
 def save_outputs(
@@ -439,8 +555,32 @@ def main():
                         help="Resume experiment: skip already processed samples and merge with existing report")
     parser.add_argument("--use_terminology", action="store_true",
                         help="Use terminology dictionary if available (only for datasets that support it, e.g., wmt25)")
+    parser.add_argument("--base_model", type=str, default=None,
+                        help="Base model name whose zero-shot output will be used as initial translation. "
+                             "If provided, the workflow will skip the initial translation step and use "
+                             "the zero-shot output from this model instead.")
     
     args = parser.parse_args()
+    
+    # Validate base_model if provided
+    if args.base_model:
+        # Check that base_model != model
+        if args.base_model == args.model:
+            print(f"Error: --base_model ({args.base_model}) cannot be the same as --model ({args.model})")
+            return 1
+        
+        # Validate that base_model exists in model mappings
+        base_model_valid = (
+            args.base_model in model_name2bedrock_id or
+            args.base_model in model_name2bedrock_arn or
+            args.base_model in model_name2openai_id
+        )
+        if not base_model_valid:
+            print(f"Error: Unknown base_model '{args.base_model}'")
+            print(f"Available Bedrock models: {list(model_name2bedrock_id.keys())}")
+            print(f"Available Bedrock ARNs: {list(model_name2bedrock_arn.keys())}")
+            print(f"Available OpenAI models: {list(model_name2openai_id.keys())}")
+            return 1
     
     # Validate and get model_id (supports Bedrock model IDs, ARNs, and OpenAI models)
     model_id = None
@@ -522,8 +662,17 @@ def main():
         print(f"Model: {model_name} ({model_id})")
         if model_provider:
             print(f"Model Provider: {model_provider}")
+        if args.base_model:
+            print(f"Base Model: {args.base_model} (using zero-shot output as initial translation)")
         print(f"Target languages: {target_langs if target_langs else 'all (both directions)'}")
         print("=" * 80)
+        
+        # Warn if workflow doesn't support base_model
+        if args.base_model and args.workflow in ['DeLTA_multi_agents', 'ADT_multi_agents']:
+            print(f"\n⚠ Warning: Workflow '{args.workflow}' processes documents incrementally")
+            print(f"  and may not fully support --base_model. The workflow will attempt to use")
+            print(f"  the base translation, but results may not be optimal.")
+            print()
         
         # Load samples
         print(f"\nLoading samples from {data_loader.get_dataset_name()}...")
@@ -567,7 +716,8 @@ def main():
                     lang_pair=lang_pair,
                     workflow_name=args.workflow,
                     model_name=model_name,
-                    use_terminology=args.use_terminology
+                    use_terminology=args.use_terminology,
+                    base_model_name=args.base_model
                 )
             print(f"Output directory: {pair_output_dir}")
             
@@ -604,7 +754,10 @@ def main():
                     lang_pair=lang_pair,
                     use_terminology=args.use_terminology,
                     model_provider=model_provider,
-                    model_type=model_type
+                    model_type=model_type,
+                    base_model_name=args.base_model,
+                    dataset=args.dataset,
+                    workflow_name=args.workflow
                 )
                 if result:
                     results.append(result)
@@ -680,8 +833,17 @@ def main():
         print(f"Model: {model_name} ({model_id})")
         if model_provider:
             print(f"Model Provider: {model_provider}")
+        if args.base_model:
+            print(f"Base Model: {args.base_model} (using zero-shot output as initial translation)")
         print(f"Language pairs: {lang_pairs}")
         print("=" * 80)
+        
+        # Warn if workflow doesn't support base_model
+        if args.base_model and args.workflow in ['DeLTA_multi_agents', 'ADT_multi_agents']:
+            print(f"\n⚠ Warning: Workflow '{args.workflow}' processes documents incrementally")
+            print(f"  and may not fully support --base_model. The workflow will attempt to use")
+            print(f"  the base translation, but results may not be optimal.")
+            print()
         
         # Process each language pair
         all_results = []
@@ -704,7 +866,8 @@ def main():
                     lang_pair=lang_pair,
                     workflow_name=args.workflow,
                     model_name=model_name,
-                    use_terminology=args.use_terminology
+                    use_terminology=args.use_terminology,
+                    base_model_name=args.base_model
                 )
             print(f"Output directory: {pair_output_dir}")
             
@@ -750,7 +913,10 @@ def main():
                     lang_pair=lang_pair,
                     use_terminology=args.use_terminology,
                     model_provider=model_provider,
-                    model_type=model_type
+                    model_type=model_type,
+                    base_model_name=args.base_model,
+                    dataset=args.dataset,
+                    workflow_name=args.workflow
                 )
                 if result:
                     results.append(result)
