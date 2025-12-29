@@ -340,9 +340,17 @@ def run_workflow(
                         try:
                             message = HumanMessage(content=retriever_prompt)
                             response = llm.invoke([message])
-                            response_text = response.content.strip() if response.content else None
-                            if response_text is None:
-                                raise ValueError(f"[Sentence {i+1}, Step 1-Retriever] Response content is None")
+                            
+                            # Check if response content is None and retry if so
+                            if response.content is None:
+                                if attempt < max_retries:
+                                    print(f"        ⚠ Warning: Retriever returned None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                                    time.sleep((2 ** attempt) * initial_backoff)
+                                    continue
+                                else:
+                                    raise ValueError(f"[Sentence {i+1}, Step 1-Retriever] Response content is None after {max_retries + 1} attempts")
+                            
+                            response_text = response.content.strip()
                             retrieved_indices = parse_retrieved_sentences(response_text, top_k)
                     
                             tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
@@ -357,12 +365,19 @@ def run_workflow(
                             total_tokens_output += tokens_output
                     
                             break
-                        except (ReadTimeoutError, ClientError) as e:
+                        except (ReadTimeoutError, ClientError, ValueError) as e:
+                            error_str = str(e).lower()
+                            is_none_content = isinstance(e, ValueError) and "none content" in error_str
+                            
                             if attempt < max_retries:
                                 backoff_time = (2 ** attempt) * initial_backoff
+                                if is_none_content:
+                                    print(f"        ⚠ Warning: Retriever None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
                                 time.sleep(backoff_time)
                             else:
-                                # Fallback: use last top_k sentences
+                                if is_none_content:
+                                    raise  # Re-raise None content error after all retries
+                                # Fallback: use last top_k sentences for timeout errors
                                 retrieved_indices = list(range(max(1, len(long_term_memory) - top_k + 1), len(long_term_memory) + 1))
             
                     # Get retrieved sentences (indices are 1-based)
@@ -403,6 +418,15 @@ def run_workflow(
                         message = HumanMessage(content=translate_prompt)
                         response = llm.invoke([message])
                 
+                        # Check if response content is None and retry if so
+                        if response.content is None:
+                            if attempt < max_retries:
+                                print(f"        ⚠ Warning: Received None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                                time.sleep((2 ** attempt) * initial_backoff)
+                                continue
+                            else:
+                                raise ValueError(f"API returned None content after {max_retries + 1} attempts")
+                
                         target_sentence = response.content.strip()
                         # Take first line if multiple lines
                         if '\n' in target_sentence:
@@ -421,19 +445,24 @@ def run_workflow(
                 
                         break
             
-                    except (ReadTimeoutError, ClientError) as e:
+                    except (ReadTimeoutError, ClientError, ValueError) as e:
                         error_str = str(e).lower()
                         is_timeout = (
                             "timeout" in error_str or 
                             "read timeout" in error_str or
                             isinstance(e, ReadTimeoutError)
                         )
-                
-                        if not is_timeout:
+                        
+                        # Check if this is a None content error - retry if so
+                        is_none_content = isinstance(e, ValueError) and "none content" in error_str
+                        
+                        if not is_timeout and not is_none_content:
                             raise
-                
+                        
                         if attempt < max_retries:
                             backoff_time = (2 ** attempt) * initial_backoff
+                            if is_none_content:
+                                print(f"        ⚠ Warning: None content error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
                             time.sleep(backoff_time)
                         else:
                             raise RuntimeError(f"Translation failed for sentence {i+1} after {max_retries + 1} attempts") from e
@@ -457,9 +486,17 @@ def run_workflow(
                     try:
                         message = HumanMessage(content=extract_prompt)
                         response = llm.invoke([message])
-                        response_text = response.content.strip() if response.content else None
-                        if response_text is None:
-                            raise ValueError(f"[Sentence {i+1}, Step 3-Extractor] Response content is None")
+                        
+                        # Check if response content is None and retry if so
+                        if response.content is None:
+                            if attempt < max_retries:
+                                print(f"        ⚠ Warning: Extractor returned None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                                time.sleep((2 ** attempt) * initial_backoff)
+                                continue
+                            else:
+                                raise ValueError(f"[Sentence {i+1}, Step 3-Extractor] Response content is None after {max_retries + 1} attempts")
+                        
+                        response_text = response.content.strip()
                         new_proper_nouns = parse_proper_nouns(response_text)
                 
                         tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
@@ -474,13 +511,20 @@ def run_workflow(
                         total_tokens_output += tokens_output
                 
                         break
-                    except (ReadTimeoutError, ClientError) as e:
-                        if attempt < max_retries:
-                            backoff_time = (2 ** attempt) * initial_backoff
-                            time.sleep(backoff_time)
-                        else:
-                            # Continue without proper nouns if extraction fails
-                            break
+                    except (ReadTimeoutError, ClientError, ValueError) as e:
+                            error_str = str(e).lower()
+                            is_none_content = isinstance(e, ValueError) and "none content" in error_str
+                            
+                            if attempt < max_retries:
+                                backoff_time = (2 ** attempt) * initial_backoff
+                                if is_none_content:
+                                    print(f"        ⚠ Warning: Extractor None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                                time.sleep(backoff_time)
+                            else:
+                                if is_none_content:
+                                    raise  # Re-raise None content error after all retries
+                                # Continue without proper nouns if extraction fails (for timeout errors)
+                                break
         
                 # Add new proper nouns to records (only if not already present)
                 for src_noun, tgt_noun in new_proper_nouns:

@@ -134,6 +134,14 @@ class ChatCDAO:
         # Extract content
         content = response.choices[0].message.content
         
+        # Check if content is None (API may return None in some cases)
+        if content is None:
+            raise ValueError(
+                f"API returned None content for model {self.model_id}. "
+                "This may indicate the model failed to generate a response. "
+                "Consider retrying the request."
+            )
+        
         # Approximate token counts (cdao doesn't provide usage info)
         # Estimate: ~4 characters per token (rough approximation)
         total_chars = sum(len(msg.get("content", "")) for msg in cdao_messages)
