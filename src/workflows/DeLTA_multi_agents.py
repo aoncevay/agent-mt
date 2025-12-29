@@ -315,7 +315,6 @@ def run_workflow(
     print(f"    Processing {len(source_sentences)} sentences with DeLTA workflow...")
     
     for i, source_sentence in enumerate(source_sentences):
-        print(f"      Processing sentence {i+1}/{len(source_sentences)}...")
         try:
                     # Step 1: Retrieve memory (Algorithm 1, lines 337-338)
                 # R^: Proper nouns in current sentence that are in records
@@ -468,7 +467,8 @@ def run_workflow(
                         else:
                             # After all retries, if it's a None content error, use source sentence as fallback
                             if is_none_content:
-                                print(f"        ⚠ Warning: API returned None content after {max_retries + 1} attempts for sentence {i+1}")
+                                print(f"        ⚠ Warning: Sentence {i+1}/{len(source_sentences)} - API returned None content after {max_retries + 1} attempts")
+                                print(f"        ⚠ Sentence: {source_sentence[:200]}{'...' if len(source_sentence) > 200 else ''}")
                                 print(f"        ⚠ Using source sentence as fallback translation (likely filtered by content policy)")
                                 target_sentence = source_sentence  # Use source as fallback
                                 # Store warning info for later reporting

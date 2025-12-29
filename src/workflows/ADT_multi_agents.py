@@ -299,6 +299,7 @@ def run_workflow(
     total_tokens_output = 0
     start_time = time.time()
     outputs = []
+    warnings = []  # Track warnings (e.g., filtered content)
     
     try:
         from botocore.exceptions import ReadTimeoutError, ClientError
@@ -347,6 +348,16 @@ def run_workflow(
                 message = HumanMessage(content=translation_prompt)
                 response = llm.invoke([message])
                 
+                # Check if response content is None and retry if so
+                if response.content is None:
+                    if attempt < max_retries:
+                        print(f"        ⚠ Warning: Discourse {i+1}/{len(discourses)} - None content (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                        print(f"        ⚠ Discourse preview: {discourse[:100]}{'...' if len(discourse) > 100 else ''}")
+                        time.sleep((2 ** attempt) * initial_backoff)
+                        continue
+                    else:
+                        raise ValueError(f"API returned None content after {max_retries + 1} attempts")
+                
                 translation = response.content.strip()
                 
                 tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
@@ -362,7 +373,7 @@ def run_workflow(
                 
                 break
             
-            except (ReadTimeoutError, ClientError) as e:
+            except (ReadTimeoutError, ClientError, ValueError) as e:
                 error_str = str(e).lower()
                 is_timeout = (
                     "timeout" in error_str or 
@@ -370,15 +381,32 @@ def run_workflow(
                     isinstance(e, ReadTimeoutError)
                 )
                 
-                if not is_timeout:
+                # Check if this is a None content error
+                is_none_content = isinstance(e, ValueError) and "none content" in error_str
+                
+                if not is_timeout and not is_none_content:
                     raise
                 
                 if attempt < max_retries:
                     backoff_time = (2 ** attempt) * initial_backoff
-                    print(f"        ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
+                    if is_timeout:
+                        print(f"        ⚠ Timeout error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
                     time.sleep(backoff_time)
                 else:
-                    raise RuntimeError(f"Translation failed after {max_retries + 1} attempts due to timeout") from e
+                    # After all retries, if it's a None content error, use source discourse as fallback
+                    if is_none_content:
+                        print(f"        ⚠ Warning: Discourse {i+1}/{len(discourses)} - API returned None content after {max_retries + 1} attempts")
+                        print(f"        ⚠ Discourse: {discourse[:200]}{'...' if len(discourse) > 200 else ''}")
+                        print(f"        ⚠ Using source discourse as fallback translation (likely filtered by content policy)")
+                        translation = discourse  # Use source as fallback
+                        warnings.append({
+                            'discourse_idx': i + 1,
+                            'discourse_preview': discourse[:100] + ('...' if len(discourse) > 100 else ''),
+                            'reason': 'API returned None content (likely content policy filter)'
+                        })
+                        break
+                    else:
+                        raise RuntimeError(f"Translation failed after {max_retries + 1} attempts due to timeout") from e
         
         if translation is None:
             raise RuntimeError(f"Translation failed for discourse {i+1}")
@@ -458,6 +486,7 @@ def run_workflow(
         "outputs": outputs,  # Individual discourse translations + final concatenated translation
         "tokens_input": total_tokens_input,
         "tokens_output": total_tokens_output,
-        "latency": latency
+        "latency": latency,
+        "warnings": warnings if warnings else None  # Include warnings if any
     }
 
