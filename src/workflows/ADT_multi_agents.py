@@ -354,7 +354,7 @@ def run_workflow(
                 
                 if tokens_input == 0:
                     tokens_input = len(translation_prompt) // 4
-                if tokens_output == 0:
+                if tokens_output == 0 and translation:
                     tokens_output = len(translation) // 4
                 
                 total_tokens_input += tokens_input
@@ -416,7 +416,7 @@ def run_workflow(
                 
                 if tokens_input == 0:
                     tokens_input = len(memory_prompt) // 4
-                if tokens_output == 0:
+                if tokens_output == 0 and response.content:
                     tokens_output = len(response.content) // 4
                 
                 total_tokens_input += tokens_input
