@@ -107,7 +107,8 @@ def parse_workflow_from_dir(workflow_dir: str) -> Tuple[str, bool]:
 def generate_report(
     reports: List[Tuple[Path, Dict]],
     dataset_filter: Optional[str] = None,
-    workflow_filter: Optional[str] = None
+    workflow_filter: Optional[str] = None,
+    with_terminology: bool = False
 ) -> None:
     """
     Generate and print completion report.
@@ -138,6 +139,12 @@ def generate_report(
             continue
         if workflow_filter and workflow != workflow_filter:
             continue
+        # Filter by terminology: if with_terminology is False, skip .term experiments
+        # if with_terminology is True, skip non-.term experiments
+        if not with_terminology and use_terminology:
+            continue
+        if with_terminology and not use_terminology:
+            continue
         
         is_completed, total, successful = check_completion_status(report_data)
         
@@ -157,7 +164,10 @@ def generate_report(
     
     # Print report
     print("=" * 80)
-    print("Experiment Completion Status")
+    if with_terminology:
+        print("Experiment Completion Status (Terminology Experiments Only)")
+    else:
+        print("Experiment Completion Status (Normal Experiments Only)")
     print("=" * 80)
     print()
     
@@ -282,7 +292,13 @@ def main():
         "--outputs-dir",
         type=str,
         default=None,
-        help="Custom outputs directory (default: outputs/ relative to project root)"
+        help="Custom outputs directory path (default: outputs/ relative to project root). "
+             "Example: --outputs-dir zhijin/agent-mt-main/outputs"
+    )
+    parser.add_argument(
+        "--with-terminology",
+        action="store_true",
+        help="Show only terminology experiments (*.term). By default, shows only normal experiments."
     )
     
     args = parser.parse_args()
@@ -307,7 +323,12 @@ def main():
         return 0
     
     # Generate and print report
-    generate_report(reports, dataset_filter=args.dataset, workflow_filter=args.workflow)
+    generate_report(
+        reports, 
+        dataset_filter=args.dataset, 
+        workflow_filter=args.workflow,
+        with_terminology=args.with_terminology
+    )
     
     return 0
 
