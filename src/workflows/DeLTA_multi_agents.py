@@ -315,322 +315,346 @@ def run_workflow(
     
     for i, source_sentence in enumerate(source_sentences):
         print(f"      Processing sentence {i+1}/{len(source_sentences)}...")
-        # Step 1: Retrieve memory (Algorithm 1, lines 337-338)
-        # R^: Proper nouns in current sentence that are in records
-        relevant_proper_nouns = {
-            p: proper_noun_records[p] 
-            for p in proper_noun_records 
-            if p in source_sentence
-        }
-        proper_noun_prompt = ', '.join([f'"{p}" - "{t}"' for p, t in relevant_proper_nouns.items()]) if relevant_proper_nouns else "N/A"
+        try:
+                    # Step 1: Retrieve memory (Algorithm 1, lines 337-338)
+                # R^: Proper nouns in current sentence that are in records
+                relevant_proper_nouns = {
+                    p: proper_noun_records[p] 
+                    for p in proper_noun_records 
+                    if p in source_sentence
+                }
+                proper_noun_prompt = ', '.join([f'"{p}" - "{t}"' for p, t in relevant_proper_nouns.items()]) if relevant_proper_nouns else "N/A"
         
-        # N^: Retrieve relevant sentences from Long-Term Memory
-        relevant_srcs, relevant_tgts = [], []
-        if long_term_memory and len(long_term_memory) > top_k:
-            retriever_prompt = render_memory_retriever_prompt(
-                sentence_list=[src for src, _ in long_term_memory],
-                query=source_sentence,
-                top_num=top_k
-            )
+                # N^: Retrieve relevant sentences from Long-Term Memory
+                relevant_srcs, relevant_tgts = [], []
+                if long_term_memory and len(long_term_memory) > top_k:
+                    retriever_prompt = render_memory_retriever_prompt(
+                        sentence_list=[src for src, _ in long_term_memory],
+                        query=source_sentence,
+                        top_num=top_k
+                    )
             
-            # Call retriever
-            retrieved_indices = []
-            for attempt in range(max_retries + 1):
-                try:
-                    message = HumanMessage(content=retriever_prompt)
-                    response = llm.invoke([message])
-                    response_text = response.content.strip() if response.content else None
-                    if response_text is None:
-                        raise ValueError(f"[Sentence {i+1}, Step 1-Retriever] Response content is None")
-                    retrieved_indices = parse_retrieved_sentences(response_text, top_k)
+                    # Call retriever
+                    retrieved_indices = []
+                    for attempt in range(max_retries + 1):
+                        try:
+                            message = HumanMessage(content=retriever_prompt)
+                            response = llm.invoke([message])
+                            response_text = response.content.strip() if response.content else None
+                            if response_text is None:
+                                raise ValueError(f"[Sentence {i+1}, Step 1-Retriever] Response content is None")
+                            retrieved_indices = parse_retrieved_sentences(response_text, top_k)
                     
-                    tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-                    tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                            tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                            tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
                     
-                    if tokens_input == 0:
-                        tokens_input = len(retriever_prompt) // 4
-                    if tokens_output == 0 and response_text:
-                        tokens_output = len(response_text) // 4
+                            if tokens_input == 0:
+                                tokens_input = len(retriever_prompt) // 4
+                            if tokens_output == 0 and response_text:
+                                tokens_output = len(response_text) // 4
                     
-                    total_tokens_input += tokens_input
-                    total_tokens_output += tokens_output
+                            total_tokens_input += tokens_input
+                            total_tokens_output += tokens_output
                     
-                    break
-                except (ReadTimeoutError, ClientError) as e:
-                    if attempt < max_retries:
-                        backoff_time = (2 ** attempt) * initial_backoff
-                        time.sleep(backoff_time)
-                    else:
-                        # Fallback: use last top_k sentences
-                        retrieved_indices = list(range(max(1, len(long_term_memory) - top_k + 1), len(long_term_memory) + 1))
+                            break
+                        except (ReadTimeoutError, ClientError) as e:
+                            if attempt < max_retries:
+                                backoff_time = (2 ** attempt) * initial_backoff
+                                time.sleep(backoff_time)
+                            else:
+                                # Fallback: use last top_k sentences
+                                retrieved_indices = list(range(max(1, len(long_term_memory) - top_k + 1), len(long_term_memory) + 1))
             
-            # Get retrieved sentences (indices are 1-based)
-            for idx in retrieved_indices:
-                if 1 <= idx <= len(long_term_memory):
-                    src, tgt = long_term_memory[idx - 1]
-                    relevant_srcs.append(src)
-                    relevant_tgts.append(tgt)
-        elif long_term_memory:
-            # If memory is smaller than top_k, use all
-            relevant_srcs, relevant_tgts = zip(*long_term_memory) if long_term_memory else ([], [])
+                    # Get retrieved sentences (indices are 1-based)
+                    for idx in retrieved_indices:
+                        if 1 <= idx <= len(long_term_memory):
+                            src, tgt = long_term_memory[idx - 1]
+                            relevant_srcs.append(src)
+                            relevant_tgts.append(tgt)
+                elif long_term_memory:
+                    # If memory is smaller than top_k, use all
+                    relevant_srcs, relevant_tgts = zip(*long_term_memory) if long_term_memory else ([], [])
         
-        relevant_instances = '\n'.join([
-            f'<{get_language_name(source_lang, language_id2name)}> {src}\n<{get_language_name(target_lang, language_id2name)}> {tgt}'
-            for src, tgt in zip(relevant_srcs, relevant_tgts)
-        ]) if relevant_srcs else "N/A"
+                relevant_instances = '\n'.join([
+                    f'<{get_language_name(source_lang, language_id2name)}> {src}\n<{get_language_name(target_lang, language_id2name)}> {tgt}'
+                    for src, tgt in zip(relevant_srcs, relevant_tgts)
+                ]) if relevant_srcs else "N/A"
         
-        # Short-term memory context
-        src_context = '\n'.join([src for src, _ in short_term_memory]) if short_term_memory else "N/A"
-        tgt_context = '\n'.join([tgt for _, tgt in short_term_memory]) if short_term_memory else "N/A"
+                # Short-term memory context
+                src_context = '\n'.join([src for src, _ in short_term_memory]) if short_term_memory else "N/A"
+                tgt_context = '\n'.join([tgt for _, tgt in short_term_memory]) if short_term_memory else "N/A"
         
-        # Step 2: Translate with hybrid memory information (Algorithm 1, line 340)
-        translate_prompt = render_document_translator_prompt(
-            source_sentence=source_sentence,
-            source_lang=source_lang,
-            target_lang=target_lang,
-            source_summary=source_summary or "",
-            target_summary=target_summary or "",
-            proper_noun_records=proper_noun_prompt,
-            source_context=src_context,
-            target_context=tgt_context,
-            relevant_instances=relevant_instances
-        )
-        
-        target_sentence = None
-        for attempt in range(max_retries + 1):
-            try:
-                message = HumanMessage(content=translate_prompt)
-                response = llm.invoke([message])
-                
-                target_sentence = response.content.strip()
-                # Take first line if multiple lines
-                if '\n' in target_sentence:
-                    target_sentence = target_sentence.split('\n')[0].strip()
-                
-                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-                
-                if tokens_input == 0:
-                    tokens_input = len(translate_prompt) // 4
-                if tokens_output == 0 and target_sentence:
-                    tokens_output = len(target_sentence) // 4
-                
-                total_tokens_input += tokens_input
-                total_tokens_output += tokens_output
-                
-                break
-            
-            except (ReadTimeoutError, ClientError) as e:
-                error_str = str(e).lower()
-                is_timeout = (
-                    "timeout" in error_str or 
-                    "read timeout" in error_str or
-                    isinstance(e, ReadTimeoutError)
+                # Step 2: Translate with hybrid memory information (Algorithm 1, line 340)
+                translate_prompt = render_document_translator_prompt(
+                    source_sentence=source_sentence,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                    source_summary=source_summary or "",
+                    target_summary=target_summary or "",
+                    proper_noun_records=proper_noun_prompt,
+                    source_context=src_context,
+                    target_context=tgt_context,
+                    relevant_instances=relevant_instances
                 )
+        
+                target_sentence = None
+                for attempt in range(max_retries + 1):
+                    try:
+                        message = HumanMessage(content=translate_prompt)
+                        response = llm.invoke([message])
                 
-                if not is_timeout:
-                    raise
+                        target_sentence = response.content.strip()
+                        # Take first line if multiple lines
+                        if '\n' in target_sentence:
+                            target_sentence = target_sentence.split('\n')[0].strip()
                 
-                if attempt < max_retries:
-                    backoff_time = (2 ** attempt) * initial_backoff
-                    time.sleep(backoff_time)
-                else:
-                    raise RuntimeError(f"Translation failed for sentence {i+1} after {max_retries + 1} attempts") from e
-        
-        if target_sentence is None:
-            raise RuntimeError(f"Translation failed for sentence {i+1}")
-        
-        translated_sentences.append(target_sentence)
-        
-        # Step 3: Update memory (Algorithm 1, lines 343-345)
-        # Extract new proper nouns
-        extract_prompt = render_proper_noun_extractor_prompt(
-            source_sentence=source_sentence,
-            target_sentence=target_sentence,
-            source_lang=source_lang,
-            target_lang=target_lang
-        )
-        
-        new_proper_nouns = []
-        for attempt in range(max_retries + 1):
-            try:
-                message = HumanMessage(content=extract_prompt)
-                response = llm.invoke([message])
-                response_text = response.content.strip() if response.content else None
-                if response_text is None:
-                    raise ValueError(f"[Sentence {i+1}, Step 3-Extractor] Response content is None")
-                new_proper_nouns = parse_proper_nouns(response_text)
+                        tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                        tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
                 
-                tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-                tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                        if tokens_input == 0:
+                            tokens_input = len(translate_prompt) // 4
+                        if tokens_output == 0 and target_sentence:
+                            tokens_output = len(target_sentence) // 4
                 
-                if tokens_input == 0:
-                    tokens_input = len(extract_prompt) // 4
-                if tokens_output == 0 and response_text:
-                    tokens_output = len(response_text) // 4
+                        total_tokens_input += tokens_input
+                        total_tokens_output += tokens_output
                 
-                total_tokens_input += tokens_input
-                total_tokens_output += tokens_output
-                
-                break
-            except (ReadTimeoutError, ClientError) as e:
-                if attempt < max_retries:
-                    backoff_time = (2 ** attempt) * initial_backoff
-                    time.sleep(backoff_time)
-                else:
-                    # Continue without proper nouns if extraction fails
-                    break
-        
-        # Add new proper nouns to records (only if not already present)
-        for src_noun, tgt_noun in new_proper_nouns:
-            if src_noun not in proper_noun_records:
-                proper_noun_records[src_noun] = tgt_noun
-        
-        # Update Long-Term Memory (last l sentences)
-        long_term_memory.append((source_sentence, target_sentence))
-        if len(long_term_memory) > long_window:
-            long_term_memory = long_term_memory[-long_window:]
-        
-        # Update Short-Term Memory (last k sentences)
-        short_term_memory.append((source_sentence, target_sentence))
-        if len(short_term_memory) > short_window:
-            short_term_memory = short_term_memory[-short_window:]
-        
-        # Step 4: Update summaries every m sentences (Algorithm 1, lines 346-351)
-        segment_buffer.append((source_sentence, target_sentence))
-        
-        if (i + 1) % summary_step == 0 and segment_buffer:
-            # Generate segment summaries
-            # Filter out any empty sentences from buffer
-            src_segment = '\n'.join([src for src, _ in segment_buffer if src and src.strip()])
-            tgt_segment = '\n'.join([tgt for _, tgt in segment_buffer if tgt and tgt.strip()])
-            
-            # Skip summary generation if segments are empty
-            if not src_segment.strip() or not tgt_segment.strip():
-                segment_buffer = []  # Clear buffer and continue
-                continue
-            
-            # Source summary
-            src_sum_prompt = render_source_summary_writer_prompt(src_segment)
-            src_seg_summary = None
-            for attempt in range(max_retries + 1):
-                try:
-                    message = HumanMessage(content=src_sum_prompt)
-                    response = llm.invoke([message])
-                    src_seg_summary = response.content.strip()
-                    
-                    tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-                    tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-                    
-                    if tokens_input == 0:
-                        tokens_input = len(src_sum_prompt) // 4
-                    if tokens_output == 0 and src_seg_summary:
-                        tokens_output = len(src_seg_summary) // 4
-                    
-                    total_tokens_input += tokens_input
-                    total_tokens_output += tokens_output
-                    
-                    break
-                except (ReadTimeoutError, ClientError) as e:
-                    if attempt < max_retries:
-                        backoff_time = (2 ** attempt) * initial_backoff
-                        time.sleep(backoff_time)
-                    else:
                         break
             
-            # Target summary
-            tgt_sum_prompt = render_target_summary_writer_prompt(tgt_segment)
-            tgt_seg_summary = None
-            for attempt in range(max_retries + 1):
-                try:
-                    message = HumanMessage(content=tgt_sum_prompt)
-                    response = llm.invoke([message])
-                    tgt_seg_summary = response.content.strip()
-                    
-                    tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
-                    tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-                    
-                    if tokens_input == 0:
-                        tokens_input = len(tgt_sum_prompt) // 4
-                    if tokens_output == 0 and tgt_seg_summary:
-                        tokens_output = len(tgt_seg_summary) // 4
-                    
-                    total_tokens_input += tokens_input
-                    total_tokens_output += tokens_output
-                    
-                    break
-                except (ReadTimeoutError, ClientError) as e:
-                    if attempt < max_retries:
-                        backoff_time = (2 ** attempt) * initial_backoff
-                        time.sleep(backoff_time)
-                    else:
+                    except (ReadTimeoutError, ClientError) as e:
+                        error_str = str(e).lower()
+                        is_timeout = (
+                            "timeout" in error_str or 
+                            "read timeout" in error_str or
+                            isinstance(e, ReadTimeoutError)
+                        )
+                
+                        if not is_timeout:
+                            raise
+                
+                        if attempt < max_retries:
+                            backoff_time = (2 ** attempt) * initial_backoff
+                            time.sleep(backoff_time)
+                        else:
+                            raise RuntimeError(f"Translation failed for sentence {i+1} after {max_retries + 1} attempts") from e
+        
+                if target_sentence is None:
+                    raise RuntimeError(f"Translation failed for sentence {i+1}")
+        
+                translated_sentences.append(target_sentence)
+        
+                # Step 3: Update memory (Algorithm 1, lines 343-345)
+                # Extract new proper nouns
+                extract_prompt = render_proper_noun_extractor_prompt(
+                    source_sentence=source_sentence,
+                    target_sentence=target_sentence,
+                    source_lang=source_lang,
+                    target_lang=target_lang
+                )
+        
+                new_proper_nouns = []
+                for attempt in range(max_retries + 1):
+                    try:
+                        message = HumanMessage(content=extract_prompt)
+                        response = llm.invoke([message])
+                        response_text = response.content.strip() if response.content else None
+                        if response_text is None:
+                            raise ValueError(f"[Sentence {i+1}, Step 3-Extractor] Response content is None")
+                        new_proper_nouns = parse_proper_nouns(response_text)
+                
+                        tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                        tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                
+                        if tokens_input == 0:
+                            tokens_input = len(extract_prompt) // 4
+                        if tokens_output == 0 and response_text:
+                            tokens_output = len(response_text) // 4
+                
+                        total_tokens_input += tokens_input
+                        total_tokens_output += tokens_output
+                
                         break
+                    except (ReadTimeoutError, ClientError) as e:
+                        if attempt < max_retries:
+                            backoff_time = (2 ** attempt) * initial_backoff
+                            time.sleep(backoff_time)
+                        else:
+                            # Continue without proper nouns if extraction fails
+                            break
+        
+                # Add new proper nouns to records (only if not already present)
+                for src_noun, tgt_noun in new_proper_nouns:
+                    if src_noun not in proper_noun_records:
+                        proper_noun_records[src_noun] = tgt_noun
+        
+                # Update Long-Term Memory (last l sentences)
+                long_term_memory.append((source_sentence, target_sentence))
+                if len(long_term_memory) > long_window:
+                    long_term_memory = long_term_memory[-long_window:]
+        
+                # Update Short-Term Memory (last k sentences)
+                short_term_memory.append((source_sentence, target_sentence))
+                if len(short_term_memory) > short_window:
+                    short_term_memory = short_term_memory[-short_window:]
+        
+                # Step 4: Update summaries every m sentences (Algorithm 1, lines 346-351)
+                segment_buffer.append((source_sentence, target_sentence))
+        
+                if (i + 1) % summary_step == 0 and segment_buffer:
+                    # Generate segment summaries
+                    # Filter out any empty sentences from buffer
+                    src_segment = '\n'.join([src for src, _ in segment_buffer if src and src.strip()])
+                    tgt_segment = '\n'.join([tgt for _, tgt in segment_buffer if tgt and tgt.strip()])
             
-            # Merge with overall summaries
-            if src_seg_summary and tgt_seg_summary:
-                if source_summary:
-                    # Merge source summary
-                    merge_src_prompt = render_source_summary_merger_prompt(source_summary, src_seg_summary)
+                    # Skip summary generation if segments are empty
+                    if not src_segment.strip() or not tgt_segment.strip():
+                        segment_buffer = []  # Clear buffer and continue
+                        continue
+            
+                    # Source summary
+                    src_sum_prompt = render_source_summary_writer_prompt(src_segment)
+                    src_seg_summary = None
                     for attempt in range(max_retries + 1):
                         try:
-                            message = HumanMessage(content=merge_src_prompt)
+                            message = HumanMessage(content=src_sum_prompt)
                             response = llm.invoke([message])
-                            source_summary = response.content.strip()
-                            
+                            src_seg_summary = response.content.strip()
+                    
                             tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
                             tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-                            
+                    
                             if tokens_input == 0:
-                                tokens_input = len(merge_src_prompt) // 4
-                            if tokens_output == 0 and source_summary:
-                                tokens_output = len(source_summary) // 4
-                            
+                                tokens_input = len(src_sum_prompt) // 4
+                            if tokens_output == 0 and src_seg_summary:
+                                tokens_output = len(src_seg_summary) // 4
+                    
                             total_tokens_input += tokens_input
                             total_tokens_output += tokens_output
-                            
+                    
                             break
                         except (ReadTimeoutError, ClientError) as e:
                             if attempt < max_retries:
                                 backoff_time = (2 ** attempt) * initial_backoff
                                 time.sleep(backoff_time)
                             else:
-                                source_summary = src_seg_summary  # Fallback
                                 break
-                else:
-                    source_summary = src_seg_summary
-                
-                if target_summary:
-                    # Merge target summary
-                    merge_tgt_prompt = render_target_summary_merger_prompt(target_summary, tgt_seg_summary)
+            
+                    # Target summary
+                    tgt_sum_prompt = render_target_summary_writer_prompt(tgt_segment)
+                    tgt_seg_summary = None
                     for attempt in range(max_retries + 1):
                         try:
-                            message = HumanMessage(content=merge_tgt_prompt)
+                            message = HumanMessage(content=tgt_sum_prompt)
                             response = llm.invoke([message])
-                            target_summary = response.content.strip()
-                            
+                            tgt_seg_summary = response.content.strip()
+                    
                             tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
                             tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
-                            
+                    
                             if tokens_input == 0:
-                                tokens_input = len(merge_tgt_prompt) // 4
-                            if tokens_output == 0 and target_summary:
-                                tokens_output = len(target_summary) // 4
-                            
+                                tokens_input = len(tgt_sum_prompt) // 4
+                            if tokens_output == 0 and tgt_seg_summary:
+                                tokens_output = len(tgt_seg_summary) // 4
+                    
                             total_tokens_input += tokens_input
                             total_tokens_output += tokens_output
-                            
+                    
                             break
                         except (ReadTimeoutError, ClientError) as e:
                             if attempt < max_retries:
                                 backoff_time = (2 ** attempt) * initial_backoff
                                 time.sleep(backoff_time)
                             else:
-                                target_summary = tgt_seg_summary  # Fallback
                                 break
-                else:
-                    target_summary = tgt_seg_summary
+            
+                    # Merge with overall summaries
+                    if src_seg_summary and tgt_seg_summary:
+                        if source_summary:
+                            # Merge source summary
+                            merge_src_prompt = render_source_summary_merger_prompt(source_summary, src_seg_summary)
+                            for attempt in range(max_retries + 1):
+                                try:
+                                    message = HumanMessage(content=merge_src_prompt)
+                                    response = llm.invoke([message])
+                                    source_summary = response.content.strip()
+                            
+                                    tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                                    tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                            
+                                    if tokens_input == 0:
+                                        tokens_input = len(merge_src_prompt) // 4
+                                    if tokens_output == 0 and source_summary:
+                                        tokens_output = len(source_summary) // 4
+                            
+                                    total_tokens_input += tokens_input
+                                    total_tokens_output += tokens_output
+                            
+                                    break
+                                except (ReadTimeoutError, ClientError) as e:
+                                    if attempt < max_retries:
+                                        backoff_time = (2 ** attempt) * initial_backoff
+                                        time.sleep(backoff_time)
+                                    else:
+                                        source_summary = src_seg_summary  # Fallback
+                                        break
+                        else:
+                            source_summary = src_seg_summary
                 
-                segment_buffer = []  # Clear buffer after summary update
+                        if target_summary:
+                            # Merge target summary
+                            merge_tgt_prompt = render_target_summary_merger_prompt(target_summary, tgt_seg_summary)
+                            for attempt in range(max_retries + 1):
+                                try:
+                                    message = HumanMessage(content=merge_tgt_prompt)
+                                    response = llm.invoke([message])
+                                    target_summary = response.content.strip()
+                            
+                                    tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
+                                    tokens_output = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('completion_tokens', 0)
+                            
+                                    if tokens_input == 0:
+                                        tokens_input = len(merge_tgt_prompt) // 4
+                                    if tokens_output == 0 and target_summary:
+                                        tokens_output = len(target_summary) // 4
+                            
+                                    total_tokens_input += tokens_input
+                                    total_tokens_output += tokens_output
+                            
+                                    break
+                                except (ReadTimeoutError, ClientError) as e:
+                                    if attempt < max_retries:
+                                        backoff_time = (2 ** attempt) * initial_backoff
+                                        time.sleep(backoff_time)
+                                    else:
+                                        target_summary = tgt_seg_summary  # Fallback
+                                        break
+                        else:
+                            target_summary = tgt_seg_summary
+                
+                        segment_buffer = []  # Clear buffer after summary update
+        
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            sentence_preview = source_sentence[:200] if source_sentence else "None"
+            sentence_len = len(source_sentence) if source_sentence else 0
+            
+            print(f"\n      ✗ ERROR at sentence {i+1}/{len(source_sentences)}:")
+            print(f"      ✗ Error type: {error_type}")
+            print(f"      ✗ Error message: {error_msg}")
+            print(f"      ✗ Sentence length: {sentence_len} chars")
+            print(f"      ✗ Sentence preview (first 200 chars): {sentence_preview}")
+            if sentence_len > 200:
+                print(f"      ✗ Sentence ending (last 100 chars): {source_sentence[-100:]}")
+            
+            import traceback
+            print(f"      ✗ Full traceback:")
+            traceback.print_exc()
+            
+            raise RuntimeError(
+                f"Error processing sentence {i+1}/{len(source_sentences)}: {error_type}: {error_msg}\n"
+                f"Sentence ({sentence_len} chars): {sentence_preview}..."
+            ) from e
     
     # Combine all translated sentences
     final_translation = '\n'.join(translated_sentences)
