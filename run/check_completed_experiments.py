@@ -141,13 +141,18 @@ def generate_report(
         
         is_completed, total, successful = check_completion_status(report_data)
         
+        # Get avg_chrf_score from summary if available
+        summary = report_data.get('summary', {})
+        avg_chrf = summary.get('avg_chrf_score')
+        
         by_dataset[dataset][workflow][model][lang_pair].append({
             'path': report_path,
             'completed': is_completed,
             'total': total,
             'successful': successful,
             'failed': report_data.get('failed_samples', 0),
-            'use_terminology': use_terminology
+            'use_terminology': use_terminology,
+            'avg_chrf_score': avg_chrf
         })
     
     # Print report
@@ -182,8 +187,12 @@ def generate_report(
                         term_suffix = " (term)" if status['use_terminology'] else ""
                         if status['completed']:
                             model_completed += 1
+                            # Add chrF++ score if available
+                            chrf_info = ""
+                            if status.get('avg_chrf_score') is not None:
+                                chrf_info = f" [chrF++: {status['avg_chrf_score']:.2f}]"
                             lang_pairs_status.append(
-                                f"  ✓ {lang_pair}{term_suffix}: {status['successful']}/{status['total']} samples"
+                                f"  ✓ {lang_pair}{term_suffix}: {status['successful']}/{status['total']} samples{chrf_info}"
                             )
                         else:
                             lang_pairs_status.append(
@@ -194,9 +203,20 @@ def generate_report(
                 workflow_completed += model_completed
                 workflow_total += model_total
                 
-                # Print model status
+                # Print model status with avg chrF++ if all completed
                 status_icon = "✓" if model_completed == model_total else "✗"
-                print(f"  {status_icon} {workflow} | {model}: {model_completed}/{model_total} completed")
+                chrf_info = ""
+                if model_completed == model_total:
+                    # Get average chrF++ across all lang_pairs for this model
+                    chrf_scores = []
+                    for lang_pair in sorted(by_dataset[dataset][workflow][model].keys()):
+                        for status in by_dataset[dataset][workflow][model][lang_pair]:
+                            if status['completed'] and status.get('avg_chrf_score') is not None:
+                                chrf_scores.append(status['avg_chrf_score'])
+                    if chrf_scores:
+                        avg_chrf = sum(chrf_scores) / len(chrf_scores)
+                        chrf_info = f" [avg chrF++: {avg_chrf:.2f}]"
+                print(f"  {status_icon} {workflow} | {model}: {model_completed}/{model_total} completed{chrf_info}")
                 
                 # Show lang_pair details if not all completed
                 if model_completed < model_total:
