@@ -34,8 +34,8 @@ def find_report_files(outputs_dir: Path, dataset: Optional[str] = None) -> List[
     if not outputs_dir.exists():
         return reports
     
-    # Look for report.json or report_{N}_samples.json files
-    for report_file in outputs_dir.rglob("report*.json"):
+    # Look for report.json files
+    for report_file in outputs_dir.rglob("report.json"):
         # Parse path: outputs/{dataset}/{lang_pair}/{workflow_dir}/{model}/report.json
         parts = report_file.parts
         try:
