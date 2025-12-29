@@ -409,7 +409,7 @@ def run_workflow(
                 
                 if tokens_input == 0:
                     tokens_input = len(translate_prompt) // 4
-                if tokens_output == 0:
+                if tokens_output == 0 and target_sentence:
                     tokens_output = len(target_sentence) // 4
                 
                 total_tokens_input += tokens_input
@@ -496,8 +496,14 @@ def run_workflow(
         
         if (i + 1) % summary_step == 0 and segment_buffer:
             # Generate segment summaries
-            src_segment = '\n'.join([src for src, _ in segment_buffer])
-            tgt_segment = '\n'.join([tgt for _, tgt in segment_buffer])
+            # Filter out any empty sentences from buffer
+            src_segment = '\n'.join([src for src, _ in segment_buffer if src and src.strip()])
+            tgt_segment = '\n'.join([tgt for _, tgt in segment_buffer if tgt and tgt.strip()])
+            
+            # Skip summary generation if segments are empty
+            if not src_segment.strip() or not tgt_segment.strip():
+                segment_buffer = []  # Clear buffer and continue
+                continue
             
             # Source summary
             src_sum_prompt = render_source_summary_writer_prompt(src_segment)
@@ -513,7 +519,7 @@ def run_workflow(
                     
                     if tokens_input == 0:
                         tokens_input = len(src_sum_prompt) // 4
-                    if tokens_output == 0:
+                    if tokens_output == 0 and src_seg_summary:
                         tokens_output = len(src_seg_summary) // 4
                     
                     total_tokens_input += tokens_input
@@ -541,7 +547,7 @@ def run_workflow(
                     
                     if tokens_input == 0:
                         tokens_input = len(tgt_sum_prompt) // 4
-                    if tokens_output == 0:
+                    if tokens_output == 0 and tgt_seg_summary:
                         tokens_output = len(tgt_seg_summary) // 4
                     
                     total_tokens_input += tokens_input
@@ -571,7 +577,7 @@ def run_workflow(
                             
                             if tokens_input == 0:
                                 tokens_input = len(merge_src_prompt) // 4
-                            if tokens_output == 0:
+                            if tokens_output == 0 and source_summary:
                                 tokens_output = len(source_summary) // 4
                             
                             total_tokens_input += tokens_input
@@ -602,7 +608,7 @@ def run_workflow(
                             
                             if tokens_input == 0:
                                 tokens_input = len(merge_tgt_prompt) // 4
-                            if tokens_output == 0:
+                            if tokens_output == 0 and target_summary:
                                 tokens_output = len(target_summary) // 4
                             
                             total_tokens_input += tokens_input
