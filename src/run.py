@@ -395,20 +395,43 @@ def save_outputs(
     # Start with existing report if resuming, otherwise create new
     if resume and existing_report:
         report = existing_report.copy()
-        # Get existing sample IDs to avoid duplicates
+        # Get existing sample IDs to avoid duplicates (only successful samples)
         existing_sample_ids = get_processed_sample_ids(existing_report)
         
-        # Start with existing totals
-        total_tokens_input = existing_report.get("summary", {}).get("total_tokens_input", 0)
-        total_tokens_output = existing_report.get("summary", {}).get("total_tokens_output", 0)
-        total_latency = existing_report.get("summary", {}).get("total_latency_seconds", 0.0)
+        # Remove samples with errors from the report (they will be re-run and replaced)
+        # Build a map of sample keys to their indices for quick lookup
+        samples_to_keep = []
+        removed_error_samples = 0
         
-        # Collect existing scores
+        for s in existing_report.get("samples", []):
+            error = s.get("error")
+            # Keep only samples without errors (successful ones)
+            if error is None or error == "":
+                samples_to_keep.append(s)
+            else:
+                removed_error_samples += 1
+        
+        # Update report with only successful samples
+        report["samples"] = samples_to_keep
+        if removed_error_samples > 0:
+            print(f"  Removed {removed_error_samples} sample(s) with errors (will be re-run)")
+        
+        # Recalculate totals from kept samples only
+        total_tokens_input = 0
+        total_tokens_output = 0
+        total_latency = 0.0
         chrf_scores = []
         bleu_scores = []
         term_success_rates = []
-        for s in existing_report.get("samples", []):
+        for s in samples_to_keep:
             if not s.get("error"):
+                # Add token counts
+                total_tokens_input += s.get("tokens_input", 0)
+                total_tokens_output += s.get("tokens_output", 0)
+                if s.get("latency"):
+                    total_latency += s.get("latency", 0.0)
+                
+                # Collect scores
                 if s.get("chrf_scores"):
                     chrf_scores.append(s["chrf_scores"][-1])  # Use last agent's score
                 if s.get("bleu_scores"):
