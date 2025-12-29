@@ -314,6 +314,7 @@ def run_workflow(
     print(f"    Processing {len(source_sentences)} sentences with DeLTA workflow...")
     
     for i, source_sentence in enumerate(source_sentences):
+        print(f"      Processing sentence {i+1}/{len(source_sentences)}...")
         # Step 1: Retrieve memory (Algorithm 1, lines 337-338)
         # R^: Proper nouns in current sentence that are in records
         relevant_proper_nouns = {
@@ -338,7 +339,9 @@ def run_workflow(
                 try:
                     message = HumanMessage(content=retriever_prompt)
                     response = llm.invoke([message])
-                    response_text = response.content.strip()
+                    response_text = response.content.strip() if response.content else None
+                    if response_text is None:
+                        raise ValueError(f"[Sentence {i+1}, Step 1-Retriever] Response content is None")
                     retrieved_indices = parse_retrieved_sentences(response_text, top_k)
                     
                     tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
@@ -346,7 +349,7 @@ def run_workflow(
                     
                     if tokens_input == 0:
                         tokens_input = len(retriever_prompt) // 4
-                    if tokens_output == 0:
+                    if tokens_output == 0 and response_text:
                         tokens_output = len(response_text) // 4
                     
                     total_tokens_input += tokens_input
@@ -453,7 +456,9 @@ def run_workflow(
             try:
                 message = HumanMessage(content=extract_prompt)
                 response = llm.invoke([message])
-                response_text = response.content.strip()
+                response_text = response.content.strip() if response.content else None
+                if response_text is None:
+                    raise ValueError(f"[Sentence {i+1}, Step 3-Extractor] Response content is None")
                 new_proper_nouns = parse_proper_nouns(response_text)
                 
                 tokens_input = getattr(response, 'response_metadata', {}).get('token_usage', {}).get('prompt_tokens', 0)
@@ -461,7 +466,7 @@ def run_workflow(
                 
                 if tokens_input == 0:
                     tokens_input = len(extract_prompt) // 4
-                if tokens_output == 0:
+                if tokens_output == 0 and response_text:
                     tokens_output = len(response_text) // 4
                 
                 total_tokens_input += tokens_input
