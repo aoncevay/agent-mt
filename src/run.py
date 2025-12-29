@@ -221,7 +221,8 @@ def process_sample(
             "tokens_input": result["tokens_input"],
             "tokens_output": result["tokens_output"],
             "latency": result["latency"],
-            "error": None
+            "error": None,
+            "warnings": result.get("warnings")  # Include warnings from workflow
         }
     
     except Exception as e:
@@ -450,6 +451,7 @@ def save_outputs(
             "total_samples": 0,
             "successful_samples": 0,
             "failed_samples": 0,
+            "warnings_count": 0,  # Count of samples with warnings
             "samples": []
         }
         existing_sample_ids = set()
@@ -486,6 +488,7 @@ def save_outputs(
             "target_lang": result["target_lang"],
             "lang_pair": lang_pair,
             "error": result.get("error"),
+            "warnings": result.get("warnings"),  # Include warnings
         }
         
         if not result.get("error"):
@@ -518,6 +521,7 @@ def save_outputs(
     report["total_samples"] = len(report["samples"])
     report["successful_samples"] = sum(1 for s in report["samples"] if not s.get("error"))
     report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
+    report["warnings_count"] = sum(1 for s in report["samples"] if s.get("warnings"))  # Count samples with warnings
     
     successful_count = report["successful_samples"]
     report["summary"] = {
@@ -547,6 +551,8 @@ def save_outputs(
     
     print(f"\n✓ Report saved to {report_file}")
     print(f"  Successful: {report['successful_samples']}/{report['total_samples']}")
+    if report.get('warnings_count', 0) > 0:
+        print(f"  Warnings: {report['warnings_count']} sample(s) with content policy filters (used source as fallback)")
     if chrf_scores:
         print(f"  Average chrF++: {report['summary']['avg_chrf_score']:.2f}")
     if bleu_scores:

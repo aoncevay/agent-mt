@@ -310,6 +310,7 @@ def run_workflow(
     
     translated_sentences = []
     segment_buffer = []  # Buffer for summary generation
+    warnings = []  # Track warnings (e.g., filtered content)
     
     print(f"    Processing {len(source_sentences)} sentences with DeLTA workflow...")
     
@@ -465,7 +466,20 @@ def run_workflow(
                                 print(f"        ⚠ Warning: None content error (attempt {attempt + 1}/{max_retries + 1}), retrying in {backoff_time:.1f}s...")
                             time.sleep(backoff_time)
                         else:
-                            raise RuntimeError(f"Translation failed for sentence {i+1} after {max_retries + 1} attempts") from e
+                            # After all retries, if it's a None content error, use source sentence as fallback
+                            if is_none_content:
+                                print(f"        ⚠ Warning: API returned None content after {max_retries + 1} attempts for sentence {i+1}")
+                                print(f"        ⚠ Using source sentence as fallback translation (likely filtered by content policy)")
+                                target_sentence = source_sentence  # Use source as fallback
+                                # Store warning info for later reporting
+                                warnings.append({
+                                    'sentence_idx': i + 1,
+                                    'sentence_preview': source_sentence[:100] + ('...' if len(source_sentence) > 100 else ''),
+                                    'reason': 'API returned None content (likely content policy filter)'
+                                })
+                                break
+                            else:
+                                raise RuntimeError(f"Translation failed for sentence {i+1} after {max_retries + 1} attempts") from e
         
                 if target_sentence is None:
                     raise RuntimeError(f"Translation failed for sentence {i+1}")
@@ -709,6 +723,7 @@ def run_workflow(
         "outputs": [final_translation],  # Single output: full document translation
         "tokens_input": total_tokens_input,
         "tokens_output": total_tokens_output,
-        "latency": latency
+        "latency": latency,
+        "warnings": warnings if warnings else None  # Include warnings if any
     }
 
