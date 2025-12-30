@@ -776,17 +776,27 @@ def main():
         print("Incomplete Settings (still running or missing reports):")
         print("="*80)
         
-        # Group by dataset/lang_pair
+        # Group by dataset/lang_pair and filter to only models in MODEL_MARKERS
         incomplete_by_dataset_lang = defaultdict(list)
+        filtered_count = 0
         for dataset, lang_pair, workflow, model in sorted(incomplete_settings):
-            incomplete_by_dataset_lang[(dataset, lang_pair)].append((workflow, model))
+            # Only include models that are in MODEL_MARKERS (models in legend)
+            if model in MODEL_MARKERS:
+                incomplete_by_dataset_lang[(dataset, lang_pair)].append((workflow, model))
+            else:
+                filtered_count += 1
         
-        for (dataset, lang_pair), settings in sorted(incomplete_by_dataset_lang.items()):
-            print(f"\n{dataset} / {lang_pair}:")
-            for workflow, model in sorted(settings):
-                print(f"  - {workflow} / {model}")
+        if incomplete_by_dataset_lang:
+            for (dataset, lang_pair), settings in sorted(incomplete_by_dataset_lang.items()):
+                print(f"\n{dataset} / {lang_pair}:")
+                for workflow, model in sorted(settings):
+                    print(f"  - {workflow} / {model}")
         
-        print(f"\nTotal incomplete: {len(incomplete_settings)} settings")
+        total_shown = sum(len(s) for s in incomplete_by_dataset_lang.values())
+        if filtered_count > 0:
+            print(f"\nTotal incomplete (shown): {total_shown} settings (filtered out {filtered_count} settings for models not in legend)")
+        else:
+            print(f"\nTotal incomplete: {total_shown} settings")
     else:
         print("\nAll experiments are complete!")
     
