@@ -168,6 +168,7 @@ def parse_report(report_path: Path) -> Optional[Dict]:
         
         summary = data.get("summary", {})
         avg_chrf = summary.get("avg_chrf_score")
+        avg_term_acc = summary.get("avg_term_success_rate")
         total_tokens_input = summary.get("total_tokens_input", 0)
         total_tokens_output = summary.get("total_tokens_output", 0)
         total_tokens = total_tokens_input + total_tokens_output
@@ -181,6 +182,7 @@ def parse_report(report_path: Path) -> Optional[Dict]:
             "dataset": data.get("dataset", ""),
             "lang_pair": data.get("lang_pair", ""),
             "chrf": avg_chrf,
+            "term_acc": avg_term_acc,  # Can be None if not available
             "total_tokens": total_tokens,
             "tokens_input": total_tokens_input,
             "tokens_output": total_tokens_output,
@@ -191,15 +193,17 @@ def parse_report(report_path: Path) -> Optional[Dict]:
 
 
 def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, str, str, str]], 
-                              reports_by_dataset_lang: Dict, incomplete_settings: Set):
+                              reports_by_dataset_lang: Dict, reports_by_dataset_lang_term: Dict,
+                              incomplete_settings: Set):
     """
     Collect all valid reports from a single outputs directory.
-    Updates seen_settings, reports_by_dataset_lang, and incomplete_settings in place.
+    Updates seen_settings, reports_by_dataset_lang, reports_by_dataset_lang_term, and incomplete_settings in place.
     
     Args:
         outputs_dir: Path to outputs directory
         seen_settings: Set of (dataset, lang_pair, workflow, model) tuples already found
-        reports_by_dataset_lang: Dictionary to update with reports
+        reports_by_dataset_lang: Dictionary to update with reports (non-term workflows)
+        reports_by_dataset_lang_term: Dictionary to update with reports (term workflows)
         incomplete_settings: Set to update with incomplete settings
     """
     # Iterate through dataset directories
@@ -222,9 +226,13 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                     continue
                 
                 workflow_acronym = workflow_dir.name
+                is_term_workflow = workflow_acronym.endswith(".term")
                 
-                # Skip *.term workflows for WMT25
-                if dataset == "wmt25" and workflow_acronym.endswith(".term"):
+                # Determine which dictionary to use
+                target_dict = reports_by_dataset_lang_term if is_term_workflow else reports_by_dataset_lang
+                
+                # Only process *.term workflows for WMT25
+                if is_term_workflow and dataset != "wmt25":
                     continue
                 
                 # Iterate through model directories
@@ -253,10 +261,10 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                     
                     # Mark as seen and add to reports
                     seen_settings.add(setting_key)
-                    reports_by_dataset_lang[(dataset, lang_pair)].append(report_data)
+                    target_dict[(dataset, lang_pair)].append(report_data)
 
 
-def collect_reports(outputs_dirs: List[Path]) -> Tuple[Dict, Set[Tuple[str, str, str, str]]]:
+def collect_reports(outputs_dirs: List[Path]) -> Tuple[Dict, Dict, Set[Tuple[str, str, str, str]]]:
     """
     Collect all valid reports from multiple outputs directories.
     If there's overlap, uses the first one found.
@@ -265,10 +273,12 @@ def collect_reports(outputs_dirs: List[Path]) -> Tuple[Dict, Set[Tuple[str, str,
         outputs_dirs: List of paths to outputs directories
     
     Returns:
-        - Dictionary mapping (dataset, lang_pair) -> list of report data
+        - Dictionary mapping (dataset, lang_pair) -> list of report data (non-term workflows)
+        - Dictionary mapping (dataset, lang_pair) -> list of report data (term workflows)
         - Set of incomplete settings (dataset, lang_pair, workflow, model)
     """
     reports_by_dataset_lang = defaultdict(list)
+    reports_by_dataset_lang_term = defaultdict(list)  # For *.term workflows
     incomplete_settings = set()
     seen_settings = set()  # Track which settings we've already found
     
@@ -278,9 +288,10 @@ def collect_reports(outputs_dirs: List[Path]) -> Tuple[Dict, Set[Tuple[str, str,
             print(f"Warning: Outputs directory does not exist: {outputs_dir}")
             continue
         
-        collect_reports_from_dir(outputs_dir, seen_settings, reports_by_dataset_lang, incomplete_settings)
+        collect_reports_from_dir(outputs_dir, seen_settings, reports_by_dataset_lang, 
+                                 reports_by_dataset_lang_term, incomplete_settings)
     
-    return reports_by_dataset_lang, incomplete_settings
+    return reports_by_dataset_lang, reports_by_dataset_lang_term, incomplete_settings
 
 
 def get_workflow_acronym(workflow_name: str) -> str:
@@ -466,7 +477,8 @@ def plot_dataset_lang_pair_price(
     lang_pair: str,
     reports: List[Dict],
     output_dir: Path,
-    use_batch: bool = False
+    use_batch: bool = False,
+    is_term: bool = False
 ):
     """Create a price-based plot for a specific dataset/lang_pair combination."""
     if not reports:
@@ -548,14 +560,118 @@ def plot_dataset_lang_pair_price(
     # Tight layout
     plt.tight_layout()
     
-    # Save figure
+    # Save figure with appropriate naming
     safe_dataset = dataset.replace("/", "_")
     safe_lang_pair = lang_pair.replace("/", "_")
-    output_path = output_dir / f"{safe_dataset}_{safe_lang_pair}_chrF_x_price.pdf"
+    if is_term:
+        # For term workflows: wmt25+T_{lang_pair}_chrF_x_price.pdf
+        output_path = output_dir / f"{safe_dataset}+T_{safe_lang_pair}_chrF_x_price.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_{safe_lang_pair}_chrF_x_price.pdf"
     plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
     plt.close()
     
     print(f"Created price plot: {output_path}")
+
+
+def plot_dataset_lang_pair_term_acc(
+    dataset: str,
+    lang_pair: str,
+    reports: List[Dict],
+    output_dir: Path,
+    use_batch: bool = False
+):
+    """Create a terminology accuracy plot for *.term workflows."""
+    if not reports:
+        return
+    
+    # Prepare data
+    workflows = set()
+    models = set()
+    data_points = []
+    
+    for report in reports:
+        # The report contains the full workflow name, convert to acronym
+        workflow_name = report.get("workflow", "")
+        workflow = get_workflow_acronym(workflow_name)
+        model = report["model"]
+        
+        # Skip if term accuracy not available
+        term_acc = report.get("term_acc")
+        if term_acc is None:
+            continue
+        
+        workflows.add(workflow)
+        models.add(model)
+        
+        # Calculate cost
+        tokens_input = report.get("tokens_input", 0)
+        tokens_output = report.get("tokens_output", 0)
+        cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
+        
+        if cost is None:
+            continue  # Skip if pricing not available for this model
+        
+        data_points.append({
+            "workflow": workflow,
+            "model": model,
+            "term_acc": term_acc,
+            "cost": cost,
+            "workflow_name": report.get("workflow", "")  # Keep original for reference
+        })
+    
+    if not data_points:
+        return
+    
+    # Create figure - single column width for ACL paper (about 3.5 inches)
+    _fig, ax = plt.subplots(figsize=(3.5, 3.5))
+    
+    # Plot each workflow with different colors
+    for workflow in sorted(workflows):
+        workflow_data = [d for d in data_points if d["workflow"] == workflow]
+        
+        if not workflow_data:
+            continue
+        
+        color = WORKFLOW_COLORS.get(workflow, "#000000")
+        
+        # Plot each model for this workflow
+        for model in sorted(models):
+            model_data = [d for d in workflow_data if d["model"] == model]
+            
+            if not model_data:
+                continue
+            
+            costs = [d["cost"] for d in model_data]
+            term_accs = [d["term_acc"] for d in model_data]
+            
+            marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
+            ax.scatter(costs, term_accs, c=color, marker=marker, s=50, 
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
+    
+    # Set log scale for x-axis
+    ax.set_xscale('log')
+    
+    # Labels
+    ax.set_xlabel('Cost ($, log scale)', fontsize=10)
+    ax.set_ylabel('Terminology Accuracy', fontsize=10)
+    
+    # Note: No y-axis limits for TAcc (user will choose boundary later)
+    
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure with naming: wmt25+T_{lang_pair}_TAcc_x_price.pdf
+    safe_dataset = dataset.replace("/", "_")
+    safe_lang_pair = lang_pair.replace("/", "_")
+    output_path = output_dir / f"{safe_dataset}+T_{safe_lang_pair}_TAcc_x_price.pdf"
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    print(f"Created term accuracy plot: {output_path}")
 
 
 def main():
@@ -566,7 +682,7 @@ def main():
         "--outputs_dirs",
         type=str,
         nargs='+',
-        default=["zhijin/agent-mt-main/outputs"],
+        default=["zhijin/agent-mt-main/outputs", "outputs"],
         help="Paths to outputs directories containing report.json files (can specify multiple)"
     )
     parser.add_argument(
@@ -574,6 +690,11 @@ def main():
         type=str,
         default="report/figs",
         help="Directory to save output PDF plots"
+    )
+    parser.add_argument(
+        "--include-tokens",
+        action="store_true",
+        help="Also create token-based plots (default: only price plots)"
     )
     
     args = parser.parse_args()
@@ -604,12 +725,18 @@ def main():
     print(f"Searching in {len(existing_dirs)} directory/directories:")
     for d in existing_dirs:
         print(f"  - {d}")
-    reports_by_dataset_lang, incomplete_settings = collect_reports(existing_dirs)
+    reports_by_dataset_lang, reports_by_dataset_lang_term, incomplete_settings = collect_reports(existing_dirs)
     
-    # Collect all workflows for legend
+    # Collect all workflows for legend (from both term and non-term)
     all_workflows = set()
     
     for reports in reports_by_dataset_lang.values():
+        for report in reports:
+            workflow_name = report.get("workflow", "")
+            workflow_acronym = get_workflow_acronym(workflow_name)
+            all_workflows.add(workflow_acronym)
+    
+    for reports in reports_by_dataset_lang_term.values():
         for report in reports:
             workflow_name = report.get("workflow", "")
             workflow_acronym = get_workflow_acronym(workflow_name)
@@ -627,11 +754,21 @@ def main():
     
     # Create plots for each dataset/lang_pair
     print("\nCreating plots...")
+    
+    # Create plots for non-term workflows
     for (dataset, lang_pair), reports in sorted(reports_by_dataset_lang.items()):
-        # Create token-based plots
-        plot_dataset_lang_pair(dataset, lang_pair, reports, output_dir)
+        # Create token-based plots (optional)
+        if args.include_tokens:
+            plot_dataset_lang_pair(dataset, lang_pair, reports, output_dir)
         # Create price-based plots (standard pricing)
         plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False)
+    
+    # Create plots for term workflows (WMT25 only)
+    for (dataset, lang_pair), reports in sorted(reports_by_dataset_lang_term.items()):
+        # Create chrF vs price plots for term workflows
+        plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False, is_term=True)
+        # Create Terminology Accuracy vs price plots
+        plot_dataset_lang_pair_term_acc(dataset, lang_pair, reports, output_dir, use_batch=False)
     
     # Print incomplete settings
     if incomplete_settings:
