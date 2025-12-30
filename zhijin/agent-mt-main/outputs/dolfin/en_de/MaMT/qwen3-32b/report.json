@@ -1,0 +1,363 @@
+{
+  "dataset": "dolfin_en_de",
+  "workflow": "MaMT_translate_postedit_proofread",
+  "model": "qwen3-32b",
+  "total_samples": 13,
+  "successful_samples": 13,
+  "failed_samples": 0,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "sample_id": 3873,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        67.91815206104765,
+        67.91579952721706,
+        67.90625099075346
+      ],
+      "bleu_scores": [
+        34.04330868147758,
+        33.954906617389085,
+        33.94798055913777
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 18144,
+      "tokens_output": 6837,
+      "latency": 22.51568865776062
+    },
+    {
+      "sample_idx": 1,
+      "sample_id": 4103,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        65.16342776765185,
+        65.15724785193218,
+        65.24620104688987
+      ],
+      "bleu_scores": [
+        27.617264979531,
+        27.584793124466525,
+        27.613294737776975
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 10620,
+      "tokens_output": 4226,
+      "latency": 14.661778211593628
+    },
+    {
+      "sample_idx": 2,
+      "sample_id": 3854,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        65.27638044157814,
+        66.99030233542915,
+        65.56894765090394
+      ],
+      "bleu_scores": [
+        37.29329675761219,
+        39.3777943476573,
+        37.480449642692555
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 21408,
+      "tokens_output": 7738,
+      "latency": 31.293072938919067
+    },
+    {
+      "sample_idx": 3,
+      "sample_id": 4050,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        75.31279980478168,
+        75.15378413202423,
+        75.13737600350436
+      ],
+      "bleu_scores": [
+        53.61043318282223,
+        53.1346521151103,
+        53.18225260093121
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 9667,
+      "tokens_output": 3557,
+      "latency": 15.378889799118042
+    },
+    {
+      "sample_idx": 4,
+      "sample_id": 3832,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        59.1551806889271,
+        61.2851071266139,
+        60.86463922237021
+      ],
+      "bleu_scores": [
+        21.773816345428912,
+        24.030852128124955,
+        23.777548258705618
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 10681,
+      "tokens_output": 3897,
+      "latency": 16.01785635948181
+    },
+    {
+      "sample_idx": 5,
+      "sample_id": 4246,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        65.66885083922917,
+        65.66885083922917,
+        65.63077827090407
+      ],
+      "bleu_scores": [
+        27.353441703027165,
+        27.353441703027165,
+        27.325854666630327
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 18105,
+      "tokens_output": 8251,
+      "latency": 32.97068953514099
+    },
+    {
+      "sample_idx": 6,
+      "sample_id": 5479,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        65.51449426529248,
+        65.87306926856671,
+        65.97197660127814
+      ],
+      "bleu_scores": [
+        33.820887710986035,
+        34.50858135718997,
+        34.53419123178943
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 13086,
+      "tokens_output": 4720,
+      "latency": 18.274849891662598
+    },
+    {
+      "sample_idx": 7,
+      "sample_id": 4875,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        69.5451878227772,
+        69.3211976173666,
+        69.58809121887124
+      ],
+      "bleu_scores": [
+        34.09069432176475,
+        33.995058700748324,
+        34.1264698172416
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 10759,
+      "tokens_output": 4019,
+      "latency": 15.50441598892212
+    },
+    {
+      "sample_idx": 8,
+      "sample_id": 3965,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        63.891095139131906,
+        64.23506270940449,
+        64.30237002651758
+      ],
+      "bleu_scores": [
+        30.465710066789207,
+        30.9348455692901,
+        31.031888929846964
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 22161,
+      "tokens_output": 8343,
+      "latency": 36.18332481384277
+    },
+    {
+      "sample_idx": 9,
+      "sample_id": 5576,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        68.25566201047641,
+        67.86829743184711,
+        68.29026860455546
+      ],
+      "bleu_scores": [
+        35.78784710201733,
+        34.411545707169985,
+        35.77730946846291
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 14310,
+      "tokens_output": 5478,
+      "latency": 23.517000436782837
+    },
+    {
+      "sample_idx": 10,
+      "sample_id": 4200,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        68.23782606716462,
+        68.23782606716462,
+        68.23782606716462
+      ],
+      "bleu_scores": [
+        29.50907177033823,
+        29.50907177033823,
+        29.50907177033823
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 14491,
+      "tokens_output": 5347,
+      "latency": 22.78642225265503
+    },
+    {
+      "sample_idx": 11,
+      "sample_id": 5120,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        58.495715328089105,
+        59.30399267311479,
+        59.03904814423838
+      ],
+      "bleu_scores": [
+        25.98586922026112,
+        26.54338836847524,
+        26.34513790731255
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 10674,
+      "tokens_output": 3903,
+      "latency": 18.888965368270874
+    },
+    {
+      "sample_idx": 12,
+      "sample_id": 4442,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": null,
+      "chrf_scores": [
+        60.08681753289399,
+        59.67552309495208,
+        60.36739493950742
+      ],
+      "bleu_scores": [
+        20.755050944815554,
+        20.849650315675717,
+        20.83731912547128
+      ],
+      "term_success_rates": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "tokens_input": 9538,
+      "tokens_output": 3400,
+      "latency": 14.335767984390259
+    }
+  ],
+  "summary": {
+    "total_tokens_input": 183644,
+    "total_tokens_output": 69716,
+    "total_latency_seconds": 282.32872223854065,
+    "avg_latency_seconds": 21.71759401834928,
+    "avg_chrf_score": 65.8577822144199,
+    "min_chrf_score": 59.03904814423838,
+    "max_chrf_score": 75.13737600350436,
+    "avg_bleu_score": 31.96067451664134,
+    "min_bleu_score": 20.83731912547128,
+    "max_bleu_score": 53.18225260093121,
+    "avg_term_success_rate": null,
+    "min_term_success_rate": null,
+    "max_term_success_rate": null
+  }
+}

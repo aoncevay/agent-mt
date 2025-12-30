@@ -1,0 +1,509 @@
+{
+  "dataset": "wmt25_zht-en",
+  "workflow": "DeLTA_multi_agents",
+  "model": "qwen3-32b",
+  "total_samples": 56,
+  "successful_samples": 3,
+  "failed_samples": 53,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "sample_id": "0",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": null,
+      "chrf_scores": [
+        8.056603059488983
+      ],
+      "bleu_scores": [
+        0.16708720807645225
+      ],
+      "term_success_rates": [
+        0.10178571428571428
+      ],
+      "tokens_input": 14712875,
+      "tokens_output": 1277434,
+      "latency": 7242.386273145676
+    },
+    {
+      "sample_idx": 1,
+      "sample_id": "1",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": null,
+      "chrf_scores": [
+        8.393654046125484
+      ],
+      "bleu_scores": [
+        0.0761571478662648
+      ],
+      "term_success_rates": [
+        0.05965909090909091
+      ],
+      "tokens_input": 1417507,
+      "tokens_output": 110710,
+      "latency": 711.7899816036224
+    },
+    {
+      "sample_idx": 2,
+      "sample_id": "2",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": null,
+      "chrf_scores": [
+        14.240809281757095
+      ],
+      "bleu_scores": [
+        0.2692291768600771
+      ],
+      "term_success_rates": [
+        0.16749723145071982
+      ],
+      "tokens_input": 5464348,
+      "tokens_output": 463267,
+      "latency": 2963.3078820705414
+    },
+    {
+      "sample_idx": 3,
+      "sample_id": "3",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 4,
+      "sample_id": "4",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 5,
+      "sample_id": "5",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 6,
+      "sample_id": "6",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 7,
+      "sample_id": "7",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 8,
+      "sample_id": "8",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 9,
+      "sample_id": "9",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 10,
+      "sample_id": "10",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 11,
+      "sample_id": "11",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 12,
+      "sample_id": "12",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 13,
+      "sample_id": "13",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 14,
+      "sample_id": "14",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 15,
+      "sample_id": "15",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 16,
+      "sample_id": "16",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 17,
+      "sample_id": "17",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 18,
+      "sample_id": "18",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 19,
+      "sample_id": "19",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 20,
+      "sample_id": "20",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 21,
+      "sample_id": "21",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 22,
+      "sample_id": "22",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 23,
+      "sample_id": "23",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 24,
+      "sample_id": "24",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 25,
+      "sample_id": "25",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 26,
+      "sample_id": "26",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 27,
+      "sample_id": "27",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 28,
+      "sample_id": "28",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 29,
+      "sample_id": "29",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 30,
+      "sample_id": "30",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 31,
+      "sample_id": "31",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 32,
+      "sample_id": "32",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 33,
+      "sample_id": "33",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 34,
+      "sample_id": "34",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 35,
+      "sample_id": "35",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 36,
+      "sample_id": "36",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 37,
+      "sample_id": "37",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 38,
+      "sample_id": "38",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 39,
+      "sample_id": "39",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 40,
+      "sample_id": "40",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 41,
+      "sample_id": "41",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 42,
+      "sample_id": "42",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 43,
+      "sample_id": "43",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 44,
+      "sample_id": "44",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 45,
+      "sample_id": "45",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 46,
+      "sample_id": "46",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 47,
+      "sample_id": "47",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 48,
+      "sample_id": "48",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 49,
+      "sample_id": "49",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 50,
+      "sample_id": "50",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 51,
+      "sample_id": "51",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 52,
+      "sample_id": "52",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 53,
+      "sample_id": "53",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 54,
+      "sample_id": "54",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    },
+    {
+      "sample_idx": 55,
+      "sample_id": "55",
+      "source_lang": "zht",
+      "target_lang": "en",
+      "lang_pair": "zht-en",
+      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+    }
+  ],
+  "summary": {
+    "total_tokens_input": 21594730,
+    "total_tokens_output": 1851411,
+    "total_latency_seconds": 10917.48413681984,
+    "avg_latency_seconds": 3639.1613789399466,
+    "avg_chrf_score": 10.230355462457188,
+    "min_chrf_score": 8.056603059488983,
+    "max_chrf_score": 14.240809281757095,
+    "avg_bleu_score": 0.17082451093426468,
+    "min_bleu_score": 0.0761571478662648,
+    "max_bleu_score": 0.2692291768600771,
+    "avg_term_success_rate": 0.10964734554850834,
+    "min_term_success_rate": 0.05965909090909091,
+    "max_term_success_rate": 0.16749723145071982
+  }
+}

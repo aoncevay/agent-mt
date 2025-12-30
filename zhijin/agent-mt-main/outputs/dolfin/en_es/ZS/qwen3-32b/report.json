@@ -1,0 +1,365 @@
+{
+  "dataset": "dolfin_en_es",
+  "workflow": "zero_shot",
+  "model": "qwen3-32b",
+  "total_samples": 17,
+  "successful_samples": 17,
+  "failed_samples": 0,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "sample_id": 1869,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        63.808629756835735
+      ],
+      "bleu_scores": [
+        36.44045598689114
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1635,
+      "tokens_output": 1486,
+      "latency": 6.5636208057403564
+    },
+    {
+      "sample_idx": 1,
+      "sample_id": 2444,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        62.59224228424477
+      ],
+      "bleu_scores": [
+        29.87524939449668
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1894,
+      "tokens_output": 1915,
+      "latency": 7.9670960903167725
+    },
+    {
+      "sample_idx": 2,
+      "sample_id": 3386,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        65.85301040663546
+      ],
+      "bleu_scores": [
+        36.911508935292936
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 3984,
+      "tokens_output": 4085,
+      "latency": 16.870521068572998
+    },
+    {
+      "sample_idx": 3,
+      "sample_id": 2121,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        68.46994535545781
+      ],
+      "bleu_scores": [
+        39.65482359964479
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1965,
+      "tokens_output": 1935,
+      "latency": 6.762891530990601
+    },
+    {
+      "sample_idx": 4,
+      "sample_id": 2120,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        65.34236973008933
+      ],
+      "bleu_scores": [
+        36.3281833409465
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1616,
+      "tokens_output": 1568,
+      "latency": 7.090682029724121
+    },
+    {
+      "sample_idx": 5,
+      "sample_id": 3345,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        68.79540592424839
+      ],
+      "bleu_scores": [
+        38.2134650248678
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1604,
+      "tokens_output": 1629,
+      "latency": 5.5973570346832275
+    },
+    {
+      "sample_idx": 6,
+      "sample_id": 1833,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        69.27500504749163
+      ],
+      "bleu_scores": [
+        41.9848611063889
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1784,
+      "tokens_output": 1808,
+      "latency": 9.052283525466919
+    },
+    {
+      "sample_idx": 7,
+      "sample_id": 2261,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        74.30552653709344
+      ],
+      "bleu_scores": [
+        51.08733817083375
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1709,
+      "tokens_output": 1723,
+      "latency": 7.06470251083374
+    },
+    {
+      "sample_idx": 8,
+      "sample_id": 1880,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        66.3958164010291
+      ],
+      "bleu_scores": [
+        37.345802411027556
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1745,
+      "tokens_output": 1828,
+      "latency": 10.021235704421997
+    },
+    {
+      "sample_idx": 9,
+      "sample_id": 2658,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        74.6249429269346
+      ],
+      "bleu_scores": [
+        53.11736902723989
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1956,
+      "tokens_output": 1943,
+      "latency": 8.071501016616821
+    },
+    {
+      "sample_idx": 10,
+      "sample_id": 2119,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        70.34422251413027
+      ],
+      "bleu_scores": [
+        44.08041602573283
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1854,
+      "tokens_output": 1825,
+      "latency": 7.512041091918945
+    },
+    {
+      "sample_idx": 11,
+      "sample_id": 1962,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        69.45469915402676
+      ],
+      "bleu_scores": [
+        41.026029867578835
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1765,
+      "tokens_output": 1741,
+      "latency": 6.598598003387451
+    },
+    {
+      "sample_idx": 12,
+      "sample_id": 1874,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        61.89802086204574
+      ],
+      "bleu_scores": [
+        34.215598348007454
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 2467,
+      "tokens_output": 2371,
+      "latency": 9.902040481567383
+    },
+    {
+      "sample_idx": 13,
+      "sample_id": 1987,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        64.07966980031658
+      ],
+      "bleu_scores": [
+        33.27840151185036
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1829,
+      "tokens_output": 1719,
+      "latency": 6.901909112930298
+    },
+    {
+      "sample_idx": 14,
+      "sample_id": 2941,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        69.93695272722701
+      ],
+      "bleu_scores": [
+        42.00378797899337
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 2906,
+      "tokens_output": 3053,
+      "latency": 8.04706072807312
+    },
+    {
+      "sample_idx": 15,
+      "sample_id": 2260,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        74.05371006112512
+      ],
+      "bleu_scores": [
+        51.02815280343358
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1888,
+      "tokens_output": 1970,
+      "latency": 7.6985907554626465
+    },
+    {
+      "sample_idx": 16,
+      "sample_id": 2608,
+      "source_lang": "en",
+      "target_lang": "es",
+      "lang_pair": "en_es",
+      "error": null,
+      "chrf_scores": [
+        65.98634540609011
+      ],
+      "bleu_scores": [
+        39.32850618782285
+      ],
+      "term_success_rates": [
+        -1.0
+      ],
+      "tokens_input": 1815,
+      "tokens_output": 1942,
+      "latency": 8.911839008331299
+    }
+  ],
+  "summary": {
+    "total_tokens_input": 34416,
+    "total_tokens_output": 34541,
+    "total_latency_seconds": 140.6339704990387,
+    "avg_latency_seconds": 8.272586499943452,
+    "avg_chrf_score": 67.95391264088363,
+    "min_chrf_score": 61.89802086204574,
+    "max_chrf_score": 74.6249429269346,
+    "avg_bleu_score": 40.348232336532305,
+    "min_bleu_score": 29.87524939449668,
+    "max_bleu_score": 53.11736902723989,
+    "avg_term_success_rate": null,
+    "min_term_success_rate": null,
+    "max_term_success_rate": null
+  }
+}

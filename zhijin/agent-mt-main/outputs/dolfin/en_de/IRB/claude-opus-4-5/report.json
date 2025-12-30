@@ -1,0 +1,129 @@
+{
+  "dataset": "dolfin_en_de",
+  "workflow": "IRB_refine",
+  "model": "claude-opus-4-5",
+  "total_samples": 13,
+  "successful_samples": 0,
+  "failed_samples": 13,
+  "samples": [
+    {
+      "sample_idx": 0,
+      "sample_id": 3873,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 1,
+      "sample_id": 4103,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 2,
+      "sample_id": 3854,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 3,
+      "sample_id": 4050,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 4,
+      "sample_id": 3832,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 5,
+      "sample_id": 4246,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 6,
+      "sample_id": 5479,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 7,
+      "sample_id": 4875,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 8,
+      "sample_id": 3965,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 9,
+      "sample_id": 5576,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 10,
+      "sample_id": 4200,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 11,
+      "sample_id": 5120,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    },
+    {
+      "sample_idx": 12,
+      "sample_id": 4442,
+      "source_lang": "en",
+      "target_lang": "de",
+      "lang_pair": "en_de",
+      "error": "An error occurred (ValidationException) when calling the InvokeModel operation: Invocation of model ID anthropic.claude-opus-4-5-20251101-v1:0 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model."
+    }
+  ],
+  "summary": {
+    "total_tokens_input": 0,
+    "total_tokens_output": 0,
+    "total_latency_seconds": 0.0,
+    "avg_latency_seconds": 0,
+    "avg_chrf_score": null,
+    "min_chrf_score": null,
+    "max_chrf_score": null,
+    "avg_bleu_score": null,
+    "min_bleu_score": null,
+    "max_bleu_score": null,
+    "avg_term_success_rate": null,
+    "min_term_success_rate": null,
+    "max_term_success_rate": null
+  }
+}
