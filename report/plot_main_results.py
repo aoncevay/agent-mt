@@ -163,7 +163,10 @@ def parse_report(report_path: Path) -> Optional[Dict]:
         total_samples = data.get("total_samples", 0)
         successful_samples = data.get("successful_samples", 0)
         
-        if total_samples != successful_samples:
+        # Experiment is incomplete if:
+        # - total_samples is 0 (no samples processed)
+        # - total_samples != successful_samples (some samples failed)
+        if total_samples == 0 or total_samples != successful_samples:
             return None  # Incomplete experiment
         
         summary = data.get("summary", {})
