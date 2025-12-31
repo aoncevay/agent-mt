@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import inspect
 import json
 import os
 import sys
@@ -94,8 +95,10 @@ def process_sample(
     print(f"  Sample {sample_display} ({source_lang}->{target_lang}): "
           f"{len(source_text)} chars source, {len(reference_text)} chars reference")
     
-    # Load base translation if base_model is provided
+    # Load base translation and token counts if base_model is provided
     base_translation = None
+    base_model_tokens_input = 0
+    base_model_tokens_output = 0
     if base_model_name and dataset:
         try:
             print(f"    Loading base translation from {base_model_name}...")
@@ -108,6 +111,22 @@ def process_sample(
                 use_terminology=use_terminology
             )
             print(f"    ✓ Loaded base translation ({len(base_translation)} chars)")
+            
+            # Load token counts from base_model's zero-shot report
+            token_counts = load_base_model_token_counts(
+                base_model_name=base_model_name,
+                dataset=dataset,
+                lang_pair=lang_pair or f"{source_lang}-{target_lang}",
+                sample_idx=sample_idx,
+                sample_id=sample_id,
+                use_terminology=use_terminology
+            )
+            if token_counts:
+                base_model_tokens_input = token_counts["tokens_input"]
+                base_model_tokens_output = token_counts["tokens_output"]
+                print(f"    ✓ Loaded base model token counts: {base_model_tokens_input} in, {base_model_tokens_output} out")
+            else:
+                print(f"    ⚠ Warning: Could not load base model token counts from report")
         except FileNotFoundError as e:
             print(f"    ✗ Error: {e}")
             return {
@@ -122,6 +141,8 @@ def process_sample(
                 "evaluations": [],
                 "tokens_input": 0,
                 "tokens_output": 0,
+                "base_model_tokens_input": 0,
+                "base_model_tokens_output": 0,
                 "latency": None,
                 "error": str(e)
             }
@@ -218,8 +239,10 @@ def process_sample(
             "reference_text": reference_text,
             "outputs": outputs,
             "evaluations": evaluations,
-            "tokens_input": result["tokens_input"],
-            "tokens_output": result["tokens_output"],
+            "tokens_input": result["tokens_input"],  # Main model tokens
+            "tokens_output": result["tokens_output"],  # Main model tokens
+            "base_model_tokens_input": base_model_tokens_input,
+            "base_model_tokens_output": base_model_tokens_output,
             "latency": result["latency"],
             "error": None,
             "warnings": result.get("warnings")  # Include warnings from workflow
@@ -240,6 +263,8 @@ def process_sample(
             "evaluations": [],
             "tokens_input": 0,
             "tokens_output": 0,
+            "base_model_tokens_input": base_model_tokens_input,
+            "base_model_tokens_output": base_model_tokens_output,
             "latency": None,
             "error": str(e)
         }
@@ -284,6 +309,264 @@ def get_processed_sample_ids(existing_report: Optional[Dict[str, Any]]) -> set:
             processed.add(f"{lang_pair}_{sample_idx}")
     
     return processed
+
+
+def load_base_model_token_counts(
+    base_model_name: str,
+    dataset: str,
+    lang_pair: str,
+    sample_idx: int,
+    sample_id: str,
+    use_terminology: bool = False
+) -> Optional[Dict[str, int]]:
+    """
+    Load token counts for a sample from base_model's zero-shot report.
+    
+    Args:
+        base_model_name: Name of the base model
+        dataset: Dataset name (e.g., "wmt25", "dolfin")
+        lang_pair: Language pair (e.g., "en-zht", "en-es")
+        sample_idx: Sample index
+        sample_id: Sample ID (may differ from sample_idx)
+        use_terminology: Whether terminology was used (affects output directory)
+    
+    Returns:
+        Dictionary with 'tokens_input' and 'tokens_output', or None if not found
+    """
+    # Build path to base model's zero-shot output
+    base_output_dir = build_output_dir(
+        dataset=dataset,
+        lang_pair=lang_pair,
+        workflow_name="zero_shot",
+        model_name=base_model_name,
+        use_terminology=use_terminology
+    )
+    
+    # Load report
+    report_file = base_output_dir / "report.json"
+    if not report_file.exists():
+        return None
+    
+    try:
+        with open(report_file, "r", encoding="utf-8") as f:
+            report = json.load(f)
+        
+        # Find matching sample in report
+        for sample in report.get("samples", []):
+            # Match by sample_id or sample_idx
+            if sample.get("sample_id") == str(sample_id) or sample.get("sample_idx") == sample_idx:
+                if not sample.get("error"):
+                    return {
+                        "tokens_input": sample.get("tokens_input", 0),
+                        "tokens_output": sample.get("tokens_output", 0)
+                    }
+    except (json.JSONDecodeError, IOError):
+        pass
+    
+    return None
+
+
+def ensure_base_model_zero_shot_exists(
+    base_model_name: str,
+    dataset: str,
+    lang_pair: str,
+    samples: List[Dict[str, Any]],
+    data_loader,
+    use_terminology: bool = False,
+    max_samples: Optional[int] = None
+) -> bool:
+    """
+    Check if zero-shot translations exist for base_model, and generate them if missing.
+    
+    Args:
+        base_model_name: Name of the base model
+        dataset: Dataset name
+        lang_pair: Language pair
+        samples: List of samples to process
+        data_loader: Data loader instance
+        use_terminology: Whether terminology was used
+        max_samples: Maximum number of samples to process
+    
+    Returns:
+        True if zero-shot exists or was successfully generated, False otherwise
+    """
+    # Build path to base model's zero-shot output
+    base_output_dir = build_output_dir(
+        dataset=dataset,
+        lang_pair=lang_pair,
+        workflow_name="zero_shot",
+        model_name=base_model_name,
+        use_terminology=use_terminology
+    )
+    
+    # Check if report exists and is complete
+    report_file = base_output_dir / ("report.json" if max_samples is None else f"report_{max_samples}_samples.json")
+    
+    if report_file.exists():
+        try:
+            with open(report_file, "r", encoding="utf-8") as f:
+                report = json.load(f)
+            
+            # Check if report is complete (all samples processed successfully)
+            total_samples = len(samples) if max_samples is None else min(len(samples), max_samples)
+            successful_samples = report.get("successful_samples", 0)
+            
+            if successful_samples >= total_samples:
+                print(f"  ✓ Zero-shot translations for base_model '{base_model_name}' already exist")
+                return True
+        except (json.JSONDecodeError, IOError):
+            pass
+    
+    # Need to generate zero-shot translations
+    print(f"  Generating zero-shot translations for base_model '{base_model_name}'...")
+    
+    # Get model_id for base_model (using already imported vars)
+    
+    base_model_id = None
+    base_model_provider = None
+    base_model_type = "bedrock"
+    
+    if base_model_name in model_name2openai_id:
+        base_model_id = model_name2openai_id[base_model_name]
+        base_model_type = "openai"
+        try:
+            import cdao  # noqa: F401
+            del cdao  # Remove from namespace to avoid unused import warning
+        except ImportError:
+            print(f"  ✗ Error: OpenAI model '{base_model_name}' requires 'cdao' library.")
+            return False
+    elif base_model_name in model_name2bedrock_arn:
+        base_model_id = model_name2bedrock_arn[base_model_name]
+        base_model_provider = model_name2provider.get(base_model_name)
+        base_model_type = "bedrock"
+    elif base_model_name in model_name2bedrock_id:
+        base_model_id = model_name2bedrock_id[base_model_name]
+        base_model_type = "bedrock"
+    else:
+        print(f"  ✗ Error: Unknown base_model '{base_model_name}'")
+        return False
+    
+    # Set AWS_REGION for base_model
+    base_aws_region = None
+    if base_model_type == "bedrock":
+        if not os.getenv("AWS_REGION"):
+            if base_model_provider:  # ARN case
+                base_aws_region = "us-east-1"
+            else:  # Model ID case
+                base_aws_region = "us-east-2"
+        else:
+            base_aws_region = os.getenv("AWS_REGION")
+    
+    # Get zero_shot workflow module
+    from workflows import zero_shot
+    workflow_module = zero_shot
+    
+    # Process samples
+    print(f"  Processing {len(samples) if max_samples is None else min(len(samples), max_samples)} samples...")
+    results = []
+    
+    for i, sample in enumerate(samples[:max_samples] if max_samples else samples):
+        source_lang, target_lang = data_loader.get_translation_direction(sample)
+        if source_lang is None or target_lang is None:
+            continue
+        
+        sample_id = sample.get("id") or sample.get("_id") or str(i)
+        source_text, reference_text, terminology = data_loader.extract_texts(
+            sample, source_lang, target_lang
+        )
+        
+        if not source_text or not reference_text:
+            continue
+        
+        print(f"    Sample {i+1}/{len(samples[:max_samples] if max_samples else samples)}...")
+        
+        try:
+            # Run zero-shot workflow
+            workflow_kwargs = {
+                "source_text": source_text,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "model_id": base_model_id,
+                "terminology": terminology if use_terminology else None,
+                "use_terminology": use_terminology,
+                "max_retries": MAX_RETRIES,
+                "initial_backoff": INITIAL_BACKOFF
+            }
+            
+            if base_aws_region and "region" in inspect.signature(workflow_module.run_workflow).parameters:
+                workflow_kwargs["region"] = base_aws_region
+            
+            if base_model_provider and "model_provider" in inspect.signature(workflow_module.run_workflow).parameters:
+                workflow_kwargs["model_provider"] = base_model_provider
+            
+            if "model_type" in inspect.signature(workflow_module.run_workflow).parameters:
+                workflow_kwargs["model_type"] = base_model_type
+            
+            result = workflow_module.run_workflow(**workflow_kwargs)
+            
+            # Evaluate (using already imported functions)
+            output = result["outputs"][0]
+            chrf_result = compute_chrf(output, reference_text)
+            bleu_result = compute_bleu(output, reference_text, target_lang)
+            
+            term_success_rate = -1.0
+            if terminology and (data_loader.get_dataset_name() == "wmt25" or use_terminology):
+                term_success_rate = compute_term_success_rate(
+                    source_text, output, reference_text, terminology, lowercase=True
+                )
+            
+            results.append({
+                "sample_idx": i,
+                "sample_id": sample_id,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "lang_pair": lang_pair,
+                "source_text": source_text,
+                "reference_text": reference_text,
+                "outputs": result["outputs"],
+                "evaluations": [{
+                    "agent_id": 0,
+                    "chrf_score": chrf_result["score"],
+                    "bleu_score": bleu_result["score"],
+                    "term_success_rate": term_success_rate,
+                    "translation": output
+                }],
+                "tokens_input": result["tokens_input"],
+                "tokens_output": result["tokens_output"],
+                "latency": result["latency"],
+                "error": None
+            })
+        except Exception as e:
+            print(f"    ✗ Error processing sample {i}: {e}")
+            results.append({
+                "sample_idx": i,
+                "sample_id": sample_id,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "lang_pair": lang_pair,
+                "source_text": source_text,
+                "reference_text": reference_text,
+                "outputs": [],
+                "evaluations": [],
+                "tokens_input": 0,
+                "tokens_output": 0,
+                "latency": None,
+                "error": str(e)
+            })
+    
+    # Save outputs
+    save_outputs(
+        results=results,
+        output_dir=base_output_dir,
+        dataset_name=f"{dataset}_{lang_pair}",
+        workflow_name="zero_shot",
+        model_name=base_model_name,
+        max_samples=max_samples,
+        resume=False
+    )
+    
+    print(f"  ✓ Generated zero-shot translations for base_model '{base_model_name}'")
+    return True
 
 
 def load_base_translation(
@@ -420,15 +703,20 @@ def save_outputs(
         # Recalculate totals from kept samples only
         total_tokens_input = 0
         total_tokens_output = 0
+        total_base_model_tokens_input = 0
+        total_base_model_tokens_output = 0
         total_latency = 0.0
         chrf_scores = []
         bleu_scores = []
         term_success_rates = []
         for s in samples_to_keep:
             if not s.get("error"):
-                # Add token counts
+                # Add token counts (main model)
                 total_tokens_input += s.get("tokens_input", 0)
                 total_tokens_output += s.get("tokens_output", 0)
+                # Add base model token counts if available
+                total_base_model_tokens_input += s.get("base_model_tokens_input", 0)
+                total_base_model_tokens_output += s.get("base_model_tokens_output", 0)
                 if s.get("latency"):
                     total_latency += s.get("latency", 0.0)
                 
@@ -457,6 +745,8 @@ def save_outputs(
         existing_sample_ids = set()
         total_tokens_input = 0
         total_tokens_output = 0
+        total_base_model_tokens_input = 0
+        total_base_model_tokens_output = 0
         total_latency = 0.0
         chrf_scores = []
         bleu_scores = []
@@ -496,13 +786,17 @@ def save_outputs(
                 "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
                 "bleu_scores": [e.get("bleu_score") for e in result["evaluations"]],
                 "term_success_rates": [e.get("term_success_rate", -1.0) for e in result["evaluations"]],
-                "tokens_input": result["tokens_input"],
-                "tokens_output": result["tokens_output"],
+                "tokens_input": result["tokens_input"],  # Main model tokens
+                "tokens_output": result["tokens_output"],  # Main model tokens
+                "base_model_tokens_input": result.get("base_model_tokens_input", 0),
+                "base_model_tokens_output": result.get("base_model_tokens_output", 0),
                 "latency": result["latency"]
             })
             
             total_tokens_input += result["tokens_input"]
             total_tokens_output += result["tokens_output"]
+            total_base_model_tokens_input += result.get("base_model_tokens_input", 0)
+            total_base_model_tokens_output += result.get("base_model_tokens_output", 0)
             if result["latency"]:
                 total_latency += result["latency"]
             
@@ -525,8 +819,10 @@ def save_outputs(
     
     successful_count = report["successful_samples"]
     report["summary"] = {
-        "total_tokens_input": total_tokens_input,
-        "total_tokens_output": total_tokens_output,
+        "total_tokens_input": total_tokens_input,  # Main model
+        "total_tokens_output": total_tokens_output,  # Main model
+        "total_base_model_tokens_input": total_base_model_tokens_input,
+        "total_base_model_tokens_output": total_base_model_tokens_output,
         "total_latency_seconds": total_latency,
         "avg_latency_seconds": total_latency / successful_count if successful_count > 0 else 0,
         "avg_chrf_score": sum(chrf_scores) / len(chrf_scores) if chrf_scores else None,
@@ -560,6 +856,8 @@ def save_outputs(
     if term_success_rates:
         print(f"  Average Term Success Rate: {report['summary']['avg_term_success_rate']:.4f}")
     print(f"  Total tokens (input/output): {total_tokens_input}/{total_tokens_output}")
+    if total_base_model_tokens_input > 0 or total_base_model_tokens_output > 0:
+        print(f"  Base model tokens (input/output): {total_base_model_tokens_input}/{total_base_model_tokens_output}")
     print(f"  Average latency: {report['summary']['avg_latency_seconds']:.2f}s")
 
 
@@ -753,6 +1051,20 @@ def main():
                 pair_output_dir = build_output_dir(**build_kwargs)
             print(f"Output directory: {pair_output_dir}")
             
+            # Ensure base_model zero-shot exists if using base_model
+            if args.base_model:
+                if not ensure_base_model_zero_shot_exists(
+                    base_model_name=args.base_model,
+                    dataset=args.dataset,
+                    lang_pair=lang_pair,
+                    samples=pair_samples,
+                    data_loader=data_loader,
+                    use_terminology=args.use_terminology,
+                    max_samples=args.max_samples
+                ):
+                    print(f"  ✗ Failed to ensure base_model zero-shot exists. Skipping {lang_pair}...")
+                    continue
+            
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
             if args.resume:
@@ -889,6 +1201,15 @@ def main():
             from data_loaders import DOLFINDataLoader
             data_loader = DOLFINDataLoader(BASE_DATA_DIR / "dolfin", lang_pair)
             
+            # Load samples first (needed for base_model check)
+            print(f"\nLoading samples from {lang_pair}...")
+            samples = data_loader.load_samples(max_samples=args.max_samples)
+            print(f"Loaded {len(samples)} samples")
+            
+            if not samples:
+                print(f"No samples for {lang_pair}, skipping...")
+                continue
+            
             # Determine output directory for this pair
             if args.output_dir:
                 pair_output_dir = Path(args.output_dir) / lang_pair
@@ -906,6 +1227,20 @@ def main():
                 pair_output_dir = build_output_dir(**build_kwargs)
             print(f"Output directory: {pair_output_dir}")
             
+            # Ensure base_model zero-shot exists if using base_model
+            if args.base_model:
+                if not ensure_base_model_zero_shot_exists(
+                    base_model_name=args.base_model,
+                    dataset=args.dataset,
+                    lang_pair=lang_pair,
+                    samples=samples,
+                    data_loader=data_loader,
+                    use_terminology=args.use_terminology,
+                    max_samples=args.max_samples
+                ):
+                    print(f"  ✗ Failed to ensure base_model zero-shot exists. Skipping {lang_pair}...")
+                    continue
+            
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
             if args.resume:
@@ -915,15 +1250,6 @@ def main():
                 if existing_report:
                     processed_sample_ids = get_processed_sample_ids(existing_report)
                     print(f"  Found {len(processed_sample_ids)} already processed samples")
-            
-            # Load samples
-            print(f"\nLoading samples from {lang_pair}...")
-            samples = data_loader.load_samples(max_samples=args.max_samples)
-            print(f"Loaded {len(samples)} samples")
-            
-            if not samples:
-                print(f"No samples for {lang_pair}, skipping...")
-                continue
             
             # Process samples
             print("\nProcessing samples...")
