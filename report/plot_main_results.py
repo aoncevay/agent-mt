@@ -421,8 +421,8 @@ def plot_dataset_lang_pair(
     if not data_points:
         return
     
-    # Create figure - single column width for ACL paper (about 3.5 inches)
-    _fig, ax = plt.subplots(figsize=(3.5, 3.5))
+    # Create figure - single column width for ACL paper (about 3.5 inches), 3:2 ratio
+    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
     
     # Plot each workflow with different colors
     for workflow in sorted(workflows):
@@ -444,7 +444,9 @@ def plot_dataset_lang_pair(
             chrfs = [d["chrf"] for d in model_data]
             
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            ax.scatter(tokens, chrfs, c=color, marker=marker, s=50, 
+            # Make star markers slightly larger for better visibility
+            marker_size = 70 if marker == "*" else 50
+            ax.scatter(tokens, chrfs, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
     
     # Set log scale for x-axis
@@ -452,15 +454,18 @@ def plot_dataset_lang_pair(
     
     # Labels
     ax.set_xlabel('Total Tokens (log scale)', fontsize=10)
-    ax.set_ylabel('chrF++ score', fontsize=10)
+    ax.set_ylabel('chrF++', fontsize=10)
     
-    # Set y-axis limits
-    ax.set_ylim(30, 75)
+    # Set y-axis limits based on language pair
+    if lang_pair == "en-zht":
+        ax.set_ylim(25, 50)
+    else:
+        ax.set_ylim(55, 80)
     
     # Note: No title as per user request (captions will be in paper)
     
-    # Grid
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # Grid (behind everything)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
     # Tight layout
     plt.tight_layout()
@@ -519,10 +524,11 @@ def plot_dataset_lang_pair_price(
     if not data_points:
         return
     
-    # Create figure - single column width for ACL paper (about 3.5 inches)
-    _fig, ax = plt.subplots(figsize=(3.5, 3.5))
+    # Create figure - single column width for ACL paper (about 3.5 inches), 3:2 ratio
+    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
     
-    # Plot each workflow with different colors
+    # First pass: collect all workflow points and draw lines (behind markers)
+    workflow_points_dict = {}
     for workflow in sorted(workflows):
         workflow_data = [d for d in data_points if d["workflow"] == workflow]
         
@@ -531,34 +537,57 @@ def plot_dataset_lang_pair_price(
         
         color = WORKFLOW_COLORS.get(workflow, "#000000")
         
-        # Plot each model for this workflow
-        for model in sorted(models):
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
             model_data = [d for d in workflow_data if d["model"] == model]
-            
-            if not model_data:
-                continue
-            
-            costs = [d["cost"] for d in model_data]
-            chrfs = [d["chrf"] for d in model_data]
-            
+            if model_data:
+                # Take first point (should only be one per model per workflow)
+                point = model_data[0]
+                workflow_points.append((point["cost"], point["chrf"], model))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines first (behind markers)
+        if len(workflow_points_sorted) > 1:
+            costs_line = [p[0] for p in workflow_points_sorted]
+            chrfs_line = [p[1] for p in workflow_points_sorted]
+            # Draw dotted line connecting points (thicker line, behind markers)
+            ax.plot(costs_line, chrfs_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=0)
+    
+    # Second pass: plot all markers on top
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow (on top of lines)
+        for cost, chrf, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            ax.scatter(costs, chrfs, c=color, marker=marker, s=50, 
-                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
+            # Make star markers slightly larger for better visibility
+            marker_size = 70 if marker == "*" else 50
+            ax.scatter(cost, chrf, c=color, marker=marker, s=marker_size, 
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
     # Set log scale for x-axis
     ax.set_xscale('log')
     
     # Labels
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
-    ax.set_ylabel('chrF++ score', fontsize=10)
+    ax.set_ylabel('chrF++', fontsize=10)
     
-    # Set y-axis limits
-    ax.set_ylim(30, 75)
+    # Set y-axis limits based on language pair
+    if lang_pair == "en-zht":
+        ax.set_ylim(25, 50)
+    else:
+        ax.set_ylim(55, 80)
     
     # Note: No title as per user request (captions will be in paper)
     
-    # Grid
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # Grid (behind everything)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
     # Tight layout
     plt.tight_layout()
@@ -626,10 +655,11 @@ def plot_dataset_lang_pair_term_acc(
     if not data_points:
         return
     
-    # Create figure - single column width for ACL paper (about 3.5 inches)
-    _fig, ax = plt.subplots(figsize=(3.5, 3.5))
+    # Create figure - single column width for ACL paper (about 3.5 inches), 3:2 ratio
+    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
     
-    # Plot each workflow with different colors
+    # First pass: collect all workflow points and draw lines (behind markers)
+    workflow_points_dict = {}
     for workflow in sorted(workflows):
         workflow_data = [d for d in data_points if d["workflow"] == workflow]
         
@@ -638,19 +668,39 @@ def plot_dataset_lang_pair_term_acc(
         
         color = WORKFLOW_COLORS.get(workflow, "#000000")
         
-        # Plot each model for this workflow
-        for model in sorted(models):
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
             model_data = [d for d in workflow_data if d["model"] == model]
-            
-            if not model_data:
-                continue
-            
-            costs = [d["cost"] for d in model_data]
-            term_accs = [d["term_acc"] for d in model_data]
-            
+            if model_data:
+                # Take first point (should only be one per model per workflow)
+                point = model_data[0]
+                workflow_points.append((point["cost"], point["term_acc"], model))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines first (behind markers)
+        if len(workflow_points_sorted) > 1:
+            costs_line = [p[0] for p in workflow_points_sorted]
+            term_accs_line = [p[1] for p in workflow_points_sorted]
+            # Draw dotted line connecting points (thicker line, behind markers)
+            ax.plot(costs_line, term_accs_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=1)
+    
+    # Second pass: plot all markers on top
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow (on top of lines)
+        for cost, term_acc, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            ax.scatter(costs, term_accs, c=color, marker=marker, s=50, 
-                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
+            # Make star markers slightly larger for better visibility
+            marker_size = 70 if marker == "*" else 50
+            ax.scatter(cost, term_acc, c=color, marker=marker, s=marker_size, 
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
     # Set log scale for x-axis
     ax.set_xscale('log')
@@ -659,10 +709,11 @@ def plot_dataset_lang_pair_term_acc(
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
     ax.set_ylabel('Terminology Accuracy', fontsize=10)
     
-    # Note: No y-axis limits for TAcc (user will choose boundary later)
+    # Set y-axis limits for TermAcc
+    ax.set_ylim(0.5, 0.8)
     
-    # Grid
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # Grid (behind everything)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
     # Tight layout
     plt.tight_layout()
@@ -675,6 +726,163 @@ def plot_dataset_lang_pair_term_acc(
     plt.close()
     
     print(f"Created term accuracy plot: {output_path}")
+
+
+def plot_dataset_avg_price(
+    dataset: str,
+    reports_by_lang_pair: Dict[str, List[Dict]],
+    output_dir: Path,
+    metric: str = "chrf",  # "chrf" or "termacc"
+    use_batch: bool = False,
+    is_term: bool = False
+):
+    """Create an average plot across all language pairs for a dataset."""
+    if not reports_by_lang_pair:
+        return
+    
+    # Aggregate data: for each workflow+model, compute average metric and total cost
+    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    
+    for lang_pair, reports in reports_by_lang_pair.items():
+        for report in reports:
+            workflow_name = report.get("workflow", "")
+            workflow = get_workflow_acronym(workflow_name)
+            model = report["model"]
+            key = (workflow, model)
+            
+            # Get metric value
+            if metric == "chrf":
+                value = report.get("chrf")
+            elif metric == "termacc":
+                value = report.get("term_acc")
+            else:
+                continue
+            
+            if value is None:
+                continue
+            
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
+            
+            if cost is None:
+                continue
+            
+            aggregated_data[key]["values"].append(value)
+            aggregated_data[key]["costs"].append(cost)
+    
+    if not aggregated_data:
+        return
+    
+    # Prepare data points: average metric, total cost
+    workflows = set()
+    models = set()
+    data_points = []
+    
+    for (workflow, model), data in aggregated_data.items():
+        if not data["values"] or not data["costs"]:
+            continue
+        
+        avg_value = sum(data["values"]) / len(data["values"])
+        total_cost = sum(data["costs"])  # Total cost across all lang pairs
+        
+        workflows.add(workflow)
+        models.add(model)
+        
+        data_points.append({
+            "workflow": workflow,
+            "model": model,
+            "value": avg_value,
+            "cost": total_cost
+        })
+    
+    if not data_points:
+        return
+    
+    # Create figure
+    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    
+    # First pass: collect all workflow points and draw lines (behind markers)
+    workflow_points_dict = {}
+    for workflow in sorted(workflows):
+        workflow_data = [d for d in data_points if d["workflow"] == workflow]
+        
+        if not workflow_data:
+            continue
+        
+        color = WORKFLOW_COLORS.get(workflow, "#000000")
+        
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
+            model_data = [d for d in workflow_data if d["model"] == model]
+            if model_data:
+                # Take first point (should only be one per model per workflow)
+                point = model_data[0]
+                workflow_points.append((point["cost"], point["value"], model))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines first (behind markers)
+        if len(workflow_points_sorted) > 1:
+            costs_line = [p[0] for p in workflow_points_sorted]
+            values_line = [p[1] for p in workflow_points_sorted]
+            # Draw dotted line connecting points (thicker line, behind markers)
+            ax.plot(costs_line, values_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=1)
+    
+    # Second pass: plot all markers on top
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow (on top of lines)
+        for cost, value, model in workflow_points_sorted:
+            marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
+            # Make star markers slightly larger for better visibility
+            marker_size = 70 if marker == "*" else 50
+            ax.scatter(cost, value, c=color, marker=marker, s=marker_size, 
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+    
+    # Set log scale for x-axis
+    ax.set_xscale('log')
+    
+    # Labels
+    ax.set_xlabel('Cost ($, log scale)', fontsize=10)
+    if metric == "chrf":
+        ax.set_ylabel('chrF++', fontsize=10)
+        # Set y-axis limits based on dataset
+        if dataset == "dolfin":
+            ax.set_ylim(55, 80)
+        else:  # wmt25
+            ax.set_ylim(35, 60)
+    elif metric == "termacc":
+        ax.set_ylabel('Terminology Accuracy', fontsize=10)
+        ax.set_ylim(0.5, 0.8)
+    
+    # Grid (behind everything)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    safe_dataset = dataset.replace("/", "_")
+    if is_term:
+        if metric == "chrf":
+            output_path = output_dir / f"{safe_dataset}+T_AVG_chrF_x_price.pdf"
+        else:  # termacc
+            output_path = output_dir / f"{safe_dataset}+T_AVG_TAcc_x_price.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_AVG_chrF_x_price.pdf"
+    
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    print(f"Created AVG plot: {output_path}")
 
 
 def main():
@@ -772,6 +980,20 @@ def main():
         plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False, is_term=True)
         # Create Terminology Accuracy vs price plots
         plot_dataset_lang_pair_term_acc(dataset, lang_pair, reports, output_dir, use_batch=False)
+    
+    # Create AVG plots per dataset
+    print("\nCreating AVG plots...")
+    
+    # DOLFIN AVG plot
+    dolfin_reports = {lp: reports for (ds, lp), reports in reports_by_dataset_lang.items() if ds == "dolfin"}
+    if dolfin_reports:
+        plot_dataset_avg_price("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False)
+    
+    # WMT25+Term AVG plots
+    wmt25_term_reports = {lp: reports for (ds, lp), reports in reports_by_dataset_lang_term.items() if ds == "wmt25"}
+    if wmt25_term_reports:
+        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True)
+        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True)
     
     # Print incomplete settings
     if incomplete_settings:
