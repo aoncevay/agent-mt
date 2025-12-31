@@ -309,6 +309,28 @@ def get_workflow_acronym_from_dir(workflow_dir_name: str) -> str:
     return workflow_dir_name
 
 
+def get_model_base_cost(model: str, use_batch: bool = False) -> Optional[float]:
+    """
+    Get the base API cost for a model (average of input and output prices per 1k tokens).
+    Used for ordering models by cost.
+    
+    Args:
+        model: Model name
+        use_batch: Whether to use batch pricing (default: False, uses standard)
+    
+    Returns:
+        Average cost per 1k tokens, or None if model pricing not available
+    """
+    pricing_dict = MODEL_PRICING_BATCH if use_batch else MODEL_PRICING_STANDARD
+    
+    if model not in pricing_dict:
+        return None
+    
+    prices = pricing_dict[model]
+    # Use average of input and output prices as base cost
+    return (prices["input"] + prices["output"]) / 2.0
+
+
 def calculate_cost(tokens_input: int, tokens_output: int, model: str, 
                    use_batch: bool = False) -> Optional[float]:
     """
@@ -368,10 +390,20 @@ def create_model_legend(output_path: Path):
     _fig, ax = plt.subplots(figsize=(4, 3))
     ax.axis('off')
     
-    # Create legend entries for all models in MODEL_MARKERS
+    # Create legend entries for all models in MODEL_MARKERS, sorted by cost (most expensive first)
     model_elements = []
     
-    for model in sorted(MODEL_MARKERS.keys()):
+    # Get all models with their base costs and sort by cost (descending)
+    models_with_costs = []
+    for model in MODEL_MARKERS.keys():
+        base_cost = get_model_base_cost(model, use_batch=False)
+        if base_cost is not None:
+            models_with_costs.append((model, base_cost))
+    
+    # Sort by cost (most expensive first)
+    models_with_costs.sort(key=lambda x: x[1], reverse=True)
+    
+    for model, _ in models_with_costs:
         marker = MODEL_MARKERS[model]
         model_elements.append(
             plt.Line2D([0], [0], marker=marker, color='black', linestyle='None',

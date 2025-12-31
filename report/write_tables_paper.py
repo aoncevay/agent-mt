@@ -33,6 +33,7 @@ get_workflow_acronym = plot_module.get_workflow_acronym
 parse_report = plot_module.parse_report
 collect_reports = plot_module.collect_reports
 calculate_cost = plot_module.calculate_cost
+get_model_base_cost = plot_module.get_model_base_cost
 
 # Model display names
 MODEL_DISPLAY_NAMES = {
@@ -56,8 +57,20 @@ WORKFLOW_DISPLAY_NAMES = {
     "DeLTA": "DeLTA",
 }
 
-# Model order (from larger to smaller)
+# Model order (from larger to smaller) - will be sorted by cost in tables
 MODEL_ORDER = ["gpt-4-1", "claude-sonnet-4", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-oss-20b"]
+
+def get_models_sorted_by_cost() -> List[str]:
+    """Get models sorted by base API cost (most expensive first)."""
+    models_with_costs = []
+    for model in MODEL_ORDER:
+        base_cost = get_model_base_cost(model, use_batch=False)
+        if base_cost is not None:
+            models_with_costs.append((model, base_cost))
+    
+    # Sort by cost (most expensive first)
+    models_with_costs.sort(key=lambda x: x[1], reverse=True)
+    return [model for model, _ in models_with_costs]
 
 # Language pairs
 DOLFIN_LANG_PAIRS = ["en_de", "en_es", "en_fr", "en_it"]
@@ -290,6 +303,9 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\midrule")
     
     # Data rows
+    # Get models sorted by cost (most expensive first)
+    sorted_models = get_models_sorted_by_cost()
+    
     for workflow in WORKFLOW_ORDER:
         workflow_display = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
         
@@ -297,15 +313,15 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
-        # Add rows for all models (in order), even if they don't have data
-        for i, model in enumerate(MODEL_ORDER):
+        # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
+        for i, model in enumerate(sorted_models):
             model_display = MODEL_DISPLAY_NAMES.get(model, model)
             
             row_parts = []
             
             # First column: workflow name (multirow)
             if i == 0:
-                row_parts.append(f"\\multirow{{{len(MODEL_ORDER)}}}{{*}}{{{workflow_display}}}")
+                row_parts.append(f"\\multirow{{{len(sorted_models)}}}{{*}}{{{workflow_display}}}")
             else:
                 row_parts.append("")
             
@@ -419,6 +435,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\midrule")
     
     # Data rows
+    # Get models sorted by cost (most expensive first)
+    sorted_models = get_models_sorted_by_cost()
+    
     for workflow in WORKFLOW_ORDER:
         workflow_display = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
         
@@ -426,15 +445,15 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
-        # Add rows for all models (in order), even if they don't have data
-        for i, model in enumerate(MODEL_ORDER):
+        # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
+        for i, model in enumerate(sorted_models):
             model_display = MODEL_DISPLAY_NAMES.get(model, model)
             
             row_parts = []
             
             # First column: workflow name (multirow)
             if i == 0:
-                row_parts.append(f"\\multirow{{{len(MODEL_ORDER)}}}{{*}}{{{workflow_display}}}")
+                row_parts.append(f"\\multirow{{{len(sorted_models)}}}{{*}}{{{workflow_display}}}")
             else:
                 row_parts.append("")
             
