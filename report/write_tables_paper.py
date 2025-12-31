@@ -15,6 +15,7 @@ Note: The generated LaTeX tables require the following packages in your .tex fil
 """
 
 import argparse
+import math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
@@ -105,10 +106,10 @@ def format_value(value: Optional[float], metric_type: str = "chrf") -> str:
 
 
 def format_cost(value: Optional[float]) -> str:
-    """Format cost value with dollar sign."""
+    """Format cost value without dollar sign (dollar sign is in header)."""
     if value is None:
         return "---"
-    return f"${value:.2f}"
+    return f"{value:.2f}"
 
 
 def collect_data_by_workflow_model(
@@ -326,10 +327,15 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
                 row_parts.append("---")  # Individual lang pair columns (empty)
             
             # Cost column (Total) - inverse color scale (lower is better)
+            # Use logarithmic normalization for better distribution across wide cost range
             total_cost = dolfin_total_costs.get((workflow, model))
             cost_color = ""
-            if total_cost is not None and cost_min != cost_max:
-                normalized = (total_cost - cost_min) / (cost_max - cost_min)
+            if total_cost is not None and cost_min != cost_max and cost_min > 0:
+                # Logarithmic normalization
+                log_cost = math.log(total_cost)
+                log_min = math.log(cost_min)
+                log_max = math.log(cost_max)
+                normalized = (log_cost - log_min) / (log_max - log_min)
                 # Inverse: high cost = red, low cost = green
                 if normalized >= 0.7:
                     cost_color = "\\cellcolor{red!25}"
@@ -459,10 +465,15 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
                 row_parts.append(format_value(val, "termacc"))
             
             # Cost column (Total) - inverse color scale (lower is better)
+            # Use logarithmic normalization for better distribution across wide cost range
             total_cost = wmt25_total_costs.get((workflow, model))
             cost_color = ""
-            if total_cost is not None and cost_min != cost_max:
-                normalized = (total_cost - cost_min) / (cost_max - cost_min)
+            if total_cost is not None and cost_min != cost_max and cost_min > 0:
+                # Logarithmic normalization
+                log_cost = math.log(total_cost)
+                log_min = math.log(cost_min)
+                log_max = math.log(cost_max)
+                normalized = (log_cost - log_min) / (log_max - log_min)
                 # Inverse: high cost = red, low cost = green
                 if normalized >= 0.7:
                     cost_color = "\\cellcolor{red!25}"
