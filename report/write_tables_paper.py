@@ -31,6 +31,7 @@ WORKFLOW_ACRONYMS = plot_module.WORKFLOW_ACRONYMS
 get_workflow_acronym = plot_module.get_workflow_acronym
 parse_report = plot_module.parse_report
 collect_reports = plot_module.collect_reports
+calculate_cost = plot_module.calculate_cost
 
 # Model display names
 MODEL_DISPLAY_NAMES = {
@@ -97,10 +98,17 @@ def format_value(value: Optional[float], metric_type: str = "chrf") -> str:
     """Format a numeric value for LaTeX, returning empty string if None."""
     if value is None:
         return "---"
-    # Use 2 decimals for TermAcc, 1 for others
-    if metric_type == "termacc":
+    # Use 2 decimals for TermAcc and Cost, 1 for others
+    if metric_type == "termacc" or metric_type == "cost":
         return f"{value:.2f}"
     return f"{value:.1f}"
+
+
+def format_cost(value: Optional[float]) -> str:
+    """Format cost value with dollar sign."""
+    if value is None:
+        return "---"
+    return f"${value:.2f}"
 
 
 def collect_data_by_workflow_model(
@@ -117,7 +125,8 @@ def collect_data_by_workflow_model(
                     "dolfin" or "wmt25_term": {
                         lang_pair: {
                             "chrf": value,
-                            "termacc": value (only for wmt25_term)
+                            "termacc": value (only for wmt25_term),
+                            "cost": value
                         }
                     }
                 }
@@ -143,6 +152,11 @@ def collect_data_by_workflow_model(
                 continue
             
             data[workflow][model]["dolfin"][lang_pair]["chrf"] = report.get("chrf")
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch=False)
+            data[workflow][model]["dolfin"][lang_pair]["cost"] = cost
     
     # Process term reports (WMT25 only)
     for (dataset, lang_pair), reports in reports_by_dataset_lang_term.items():
@@ -163,6 +177,11 @@ def collect_data_by_workflow_model(
             # Store both chrF and TermAcc for term workflows
             data[workflow][model]["wmt25_term"][lang_pair]["chrf"] = report.get("chrf")
             data[workflow][model]["wmt25_term"][lang_pair]["termacc"] = report.get("term_acc")
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch=False)
+            data[workflow][model]["wmt25_term"][lang_pair]["cost"] = cost
     
     return data
 
@@ -194,24 +213,51 @@ def compute_averages(
     return averages
 
 
-def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
-    """Generate LaTeX table for DOLFIN dataset."""
-    
-    # Compute min/max for color coding (chrF++ and COMET use same scale)
-    chrf_values = []
+def compute_total_costs(
+    data: Dict[str, Dict[str, Dict[str, Dict[str, Optional[float]]]]],
+    dataset: str,
+    lang_pairs: List[str]
+) -> Dict[Tuple[str, str], Optional[float]]:
+    """Compute total costs (sum) for each workflow-model combination across all language pairs."""
+    totals = {}
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER:
-            for lang_pair in DOLFIN_LANG_PAIRS:
-                val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("chrf")
-                if val is not None:
-                    chrf_values.append(val)
+            key = (workflow, model)
+            total_cost = 0.0
+            has_data = False
+            
+            for lang_pair in lang_pairs:
+                cost = data.get(workflow, {}).get(model, {}).get(dataset, {}).get(lang_pair, {}).get("cost")
+                if cost is not None:
+                    total_cost += cost
+                    has_data = True
+            
+            if has_data:
+                totals[key] = total_cost
+            else:
+                totals[key] = None
     
+    return totals
+
+
+def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
+    """Generate LaTeX table for DOLFIN dataset."""
+    
+    # Compute averages first
+    dolfin_chrf_avg = compute_averages(data, "dolfin", "chrf", DOLFIN_LANG_PAIRS)
+    
+    # Compute min/max for color coding from Avg values (since we color the Avg column)
+    chrf_values = [val for val in dolfin_chrf_avg.values() if val is not None]
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
     
-    # Compute averages
-    dolfin_chrf_avg = compute_averages(data, "dolfin", "chrf", DOLFIN_LANG_PAIRS)
+    # Compute total costs (sum across all lang pairs)
+    dolfin_total_costs = compute_total_costs(data, "dolfin", DOLFIN_LANG_PAIRS)
+    # Get min/max from total costs (not individual lang pair costs)
+    cost_values = [cost for cost in dolfin_total_costs.values() if cost is not None]
+    cost_min = min(cost_values) if cost_values else 0
+    cost_max = max(cost_values) if cost_values else 1000
     
     # Start LaTeX table
     lines = []
@@ -223,19 +269,22 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
     lines.append("\\small")
-    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + COMET (5: Avg + 4 lang pairs) = 12
-    lines.append("\\begin{tabular}{ll" + "c" * 10 + "}")
+    lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
+    lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
+    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + COMET (5: Avg + 4 lang pairs) + Cost (1: Total) = 13
+    lines.append("\\begin{tabular}{ll" + "c" * 11 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | COMET
+    # First header row: chrF++ | COMET | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{5}{c}{\\textbf{chrF++}} & "
-    header1 += "\\multicolumn{5}{c}{\\textbf{COMET}} \\\\"
+    header1 += "\\multicolumn{5}{c}{\\textbf{COMET}} & "
+    header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
-    lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-12}")
+    lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-12} \\cmidrule(lr){13-13}")
     
-    # Second header row: language pairs
-    header2 = "& & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It \\\\"
+    # Second header row: language pairs and Total
+    header2 = "& & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Total} \\\\"
     lines.append(header2)
     lines.append("\\midrule")
     
@@ -276,12 +325,29 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
             for _ in DOLFIN_LANG_PAIRS:
                 row_parts.append("---")  # Individual lang pair columns (empty)
             
+            # Cost column (Total) - inverse color scale (lower is better)
+            total_cost = dolfin_total_costs.get((workflow, model))
+            cost_color = ""
+            if total_cost is not None and cost_min != cost_max:
+                normalized = (total_cost - cost_min) / (cost_max - cost_min)
+                # Inverse: high cost = red, low cost = green
+                if normalized >= 0.7:
+                    cost_color = "\\cellcolor{red!25}"
+                elif normalized >= 0.5:
+                    cost_color = "\\cellcolor{red!10}"
+                elif normalized >= 0.3:
+                    cost_color = "\\cellcolor{green!10}"
+                else:
+                    cost_color = "\\cellcolor{green!25}"
+            row_parts.append(f"{cost_color}{format_cost(total_cost)}")
+            
             # Join row parts
             row = " & ".join(row_parts) + " \\\\"
             lines.append(row)
     
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
+    lines.append("}")  # End resizebox
     lines.append("\\caption{Main results for DOLFIN dataset.}")
     lines.append("\\label{tab:main_results_dolfin}")
     lines.append("\\end{table*}")
@@ -296,28 +362,25 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
 def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     """Generate LaTeX table for WMT25+Term dataset."""
     
-    # Compute min/max for color coding (separate for chrF++ and TermAcc)
-    chrf_values = []
-    termacc_values = []
+    # Compute averages first
+    wmt25_chrf_avg = compute_averages(data, "wmt25_term", "chrf", WMT25_LANG_PAIRS)
+    wmt25_termacc_avg = compute_averages(data, "wmt25_term", "termacc", WMT25_LANG_PAIRS)
     
-    for workflow in WORKFLOW_ORDER:
-        for model in MODEL_ORDER:
-            for lang_pair in WMT25_LANG_PAIRS:
-                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("chrf")
-                if val is not None:
-                    chrf_values.append(val)
-                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("termacc")
-                if val is not None:
-                    termacc_values.append(val)
-    
+    # Compute min/max for color coding from Avg values (since we color the Avg column)
+    chrf_values = [val for val in wmt25_chrf_avg.values() if val is not None]
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
+    
+    termacc_values = [val for val in wmt25_termacc_avg.values() if val is not None]
     termacc_min = min(termacc_values) if termacc_values else 0
     termacc_max = max(termacc_values) if termacc_values else 100
     
-    # Compute averages
-    wmt25_chrf_avg = compute_averages(data, "wmt25_term", "chrf", WMT25_LANG_PAIRS)
-    wmt25_termacc_avg = compute_averages(data, "wmt25_term", "termacc", WMT25_LANG_PAIRS)
+    # Compute total costs (sum across all lang pairs)
+    wmt25_total_costs = compute_total_costs(data, "wmt25_term", WMT25_LANG_PAIRS)
+    # Get min/max from total costs (not individual lang pair costs)
+    cost_values = [cost for cost in wmt25_total_costs.values() if cost is not None]
+    cost_min = min(cost_values) if cost_values else 0
+    cost_max = max(cost_values) if cost_values else 1000
     
     # Start LaTeX table
     lines = []
@@ -329,20 +392,23 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
     lines.append("\\small")
-    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + COMET (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) = 11
-    lines.append("\\begin{tabular}{ll" + "c" * 9 + "}")
+    lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
+    lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
+    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + COMET (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) + Cost (1: Total) = 12
+    lines.append("\\begin{tabular}{ll" + "c" * 10 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | COMET | TermAcc
+    # First header row: chrF++ | COMET | TermAcc | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{chrF++}} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{COMET}} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc}} \\\\"
+    header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc}} & "
+    header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
-    lines.append("\\cmidrule(lr){3-5} \\cmidrule(lr){6-8} \\cmidrule(lr){9-11}")
+    lines.append("\\cmidrule(lr){3-5} \\cmidrule(lr){6-8} \\cmidrule(lr){9-11} \\cmidrule(lr){12-12}")
     
-    # Second header row: language pairs
-    header2 = "& & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En \\\\"
+    # Second header row: language pairs and Total
+    header2 = "& & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Total} \\\\"
     lines.append(header2)
     lines.append("\\midrule")
     
@@ -392,12 +458,29 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("termacc")
                 row_parts.append(format_value(val, "termacc"))
             
+            # Cost column (Total) - inverse color scale (lower is better)
+            total_cost = wmt25_total_costs.get((workflow, model))
+            cost_color = ""
+            if total_cost is not None and cost_min != cost_max:
+                normalized = (total_cost - cost_min) / (cost_max - cost_min)
+                # Inverse: high cost = red, low cost = green
+                if normalized >= 0.7:
+                    cost_color = "\\cellcolor{red!25}"
+                elif normalized >= 0.5:
+                    cost_color = "\\cellcolor{red!10}"
+                elif normalized >= 0.3:
+                    cost_color = "\\cellcolor{green!10}"
+                else:
+                    cost_color = "\\cellcolor{green!25}"
+            row_parts.append(f"{cost_color}{format_cost(total_cost)}")
+            
             # Join row parts
             row = " & ".join(row_parts) + " \\\\"
             lines.append(row)
     
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
+    lines.append("}")  # End resizebox
     lines.append("\\caption{Main results for WMT25+Term dataset.}")
     lines.append("\\label{tab:main_results_wmt25}")
     lines.append("\\end{table*}")
