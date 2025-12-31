@@ -352,11 +352,14 @@ def create_workflow_legend(workflows: Set[str], output_path: Path):
             )
     
     if workflow_elements:
-        ax.legend(handles=workflow_elements, loc='center', 
-                 frameon=True, fontsize=10)
+        legend = ax.legend(handles=workflow_elements, loc='center', 
+                          frameon=True, fontsize=10, title='System',
+                          borderpad=0.2, columnspacing=0.5, handletextpad=0.3,
+                          handlelength=1.0)
+        legend.get_title().set_fontweight('bold')
     
-    plt.tight_layout()
-    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.tight_layout(pad=0.1)
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
     plt.close()
 
 
@@ -377,11 +380,14 @@ def create_model_legend(output_path: Path):
         )
     
     if model_elements:
-        ax.legend(handles=model_elements, loc='center', 
-                 frameon=True, fontsize=10)
+        legend = ax.legend(handles=model_elements, loc='center', 
+                          frameon=True, fontsize=10, title='Model',
+                          borderpad=0.2, columnspacing=0.5, handletextpad=0.3,
+                          handlelength=1.0)
+        legend.get_title().set_fontweight('bold')
     
-    plt.tight_layout()
-    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.tight_layout(pad=0.1)
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
     plt.close()
 
 
