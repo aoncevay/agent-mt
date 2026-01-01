@@ -311,6 +311,74 @@ def get_processed_sample_ids(existing_report: Optional[Dict[str, Any]]) -> set:
     return processed
 
 
+def compute_summary_statistics(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Compute summary statistics from successful samples only.
+    Returns empty dict if no successful samples.
+    """
+    successful_samples = [s for s in samples if not s.get("error")]
+    
+    if not successful_samples:
+        return {}
+    
+    total_tokens_input = 0
+    total_tokens_output = 0
+    total_base_model_tokens_input = 0
+    total_base_model_tokens_output = 0
+    total_latency = 0.0
+    chrf_scores = []
+    bleu_scores = []
+    term_success_rates = []
+    
+    for s in successful_samples:
+        total_tokens_input += s.get("tokens_input", 0) or 0
+        total_tokens_output += s.get("tokens_output", 0) or 0
+        total_base_model_tokens_input += s.get("base_model_tokens_input", 0) or 0
+        total_base_model_tokens_output += s.get("base_model_tokens_output", 0) or 0
+        if s.get("latency"):
+            total_latency += s.get("latency", 0.0)
+        
+        # Collect scores
+        if s.get("chrf_scores"):
+            chrf_list = s["chrf_scores"]
+            if isinstance(chrf_list, list) and len(chrf_list) > 0:
+                chrf_scores.append(chrf_list[-1])  # Use last agent's score
+        
+        if s.get("bleu_scores"):
+            bleu_list = s["bleu_scores"]
+            if isinstance(bleu_list, list) and len(bleu_list) > 0:
+                last_bleu = bleu_list[-1]
+                if last_bleu is not None:
+                    bleu_scores.append(last_bleu)
+        
+        if s.get("term_success_rates"):
+            term_list = s["term_success_rates"]
+            if isinstance(term_list, list) and len(term_list) > 0:
+                last_term = term_list[-1]
+                if last_term is not None and last_term >= 0:
+                    term_success_rates.append(last_term)
+    
+    successful_count = len(successful_samples)
+    
+    return {
+        "total_tokens_input": total_tokens_input,
+        "total_tokens_output": total_tokens_output,
+        "total_base_model_tokens_input": total_base_model_tokens_input,
+        "total_base_model_tokens_output": total_base_model_tokens_output,
+        "total_latency_seconds": total_latency,
+        "avg_latency_seconds": total_latency / successful_count if successful_count > 0 else 0,
+        "avg_chrf_score": sum(chrf_scores) / len(chrf_scores) if chrf_scores else None,
+        "min_chrf_score": min(chrf_scores) if chrf_scores else None,
+        "max_chrf_score": max(chrf_scores) if chrf_scores else None,
+        "avg_bleu_score": sum(bleu_scores) / len(bleu_scores) if bleu_scores else None,
+        "min_bleu_score": min(bleu_scores) if bleu_scores else None,
+        "max_bleu_score": max(bleu_scores) if bleu_scores else None,
+        "avg_term_success_rate": sum(term_success_rates) / len(term_success_rates) if term_success_rates else None,
+        "min_term_success_rate": min(term_success_rates) if term_success_rates else None,
+        "max_term_success_rate": max(term_success_rates) if term_success_rates else None,
+    }
+
+
 def load_base_model_token_counts(
     base_model_name: str,
     dataset: str,
@@ -625,16 +693,21 @@ def load_base_translation(
         return f.read().strip()
 
 
-def save_outputs(
-    results: List[Dict[str, Any]],
+def save_single_sample(
+    result: Dict[str, Any],
     output_dir: Path,
     dataset_name: str,
     workflow_name: str,
     model_name: str,
+    expected_total_samples: int,
     max_samples: Optional[int] = None,
     resume: bool = False
 ):
-    """Save translation outputs and generate report."""
+    """
+    Save a single sample incrementally.
+    Updates report.json after each sample, but only computes summary statistics
+    when all expected samples are successfully completed.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Determine report filename
@@ -644,6 +717,157 @@ def save_outputs(
         report_filename = "report.json"
     
     report_file = output_dir / report_filename
+    
+    # Load existing report or create new
+    if report_file.exists():
+        try:
+            with open(report_file, 'r', encoding='utf-8') as f:
+                report = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            report = {
+                "dataset": dataset_name,
+                "workflow": workflow_name,
+                "model": model_name,
+                "expected_total_samples": expected_total_samples,
+                "total_samples": 0,
+                "successful_samples": 0,
+                "failed_samples": 0,
+                "warnings_count": 0,
+                "samples": []
+            }
+    else:
+        report = {
+            "dataset": dataset_name,
+            "workflow": workflow_name,
+            "model": model_name,
+            "expected_total_samples": expected_total_samples,
+            "total_samples": 0,
+            "successful_samples": 0,
+            "failed_samples": 0,
+            "warnings_count": 0,
+            "samples": []
+        }
+    
+    # Ensure expected_total_samples is set (for older reports)
+    if "expected_total_samples" not in report:
+        report["expected_total_samples"] = expected_total_samples
+    
+    # Get existing sample IDs to check for duplicates
+    existing_sample_ids = get_processed_sample_ids(report)
+    
+    sample_id = result.get("sample_id", str(result["sample_idx"]))
+    lang_pair = result.get("lang_pair", "")
+    sample_key = str(sample_id) if sample_id != str(result["sample_idx"]) else f"{lang_pair}_{result['sample_idx']}"
+    
+    # Skip if already processed (shouldn't happen in incremental save, but safety check)
+    if sample_key in existing_sample_ids:
+        return
+    
+    # Save output files if sample succeeded
+    if not result.get("error"):
+        sample_idx = result["sample_idx"]
+        outputs = result["outputs"]
+        
+        # Use sample_id in filename if it's different from sample_idx, otherwise use sample_idx
+        if sample_id != str(sample_idx) and sample_id:
+            safe_id = str(sample_id).replace("/", "_").replace("\\", "_")[:50]
+            file_prefix = f"sample_{safe_id}"
+        else:
+            file_prefix = f"sample_{sample_idx:05d}"
+        
+        # Save each agent's output
+        for agent_id, output in enumerate(outputs):
+            output_file = output_dir / f"{file_prefix}_agent_{agent_id}.txt"
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(output)
+    
+    # Create sample data
+    sample_data = {
+        "sample_idx": result["sample_idx"],
+        "sample_id": sample_id,
+        "source_lang": result["source_lang"],
+        "target_lang": result["target_lang"],
+        "lang_pair": lang_pair,
+        "error": result.get("error"),
+        "warnings": result.get("warnings"),
+    }
+    
+    if not result.get("error"):
+        sample_data.update({
+            "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
+            "bleu_scores": [e.get("bleu_score") for e in result["evaluations"]],
+            "term_success_rates": [e.get("term_success_rate", -1.0) for e in result["evaluations"]],
+            "tokens_input": result["tokens_input"],
+            "tokens_output": result["tokens_output"],
+            "base_model_tokens_input": result.get("base_model_tokens_input", 0),
+            "base_model_tokens_output": result.get("base_model_tokens_output", 0),
+            "latency": result["latency"]
+        })
+    
+    # Append sample to report
+    report["samples"].append(sample_data)
+    
+    # Update counts
+    report["total_samples"] = len(report["samples"])
+    report["successful_samples"] = sum(1 for s in report["samples"] if not s.get("error"))
+    report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
+    report["warnings_count"] = sum(1 for s in report["samples"] if s.get("warnings"))
+    
+    # Only compute summary statistics if all expected samples are successfully completed
+    if report["successful_samples"] == expected_total_samples:
+        report["summary"] = compute_summary_statistics(report["samples"])
+    else:
+        # Remove summary if not all samples done (in case it was previously computed)
+        if "summary" in report:
+            del report["summary"]
+    
+    # Save report
+    with open(report_file, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+
+def save_outputs(
+    results: List[Dict[str, Any]],
+    output_dir: Path,
+    dataset_name: str,
+    workflow_name: str,
+    model_name: str,
+    max_samples: Optional[int] = None,
+    resume: bool = False
+):
+    """
+    Save translation outputs and generate report (batch mode).
+    If results is empty, just reloads report and computes final summary.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Determine report filename
+    if max_samples is not None:
+        report_filename = f"report_{max_samples}_samples.json"
+    else:
+        report_filename = "report.json"
+    
+    report_file = output_dir / report_filename
+    
+    # If no results provided, just finalize the existing report
+    if not results:
+        if report_file.exists():
+            try:
+                with open(report_file, 'r', encoding='utf-8') as f:
+                    report = json.load(f)
+                expected_total = report.get("expected_total_samples", report.get("total_samples", 0))
+                # Compute summary if all samples are done
+                if report.get("successful_samples", 0) == expected_total:
+                    report["summary"] = compute_summary_statistics(report["samples"])
+                else:
+                    # Remove summary if not complete
+                    if "summary" in report:
+                        del report["summary"]
+                with open(report_file, "w", encoding="utf-8") as f:
+                    json.dump(report, f, indent=2, ensure_ascii=False)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return
     
     # Load existing report if resuming
     existing_report = None
@@ -817,24 +1041,8 @@ def save_outputs(
     report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
     report["warnings_count"] = sum(1 for s in report["samples"] if s.get("warnings"))  # Count samples with warnings
     
-    successful_count = report["successful_samples"]
-    report["summary"] = {
-        "total_tokens_input": total_tokens_input,  # Main model
-        "total_tokens_output": total_tokens_output,  # Main model
-        "total_base_model_tokens_input": total_base_model_tokens_input,
-        "total_base_model_tokens_output": total_base_model_tokens_output,
-        "total_latency_seconds": total_latency,
-        "avg_latency_seconds": total_latency / successful_count if successful_count > 0 else 0,
-        "avg_chrf_score": sum(chrf_scores) / len(chrf_scores) if chrf_scores else None,
-        "min_chrf_score": min(chrf_scores) if chrf_scores else None,
-        "max_chrf_score": max(chrf_scores) if chrf_scores else None,
-        "avg_bleu_score": sum(bleu_scores) / len(bleu_scores) if bleu_scores else None,
-        "min_bleu_score": min(bleu_scores) if bleu_scores else None,
-        "max_bleu_score": max(bleu_scores) if bleu_scores else None,
-        "avg_term_success_rate": sum(term_success_rates) / len(term_success_rates) if term_success_rates else None,
-        "min_term_success_rate": min(term_success_rates) if term_success_rates else None,
-        "max_term_success_rate": max(term_success_rates) if term_success_rates else None,
-    }
+    # Compute summary statistics (always computed in batch save_outputs, since it's called at the end)
+    report["summary"] = compute_summary_statistics(report["samples"])
     
     # Save report
     with open(report_file, "w", encoding="utf-8") as f:
@@ -849,16 +1057,18 @@ def save_outputs(
     print(f"  Successful: {report['successful_samples']}/{report['total_samples']}")
     if report.get('warnings_count', 0) > 0:
         print(f"  Warnings: {report['warnings_count']} sample(s) with content policy filters (used source as fallback)")
-    if chrf_scores:
-        print(f"  Average chrF++: {report['summary']['avg_chrf_score']:.2f}")
-    if bleu_scores:
-        print(f"  Average BLEU-4: {report['summary']['avg_bleu_score']:.2f}")
-    if term_success_rates:
-        print(f"  Average Term Success Rate: {report['summary']['avg_term_success_rate']:.4f}")
-    print(f"  Total tokens (input/output): {total_tokens_input}/{total_tokens_output}")
-    if total_base_model_tokens_input > 0 or total_base_model_tokens_output > 0:
-        print(f"  Base model tokens (input/output): {total_base_model_tokens_input}/{total_base_model_tokens_output}")
-    print(f"  Average latency: {report['summary']['avg_latency_seconds']:.2f}s")
+    if report.get("summary"):
+        summary = report["summary"]
+        if summary.get("avg_chrf_score") is not None:
+            print(f"  Average chrF++: {summary['avg_chrf_score']:.2f}")
+        if summary.get("avg_bleu_score") is not None:
+            print(f"  Average BLEU-4: {summary['avg_bleu_score']:.2f}")
+        if summary.get("avg_term_success_rate") is not None:
+            print(f"  Average Term Success Rate: {summary['avg_term_success_rate']:.4f}")
+        print(f"  Total tokens (input/output): {summary.get('total_tokens_input', 0)}/{summary.get('total_tokens_output', 0)}")
+        if summary.get('total_base_model_tokens_input', 0) > 0 or summary.get('total_base_model_tokens_output', 0) > 0:
+            print(f"  Base model tokens (input/output): {summary.get('total_base_model_tokens_input', 0)}/{summary.get('total_base_model_tokens_output', 0)}")
+        print(f"  Average latency: {summary.get('avg_latency_seconds', 0):.2f}s")
 
 
 def main():
@@ -1075,7 +1285,12 @@ def main():
                     processed_sample_ids = get_processed_sample_ids(existing_report)
                     print(f"  Found {len(processed_sample_ids)} already processed samples")
             
-            # Process samples
+            # Determine expected total samples
+            expected_total_samples = len(pair_samples)
+            if args.max_samples:
+                expected_total_samples = min(expected_total_samples, args.max_samples)
+            
+            # Process samples with incremental saving
             print("\nProcessing samples...")
             results = []
             skipped = 0
@@ -1105,14 +1320,27 @@ def main():
                 )
                 if result:
                     results.append(result)
+                    
+                    # Save incrementally after each sample
+                    save_single_sample(
+                        result=result,
+                        output_dir=pair_output_dir,
+                        dataset_name=f"{args.dataset}_{lang_pair}",
+                        workflow_name=args.workflow,
+                        model_name=model_name,
+                        expected_total_samples=expected_total_samples,
+                        max_samples=args.max_samples,
+                        resume=args.resume
+                    )
             
             if skipped > 0:
                 print(f"  Skipped {skipped} already processed samples")
             
-            # Save outputs and generate report for this pair
-            print(f"\nSaving outputs for {lang_pair}...")
+            # Final summary: compute aggregates if all samples are done
+            # (save_single_sample already handles this, but we call save_outputs for final consistency check)
+            print(f"\nFinalizing report for {lang_pair}...")
             save_outputs(
-                results=results,
+                results=[],  # Empty list since samples already saved incrementally
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
@@ -1251,7 +1479,12 @@ def main():
                     processed_sample_ids = get_processed_sample_ids(existing_report)
                     print(f"  Found {len(processed_sample_ids)} already processed samples")
             
-            # Process samples
+            # Determine expected total samples
+            expected_total_samples = len(samples)
+            if args.max_samples:
+                expected_total_samples = min(expected_total_samples, args.max_samples)
+            
+            # Process samples with incremental saving
             print("\nProcessing samples...")
             results = []
             skipped = 0
@@ -1281,14 +1514,27 @@ def main():
                 )
                 if result:
                     results.append(result)
+                    
+                    # Save incrementally after each sample
+                    save_single_sample(
+                        result=result,
+                        output_dir=pair_output_dir,
+                        dataset_name=f"{args.dataset}_{lang_pair}",
+                        workflow_name=args.workflow,
+                        model_name=model_name,
+                        expected_total_samples=expected_total_samples,
+                        max_samples=args.max_samples,
+                        resume=args.resume
+                    )
             
             if skipped > 0:
                 print(f"  Skipped {skipped} already processed samples")
             
-            # Save outputs and generate report for this pair
-            print(f"\nSaving outputs for {lang_pair}...")
+            # Final summary: compute aggregates if all samples are done
+            # (save_single_sample already handles this, but we call save_outputs for final consistency check)
+            print(f"\nFinalizing report for {lang_pair}...")
             save_outputs(
-                results=results,
+                results=[],  # Empty list since samples already saved incrementally
                 output_dir=pair_output_dir,
                 dataset_name=f"{args.dataset}_{lang_pair}",
                 workflow_name=args.workflow,
