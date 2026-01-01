@@ -1,7 +1,7 @@
 {
   "dataset": "wmt25_en-zht",
   "workflow": "DeLTA_multi_agents",
-  "model": "qwen3-235b",
+  "model": "qwen3-32b",
   "total_samples": 55,
   "successful_samples": 55,
   "failed_samples": 0,
@@ -16,17 +16,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.542523986262715
+        30.22948437237548
       ],
       "bleu_scores": [
-        49.5401568717045
+        43.60207130660636
       ],
       "term_success_rates": [
-        0.625531914893617
+        0.574468085106383
       ],
-      "tokens_input": 61209,
-      "tokens_output": 3994,
-      "latency": 106.20675444602966
+      "tokens_input": 58650,
+      "tokens_output": 3491,
+      "latency": 40.93878936767578
     },
     {
       "sample_idx": 1,
@@ -37,17 +37,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.035934372464034
+        36.27918052880123
       ],
       "bleu_scores": [
-        51.55195611338373
+        47.88110536378943
       ],
       "term_success_rates": [
-        0.5776984126984127
+        0.4341984126984127
       ],
-      "tokens_input": 393532,
-      "tokens_output": 27946,
-      "latency": 688.6188552379608
+      "tokens_input": 334627,
+      "tokens_output": 21824,
+      "latency": 224.17043447494507
     },
     {
       "sample_idx": 2,
@@ -58,17 +58,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.43361360418131
+        37.67461469685565
       ],
       "bleu_scores": [
-        51.337608421441345
+        47.772909430287925
       ],
       "term_success_rates": [
-        0.6430507162214479
+        0.5445218737901665
       ],
-      "tokens_input": 271785,
-      "tokens_output": 19018,
-      "latency": 505.7306535243988
+      "tokens_input": 243599,
+      "tokens_output": 15591,
+      "latency": 157.7928924560547
     },
     {
       "sample_idx": 3,
@@ -79,17 +79,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.86838956152664
+        30.767496736834627
       ],
       "bleu_scores": [
-        51.48039869904609
+        42.48630781974611
       ],
       "term_success_rates": [
-        0.494638604887052
+        0.4610686551680341
       ],
-      "tokens_input": 307172,
-      "tokens_output": 22774,
-      "latency": 418.90279936790466
+      "tokens_input": 268801,
+      "tokens_output": 18419,
+      "latency": 166.00155401229858
     },
     {
       "sample_idx": 4,
@@ -100,17 +100,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.11974947576792
+        35.869135616903925
       ],
       "bleu_scores": [
-        55.79339799541192
+        49.90929080908474
       ],
       "term_success_rates": [
-        0.7239185750636133
+        0.6208651399491095
       ],
-      "tokens_input": 290481,
-      "tokens_output": 22774,
-      "latency": 513.1530516147614
+      "tokens_input": 255746,
+      "tokens_output": 18232,
+      "latency": 171.37835431098938
     },
     {
       "sample_idx": 5,
@@ -121,17 +121,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.32821096995946
+        32.24700251905773
       ],
       "bleu_scores": [
-        49.699082894897955
+        39.18200850574902
       ],
       "term_success_rates": [
-        0.5922619047619048
+        0.46428571428571425
       ],
-      "tokens_input": 248731,
-      "tokens_output": 17163,
-      "latency": 408.2784523963928
+      "tokens_input": 220391,
+      "tokens_output": 13948,
+      "latency": 141.80200219154358
     },
     {
       "sample_idx": 6,
@@ -142,17 +142,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        35.99152269984251
+        31.983160827377883
       ],
       "bleu_scores": [
-        47.47086647645226
+        40.62681066349731
       ],
       "term_success_rates": [
-        0.560695652173913
+        0.448526130873957
       ],
-      "tokens_input": 276393,
-      "tokens_output": 18147,
-      "latency": 499.6646432876587
+      "tokens_input": 280748,
+      "tokens_output": 18588,
+      "latency": 216.74819111824036
     },
     {
       "sample_idx": 7,
@@ -163,17 +163,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        34.81070816022947
+        25.49501772100638
       ],
       "bleu_scores": [
-        45.215715464146754
+        33.295011001783585
       ],
       "term_success_rates": [
-        0.5625
+        0.4875
       ],
-      "tokens_input": 30397,
-      "tokens_output": 2192,
-      "latency": 55.74652051925659
+      "tokens_input": 30658,
+      "tokens_output": 2201,
+      "latency": 23.400781393051147
     },
     {
       "sample_idx": 8,
@@ -184,17 +184,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        50.79698206450794
+        45.258759497528715
       ],
       "bleu_scores": [
-        58.698290993632234
+        52.254405374106135
       ],
       "term_success_rates": [
-        0.7132530120481927
+        0.541566265060241
       ],
-      "tokens_input": 565963,
-      "tokens_output": 42233,
-      "latency": 676.9752271175385
+      "tokens_input": 578672,
+      "tokens_output": 43681,
+      "latency": 224.3800868988037
     },
     {
       "sample_idx": 9,
@@ -205,17 +205,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        27.242905290774072
+        25.210421239571527
       ],
       "bleu_scores": [
-        35.507668087980996
+        32.654233524622285
       ],
       "term_success_rates": [
-        0.579689502919812
+        0.5610371267150928
       ],
-      "tokens_input": 312621,
-      "tokens_output": 20674,
-      "latency": 501.4718704223633
+      "tokens_input": 278198,
+      "tokens_output": 17430,
+      "latency": 171.16176795959473
     },
     {
       "sample_idx": 10,
@@ -226,17 +226,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        34.75131991960465
+        29.6534708168864
       ],
       "bleu_scores": [
-        45.451867515530616
+        40.05170643316253
       ],
       "term_success_rates": [
-        0.5686274509803921
+        0.5
       ],
-      "tokens_input": 46511,
-      "tokens_output": 1963,
-      "latency": 67.10853958129883
+      "tokens_input": 44919,
+      "tokens_output": 1797,
+      "latency": 31.686232328414917
     },
     {
       "sample_idx": 11,
@@ -247,17 +247,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        47.11580772539072
+        33.27102659382202
       ],
       "bleu_scores": [
-        53.857889027465056
+        45.42595807114215
       ],
       "term_success_rates": [
-        0.515541165587419
+        0.4475155279503105
       ],
-      "tokens_input": 485830,
-      "tokens_output": 40223,
-      "latency": 860.7439115047455
+      "tokens_input": 499235,
+      "tokens_output": 41399,
+      "latency": 256.930703163147
     },
     {
       "sample_idx": 12,
@@ -268,17 +268,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.34637414381131
+        35.6279988359495
       ],
       "bleu_scores": [
-        52.41756809278268
+        45.315460818257904
       ],
       "term_success_rates": [
-        0.589622641509434
+        0.46226415094339623
       ],
-      "tokens_input": 333882,
-      "tokens_output": 24019,
-      "latency": 580.7995789051056
+      "tokens_input": 316080,
+      "tokens_output": 21869,
+      "latency": 215.67306518554688
     },
     {
       "sample_idx": 13,
@@ -289,17 +289,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.59317824621741
+        34.95425776887588
       ],
       "bleu_scores": [
-        49.92616432770084
+        45.71849277693119
       ],
       "term_success_rates": [
-        0.6977272727272728
+        0.5039772727272728
       ],
-      "tokens_input": 260119,
-      "tokens_output": 19788,
-      "latency": 508.7183573246002
+      "tokens_input": 232564,
+      "tokens_output": 16267,
+      "latency": 161.873126745224
     },
     {
       "sample_idx": 14,
@@ -310,17 +310,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        37.67202782899938
+        30.914207131400605
       ],
       "bleu_scores": [
-        48.226932834613876
+        39.37858033422082
       ],
       "term_success_rates": [
-        0.5436328377504848
+        0.453781512605042
       ],
-      "tokens_input": 255454,
-      "tokens_output": 16315,
-      "latency": 406.9392476081848
+      "tokens_input": 280327,
+      "tokens_output": 18716,
+      "latency": 158.1067831516266
     },
     {
       "sample_idx": 15,
@@ -331,17 +331,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        39.898955491408785
+        34.7869680453637
       ],
       "bleu_scores": [
-        48.82853516179544
+        44.613656698477534
       ],
       "term_success_rates": [
-        0.5330188679245284
+        0.45708472068072514
       ],
-      "tokens_input": 307388,
-      "tokens_output": 21146,
-      "latency": 497.67576932907104
+      "tokens_input": 288748,
+      "tokens_output": 19099,
+      "latency": 204.9368770122528
     },
     {
       "sample_idx": 16,
@@ -352,17 +352,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.711490244235186
+        38.55422609906249
       ],
       "bleu_scores": [
-        51.29347886843515
+        45.83365228630327
       ],
       "term_success_rates": [
-        0.5751419833988641
+        0.4925731760594146
       ],
-      "tokens_input": 350760,
-      "tokens_output": 27573,
-      "latency": 477.9091444015503
+      "tokens_input": 296072,
+      "tokens_output": 21545,
+      "latency": 161.12436771392822
     },
     {
       "sample_idx": 17,
@@ -373,17 +373,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.69091792429673
+        31.840146349458553
       ],
       "bleu_scores": [
-        47.11365404915574
+        40.045491059696396
       ],
       "term_success_rates": [
-        0.4904316866933689
+        0.3738317757009345
       ],
-      "tokens_input": 272126,
-      "tokens_output": 17390,
-      "latency": 517.9948976039886
+      "tokens_input": 300370,
+      "tokens_output": 20536,
+      "latency": 188.93248105049133
     },
     {
       "sample_idx": 18,
@@ -394,17 +394,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.84124047574173
+        39.21211614811803
       ],
       "bleu_scores": [
-        51.13635088898171
+        50.1892741046192
       ],
       "term_success_rates": [
-        0.6432291666666666
+        0.6119791666666666
       ],
-      "tokens_input": 340615,
-      "tokens_output": 24837,
-      "latency": 418.7015337944031
+      "tokens_input": 323155,
+      "tokens_output": 22806,
+      "latency": 129.09935665130615
     },
     {
       "sample_idx": 19,
@@ -415,17 +415,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        30.033814267927532
+        26.59643645520784
       ],
       "bleu_scores": [
-        40.86785573552176
+        37.055439409940405
       ],
       "term_success_rates": [
-        0.647565543071161
+        0.5071161048689138
       ],
-      "tokens_input": 261791,
-      "tokens_output": 17521,
-      "latency": 401.59751892089844
+      "tokens_input": 271495,
+      "tokens_output": 18335,
+      "latency": 157.60517621040344
     },
     {
       "sample_idx": 20,
@@ -436,17 +436,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        38.67891586910822
+        31.235911959115953
       ],
       "bleu_scores": [
-        52.10801229224654
+        44.43775288012868
       ],
       "term_success_rates": [
-        0.5446428571428571
+        0.48214285714285715
       ],
-      "tokens_input": 61394,
-      "tokens_output": 4249,
-      "latency": 95.0878484249115
+      "tokens_input": 60103,
+      "tokens_output": 3922,
+      "latency": 46.364093542099
     },
     {
       "sample_idx": 21,
@@ -457,17 +457,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        51.25561851749387
+        37.58252512527525
       ],
       "bleu_scores": [
-        57.17302138640232
+        39.14968124092491
       ],
       "term_success_rates": [
-        0.537037037037037
+        0.18342151675485008
       ],
-      "tokens_input": 118865,
-      "tokens_output": 7118,
-      "latency": 179.44936156272888
+      "tokens_input": 132619,
+      "tokens_output": 8546,
+      "latency": 81.10141897201538
     },
     {
       "sample_idx": 22,
@@ -478,17 +478,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.258203242190014
+        35.59546364229762
       ],
       "bleu_scores": [
-        48.73893520648127
+        44.01800350823147
       ],
       "term_success_rates": [
-        0.4989686783804431
+        0.456811815635345
       ],
-      "tokens_input": 290730,
-      "tokens_output": 19920,
-      "latency": 458.0713198184967
+      "tokens_input": 256229,
+      "tokens_output": 16257,
+      "latency": 189.88713145256042
     },
     {
       "sample_idx": 23,
@@ -499,17 +499,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.13759728932888
+        36.76693116968816
       ],
       "bleu_scores": [
-        49.716272342522416
+        43.82735686094302
       ],
       "term_success_rates": [
-        0.6652335063009637
+        0.45352112676056344
       ],
-      "tokens_input": 251006,
-      "tokens_output": 16654,
-      "latency": 363.64445900917053
+      "tokens_input": 218372,
+      "tokens_output": 13174,
+      "latency": 145.18072867393494
     },
     {
       "sample_idx": 24,
@@ -520,17 +520,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        38.20262428309659
+        29.703077968464015
       ],
       "bleu_scores": [
-        50.07990143781682
+        38.78996210852611
       ],
       "term_success_rates": [
-        0.5604166666666666
+        0.3170343137254902
       ],
-      "tokens_input": 304313,
-      "tokens_output": 23333,
-      "latency": 472.0501506328583
+      "tokens_input": 266683,
+      "tokens_output": 18954,
+      "latency": 184.49980235099792
     },
     {
       "sample_idx": 25,
@@ -541,17 +541,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.720620944744695
+        33.37774543773129
       ],
       "bleu_scores": [
-        47.66199062169005
+        44.44760162319206
       ],
       "term_success_rates": [
-        0.5694954128440367
+        0.4487767584097859
       ],
-      "tokens_input": 272922,
-      "tokens_output": 19555,
-      "latency": 401.3738582134247
+      "tokens_input": 253326,
+      "tokens_output": 16950,
+      "latency": 186.825270652771
     },
     {
       "sample_idx": 26,
@@ -562,17 +562,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.28618450311104
+        35.169859869085194
       ],
       "bleu_scores": [
-        51.17280799162809
+        43.74686447592036
       ],
       "term_success_rates": [
-        0.5375448028673835
+        0.49139784946236564
       ],
-      "tokens_input": 389979,
-      "tokens_output": 29254,
-      "latency": 440.8576910495758
+      "tokens_input": 283759,
+      "tokens_output": 17903,
+      "latency": 169.1034984588623
     },
     {
       "sample_idx": 27,
@@ -583,17 +583,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.630152958582556
+        30.300999482732244
       ],
       "bleu_scores": [
-        46.79583281225849
+        38.77927634772525
       ],
       "term_success_rates": [
-        0.5706783176662694
+        0.3798711328831811
       ],
-      "tokens_input": 287539,
-      "tokens_output": 18375,
-      "latency": 423.6900782585144
+      "tokens_input": 307078,
+      "tokens_output": 20229,
+      "latency": 202.08706736564636
     },
     {
       "sample_idx": 28,
@@ -604,17 +604,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        37.116109074917105
+        30.788825720054636
       ],
       "bleu_scores": [
-        44.84543735548225
+        36.919327632859485
       ],
       "term_success_rates": [
-        0.38448844884488453
+        0.3498349834983498
       ],
-      "tokens_input": 390351,
-      "tokens_output": 28770,
-      "latency": 529.775004863739
+      "tokens_input": 373874,
+      "tokens_output": 26708,
+      "latency": 268.6591100692749
     },
     {
       "sample_idx": 29,
@@ -625,17 +625,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.6189122629396
+        35.76920279986277
       ],
       "bleu_scores": [
-        52.47679649817106
+        48.918567722802464
       ],
       "term_success_rates": [
-        0.6540880503144654
+        0.6022012578616353
       ],
-      "tokens_input": 306484,
-      "tokens_output": 24337,
-      "latency": 349.6010842323303
+      "tokens_input": 281512,
+      "tokens_output": 21283,
+      "latency": 131.7967665195465
     },
     {
       "sample_idx": 30,
@@ -646,17 +646,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        35.86193974751302
+        31.17211410544442
       ],
       "bleu_scores": [
-        49.330933883209404
+        44.289172831824885
       ],
       "term_success_rates": [
-        0.6421911421911422
+        0.4976689976689976
       ],
-      "tokens_input": 257707,
-      "tokens_output": 18160,
-      "latency": 341.47201132774353
+      "tokens_input": 255857,
+      "tokens_output": 18189,
+      "latency": 219.40554523468018
     },
     {
       "sample_idx": 31,
@@ -667,17 +667,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        39.650343544685725
+        33.781269338221364
       ],
       "bleu_scores": [
-        53.218239548177166
+        47.158828556708805
       ],
       "term_success_rates": [
-        0.6431034482758621
+        0.5821428571428572
       ],
-      "tokens_input": 101862,
-      "tokens_output": 6112,
-      "latency": 130.3566563129425
+      "tokens_input": 102048,
+      "tokens_output": 6431,
+      "latency": 131.4221534729004
     },
     {
       "sample_idx": 32,
@@ -688,17 +688,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        47.517313450335685
+        38.542317357547006
       ],
       "bleu_scores": [
-        54.67234108132836
+        42.9041547162122
       ],
       "term_success_rates": [
-        0.6831831831831833
+        0.5225225225225225
       ],
-      "tokens_input": 473404,
-      "tokens_output": 37514,
-      "latency": 717.5333771705627
+      "tokens_input": 541630,
+      "tokens_output": 43845,
+      "latency": 262.1090478897095
     },
     {
       "sample_idx": 33,
@@ -709,17 +709,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.2024350131571
+        32.472675107816215
       ],
       "bleu_scores": [
-        51.55166280787297
+        43.64492848280575
       ],
       "term_success_rates": [
-        0.535165211436398
+        0.4782319707544035
       ],
-      "tokens_input": 248773,
-      "tokens_output": 15674,
-      "latency": 326.71811413764954
+      "tokens_input": 221537,
+      "tokens_output": 13116,
+      "latency": 151.7393307685852
     },
     {
       "sample_idx": 34,
@@ -730,17 +730,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        44.187181100153374
+        37.14245372703899
       ],
       "bleu_scores": [
-        53.383558018509206
+        46.81311841463503
       ],
       "term_success_rates": [
-        0.63515625
+        0.45208333333333334
       ],
-      "tokens_input": 319566,
-      "tokens_output": 22279,
-      "latency": 500.61762857437134
+      "tokens_input": 284432,
+      "tokens_output": 18767,
+      "latency": 201.0026466846466
     },
     {
       "sample_idx": 35,
@@ -751,17 +751,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.878000708214216
+        37.81075191529212
       ],
       "bleu_scores": [
-        53.125631522491034
+        45.27045460139325
       ],
       "term_success_rates": [
-        0.6865293865293864
+        0.460960960960961
       ],
-      "tokens_input": 261506,
-      "tokens_output": 18372,
-      "latency": 425.14118909835815
+      "tokens_input": 263633,
+      "tokens_output": 18319,
+      "latency": 203.5965449810028
     },
     {
       "sample_idx": 36,
@@ -772,17 +772,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        34.76818498987097
+        29.911284065559514
       ],
       "bleu_scores": [
-        46.21958224573831
+        40.43833261848352
       ],
       "term_success_rates": [
-        0.5669642857142857
+        0.5592221685971686
       ],
-      "tokens_input": 318807,
-      "tokens_output": 23119,
-      "latency": 502.410174369812
+      "tokens_input": 285902,
+      "tokens_output": 19231,
+      "latency": 183.63320112228394
     },
     {
       "sample_idx": 37,
@@ -793,17 +793,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.50816985075957
+        35.17032970648635
       ],
       "bleu_scores": [
-        54.63223343395377
+        45.18346725269816
       ],
       "term_success_rates": [
-        0.68
+        0.5713333333333334
       ],
-      "tokens_input": 288263,
-      "tokens_output": 20274,
-      "latency": 417.05301308631897
+      "tokens_input": 247268,
+      "tokens_output": 16045,
+      "latency": 155.57285523414612
     },
     {
       "sample_idx": 38,
@@ -814,17 +814,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.51736770893939
+        35.21778161804138
       ],
       "bleu_scores": [
-        52.02275080301154
+        45.71026981603867
       ],
       "term_success_rates": [
-        0.5808537350910232
+        0.5142812303829254
       ],
-      "tokens_input": 309150,
-      "tokens_output": 22031,
-      "latency": 370.4922745227814
+      "tokens_input": 241419,
+      "tokens_output": 15171,
+      "latency": 146.2548005580902
     },
     {
       "sample_idx": 39,
@@ -835,17 +835,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        36.52939066974924
+        32.662325320164804
       ],
       "bleu_scores": [
-        47.52800858527863
+        41.500472023034995
       ],
       "term_success_rates": [
-        0.617283950617284
+        0.4790051679586564
       ],
-      "tokens_input": 308226,
-      "tokens_output": 21740,
-      "latency": 458.89052534103394
+      "tokens_input": 305079,
+      "tokens_output": 21538,
+      "latency": 219.07950091362
     },
     {
       "sample_idx": 40,
@@ -856,17 +856,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        38.11620919720081
+        31.640796138900278
       ],
       "bleu_scores": [
-        51.736317887796716
+        43.12990924406219
       ],
       "term_success_rates": [
-        0.5421822272215974
+        0.5127904743614365
       ],
-      "tokens_input": 292873,
-      "tokens_output": 19573,
-      "latency": 384.6626033782959
+      "tokens_input": 287199,
+      "tokens_output": 18603,
+      "latency": 198.5931911468506
     },
     {
       "sample_idx": 41,
@@ -877,17 +877,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.03808791936499
+        35.36432879000095
       ],
       "bleu_scores": [
-        51.85291071237583
+        49.35392323288373
       ],
       "term_success_rates": [
-        0.6649659863945577
+        0.5801749271137027
       ],
-      "tokens_input": 272940,
-      "tokens_output": 20376,
-      "latency": 296.01171016693115
+      "tokens_input": 203814,
+      "tokens_output": 12838,
+      "latency": 119.02219581604004
     },
     {
       "sample_idx": 42,
@@ -898,17 +898,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        31.61369093876758
+        28.235880579156824
       ],
       "bleu_scores": [
-        45.09432412160507
+        39.62985423897629
       ],
       "term_success_rates": [
-        0.6512605042016807
+        0.5266106442577031
       ],
-      "tokens_input": 200921,
-      "tokens_output": 13339,
-      "latency": 282.12963104248047
+      "tokens_input": 188070,
+      "tokens_output": 11280,
+      "latency": 122.06985282897949
     },
     {
       "sample_idx": 43,
@@ -919,17 +919,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        38.531820179264095
+        30.72931335605484
       ],
       "bleu_scores": [
-        50.46479563662111
+        44.280315621896314
       ],
       "term_success_rates": [
-        0.6653439153439153
+        0.5248015873015873
       ],
-      "tokens_input": 95522,
-      "tokens_output": 7242,
-      "latency": 152.29282021522522
+      "tokens_input": 94362,
+      "tokens_output": 6933,
+      "latency": 68.63345408439636
     },
     {
       "sample_idx": 44,
@@ -940,17 +940,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        39.18807425567935
+        28.83932024728771
       ],
       "bleu_scores": [
-        51.347464770839785
+        40.44349373730154
       ],
       "term_success_rates": [
-        0.5351937489034263
+        0.315900944933203
       ],
-      "tokens_input": 461295,
-      "tokens_output": 38259,
-      "latency": 739.7995007038116
+      "tokens_input": 404496,
+      "tokens_output": 31477,
+      "latency": 280.3037202358246
     },
     {
       "sample_idx": 45,
@@ -961,17 +961,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        37.11744789500789
+        30.80691238238775
       ],
       "bleu_scores": [
-        48.207889312334345
+        43.481018145336044
       ],
       "term_success_rates": [
-        0.5506436314363145
+        0.4250103098857076
       ],
-      "tokens_input": 239367,
-      "tokens_output": 16219,
-      "latency": 355.11422300338745
+      "tokens_input": 222549,
+      "tokens_output": 14523,
+      "latency": 142.59051251411438
     },
     {
       "sample_idx": 46,
@@ -982,17 +982,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        42.626299651496744
+        35.5109393915941
       ],
       "bleu_scores": [
-        52.93009598093997
+        49.09713786717028
       ],
       "term_success_rates": [
-        0.7452830188679245
+        0.6132075471698113
       ],
-      "tokens_input": 53508,
-      "tokens_output": 2365,
-      "latency": 67.3013026714325
+      "tokens_input": 51308,
+      "tokens_output": 2360,
+      "latency": 37.41735816001892
     },
     {
       "sample_idx": 47,
@@ -1003,17 +1003,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.478506474867196
+        31.241614419321532
       ],
       "bleu_scores": [
-        52.15596426131801
+        41.496555682399844
       ],
       "term_success_rates": [
-        0.5082885304659498
+        0.4306145066968497
       ],
-      "tokens_input": 175731,
-      "tokens_output": 10859,
-      "latency": 233.9258370399475
+      "tokens_input": 165184,
+      "tokens_output": 9502,
+      "latency": 111.1838526725769
     },
     {
       "sample_idx": 48,
@@ -1024,17 +1024,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        46.577079842662975
+        37.44187887786786
       ],
       "bleu_scores": [
-        57.04804563334173
+        50.394262412463085
       ],
       "term_success_rates": [
-        0.5316091954022988
+        0.40445402298850575
       ],
-      "tokens_input": 362057,
-      "tokens_output": 25162,
-      "latency": 520.5518691539764
+      "tokens_input": 329499,
+      "tokens_output": 21542,
+      "latency": 185.5471315383911
     },
     {
       "sample_idx": 49,
@@ -1045,17 +1045,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        39.81906075666758
+        36.02631914984142
       ],
       "bleu_scores": [
-        49.85223259467902
+        45.582623950570905
       ],
       "term_success_rates": [
-        0.6713058419243986
+        0.574914089347079
       ],
-      "tokens_input": 336160,
-      "tokens_output": 23331,
-      "latency": 496.78732919692993
+      "tokens_input": 286655,
+      "tokens_output": 18372,
+      "latency": 200.10460877418518
     },
     {
       "sample_idx": 50,
@@ -1066,17 +1066,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        35.11689142593802
+        30.966253771315422
       ],
       "bleu_scores": [
-        45.927174017794364
+        40.07869200082668
       ],
       "term_success_rates": [
-        0.6675530289137478
+        0.48946298673513045
       ],
-      "tokens_input": 264310,
-      "tokens_output": 16483,
-      "latency": 359.2440752983093
+      "tokens_input": 269566,
+      "tokens_output": 16677,
+      "latency": 169.07437252998352
     },
     {
       "sample_idx": 51,
@@ -1087,17 +1087,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        40.375102612941134
+        36.261669384623254
       ],
       "bleu_scores": [
-        52.65034050154963
+        46.28617397476986
       ],
       "term_success_rates": [
-        0.7016379601485985
+        0.5458628841607566
       ],
-      "tokens_input": 307961,
-      "tokens_output": 22714,
-      "latency": 473.85094928741455
+      "tokens_input": 272528,
+      "tokens_output": 19805,
+      "latency": 176.74589109420776
     },
     {
       "sample_idx": 52,
@@ -1108,17 +1108,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        41.974434422677795
+        38.31918100780929
       ],
       "bleu_scores": [
-        51.99980321947672
+        46.73187431310524
       ],
       "term_success_rates": [
-        0.5318452380952381
+        0.5110119047619047
       ],
-      "tokens_input": 280738,
-      "tokens_output": 18401,
-      "latency": 422.92616534233093
+      "tokens_input": 274243,
+      "tokens_output": 17657,
+      "latency": 178.63238334655762
     },
     {
       "sample_idx": 53,
@@ -1129,17 +1129,17 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        37.395350004528964
+        31.15067653872178
       ],
       "bleu_scores": [
-        48.71359260094796
+        40.29294199327211
       ],
       "term_success_rates": [
-        0.6014648230557321
+        0.43441810166118466
       ],
-      "tokens_input": 326169,
-      "tokens_output": 23431,
-      "latency": 476.3850507736206
+      "tokens_input": 302448,
+      "tokens_output": 20960,
+      "latency": 217.96732568740845
     },
     {
       "sample_idx": 54,
@@ -1150,32 +1150,32 @@
       "error": null,
       "warnings": null,
       "chrf_scores": [
-        43.68580068978522
+        37.12391187568227
       ],
       "bleu_scores": [
-        51.43036260007092
+        48.60605429203133
       ],
       "term_success_rates": [
-        0.6686868686868688
+        0.5919622044622045
       ],
-      "tokens_input": 315389,
-      "tokens_output": 22965,
-      "latency": 325.95935106277466
+      "tokens_input": 352609,
+      "tokens_output": 27035,
+      "latency": 135.95778942108154
     }
   ],
   "summary": {
-    "total_tokens_input": 15218548,
-    "total_tokens_output": 1085249,
-    "total_latency_seconds": 22604.165565252304,
-    "avg_latency_seconds": 410.9848284591328,
-    "avg_chrf_score": 39.65463251725255,
-    "min_chrf_score": 27.242905290774072,
-    "max_chrf_score": 51.25561851749387,
-    "avg_bleu_score": 50.24146731356439,
-    "min_bleu_score": 35.507668087980996,
-    "max_bleu_score": 58.698290993632234,
-    "avg_term_success_rate": 0.5983284691298797,
-    "min_term_success_rate": 0.38448844884488453,
-    "max_term_success_rate": 0.7452830188679245
+    "total_tokens_input": 14289945,
+    "total_tokens_output": 979916,
+    "total_latency_seconds": 9026.907178163528,
+    "avg_latency_seconds": 164.1255850575187,
+    "avg_chrf_score": 33.56832671539896,
+    "min_chrf_score": 25.210421239571527,
+    "max_chrf_score": 45.258759497528715,
+    "avg_bleu_score": 43.60225982207597,
+    "min_bleu_score": 32.654233524622285,
+    "max_bleu_score": 52.254405374106135,
+    "avg_term_success_rate": 0.48566952913592976,
+    "min_term_success_rate": 0.18342151675485008,
+    "max_term_success_rate": 0.6208651399491095
   }
 }

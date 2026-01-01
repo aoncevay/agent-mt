@@ -3,8 +3,9 @@
   "workflow": "DeLTA_multi_agents",
   "model": "qwen3-32b",
   "total_samples": 56,
-  "successful_samples": 3,
-  "failed_samples": 53,
+  "successful_samples": 56,
+  "failed_samples": 0,
+  "warnings_count": 0,
   "samples": [
     {
       "sample_idx": 0,
@@ -13,18 +14,19 @@
       "target_lang": "en",
       "lang_pair": "zht-en",
       "error": null,
+      "warnings": null,
       "chrf_scores": [
-        8.056603059488983
+        68.54976194031886
       ],
       "bleu_scores": [
-        0.16708720807645225
+        29.39313581779915
       ],
       "term_success_rates": [
-        0.10178571428571428
+        0.5672619047619047
       ],
-      "tokens_input": 14712875,
-      "tokens_output": 1277434,
-      "latency": 7242.386273145676
+      "tokens_input": 225531,
+      "tokens_output": 22578,
+      "latency": 118.54999470710754
     },
     {
       "sample_idx": 1,
@@ -33,18 +35,19 @@
       "target_lang": "en",
       "lang_pair": "zht-en",
       "error": null,
+      "warnings": null,
       "chrf_scores": [
-        8.393654046125484
+        68.51166368903667
       ],
       "bleu_scores": [
-        0.0761571478662648
+        36.78968432086644
       ],
       "term_success_rates": [
-        0.05965909090909091
+        0.6704545454545454
       ],
-      "tokens_input": 1417507,
-      "tokens_output": 110710,
-      "latency": 711.7899816036224
+      "tokens_input": 39918,
+      "tokens_output": 3290,
+      "latency": 30.594706773757935
     },
     {
       "sample_idx": 2,
@@ -53,18 +56,19 @@
       "target_lang": "en",
       "lang_pair": "zht-en",
       "error": null,
+      "warnings": null,
       "chrf_scores": [
-        14.240809281757095
+        64.54608116671547
       ],
       "bleu_scores": [
-        0.2692291768600771
+        27.24517029317106
       ],
       "term_success_rates": [
-        0.16749723145071982
+        0.48062015503875966
       ],
-      "tokens_input": 5464348,
-      "tokens_output": 463267,
-      "latency": 2963.3078820705414
+      "tokens_input": 142121,
+      "tokens_output": 12614,
+      "latency": 82.8751277923584
     },
     {
       "sample_idx": 3,
@@ -72,7 +76,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.31142766636701
+      ],
+      "bleu_scores": [
+        32.08594516606403
+      ],
+      "term_success_rates": [
+        0.4620689655172414
+      ],
+      "tokens_input": 419753,
+      "tokens_output": 35092,
+      "latency": 204.6373519897461
     },
     {
       "sample_idx": 4,
@@ -80,7 +97,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.10712615121398
+      ],
+      "bleu_scores": [
+        28.880446372842904
+      ],
+      "term_success_rates": [
+        0.5258295625942685
+      ],
+      "tokens_input": 255610,
+      "tokens_output": 25354,
+      "latency": 159.73146224021912
     },
     {
       "sample_idx": 5,
@@ -88,7 +118,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.65112571959445
+      ],
+      "bleu_scores": [
+        34.07152379763812
+      ],
+      "term_success_rates": [
+        0.5676829268292682
+      ],
+      "tokens_input": 285632,
+      "tokens_output": 26049,
+      "latency": 146.15289211273193
     },
     {
       "sample_idx": 6,
@@ -96,7 +139,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.10912993649188
+      ],
+      "bleu_scores": [
+        29.914385869779462
+      ],
+      "term_success_rates": [
+        0.5062447628624099
+      ],
+      "tokens_input": 255474,
+      "tokens_output": 23512,
+      "latency": 163.29973459243774
     },
     {
       "sample_idx": 7,
@@ -104,7 +160,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.9757247004016
+      ],
+      "bleu_scores": [
+        30.852559889203313
+      ],
+      "term_success_rates": [
+        0.49303030303030304
+      ],
+      "tokens_input": 330552,
+      "tokens_output": 31148,
+      "latency": 157.9949426651001
     },
     {
       "sample_idx": 8,
@@ -112,7 +181,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.62391819981943
+      ],
+      "bleu_scores": [
+        30.757504921557633
+      ],
+      "term_success_rates": [
+        0.5475609756097561
+      ],
+      "tokens_input": 271629,
+      "tokens_output": 27292,
+      "latency": 137.2591643333435
     },
     {
       "sample_idx": 9,
@@ -120,7 +202,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        75.88734523989923
+      ],
+      "bleu_scores": [
+        43.20398609053202
+      ],
+      "term_success_rates": [
+        0.7252358490566038
+      ],
+      "tokens_input": 311827,
+      "tokens_output": 30247,
+      "latency": 145.7840075492859
     },
     {
       "sample_idx": 10,
@@ -128,7 +223,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        66.67803542397141
+      ],
+      "bleu_scores": [
+        25.955105489523188
+      ],
+      "term_success_rates": [
+        0.5992166079122601
+      ],
+      "tokens_input": 214445,
+      "tokens_output": 22160,
+      "latency": 138.02554178237915
     },
     {
       "sample_idx": 11,
@@ -136,7 +244,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        66.03600676620314
+      ],
+      "bleu_scores": [
+        28.900857106569102
+      ],
+      "term_success_rates": [
+        0.5450430228208006
+      ],
+      "tokens_input": 319418,
+      "tokens_output": 29226,
+      "latency": 144.46285557746887
     },
     {
       "sample_idx": 12,
@@ -144,7 +265,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.8405223949314
+      ],
+      "bleu_scores": [
+        32.108481714812214
+      ],
+      "term_success_rates": [
+        0.6860617365225661
+      ],
+      "tokens_input": 217941,
+      "tokens_output": 21043,
+      "latency": 158.25820112228394
     },
     {
       "sample_idx": 13,
@@ -152,7 +286,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.90910112889739
+      ],
+      "bleu_scores": [
+        34.059723938365934
+      ],
+      "term_success_rates": [
+        0.5705128205128205
+      ],
+      "tokens_input": 341136,
+      "tokens_output": 29513,
+      "latency": 181.34636282920837
     },
     {
       "sample_idx": 14,
@@ -160,7 +307,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.42584314090017
+      ],
+      "bleu_scores": [
+        31.99838343773471
+      ],
+      "term_success_rates": [
+        0.45424528301886796
+      ],
+      "tokens_input": 283237,
+      "tokens_output": 27517,
+      "latency": 155.44711089134216
     },
     {
       "sample_idx": 15,
@@ -168,7 +328,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.66541716553868
+      ],
+      "bleu_scores": [
+        32.85192682032051
+      ],
+      "term_success_rates": [
+        0.567247580850522
+      ],
+      "tokens_input": 222383,
+      "tokens_output": 20841,
+      "latency": 210.014573097229
     },
     {
       "sample_idx": 16,
@@ -176,7 +349,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.07941331594549
+      ],
+      "bleu_scores": [
+        30.123367038234743
+      ],
+      "term_success_rates": [
+        0.6750644745325597
+      ],
+      "tokens_input": 245385,
+      "tokens_output": 24212,
+      "latency": 141.55552983283997
     },
     {
       "sample_idx": 17,
@@ -184,7 +370,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.84083542759726
+      ],
+      "bleu_scores": [
+        35.50941523388598
+      ],
+      "term_success_rates": [
+        0.5612343966712898
+      ],
+      "tokens_input": 317715,
+      "tokens_output": 28133,
+      "latency": 151.025940656662
     },
     {
       "sample_idx": 18,
@@ -192,7 +391,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.58867707400277
+      ],
+      "bleu_scores": [
+        32.688883470985516
+      ],
+      "term_success_rates": [
+        0.5915611553818625
+      ],
+      "tokens_input": 264696,
+      "tokens_output": 26567,
+      "latency": 137.09230041503906
     },
     {
       "sample_idx": 19,
@@ -200,7 +412,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        77.37869049953744
+      ],
+      "bleu_scores": [
+        46.29099430730016
+      ],
+      "term_success_rates": [
+        0.7708333333333334
+      ],
+      "tokens_input": 229445,
+      "tokens_output": 19255,
+      "latency": 117.92995953559875
     },
     {
       "sample_idx": 20,
@@ -208,7 +433,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.00141915557644
+      ],
+      "bleu_scores": [
+        30.928372693941533
+      ],
+      "term_success_rates": [
+        0.5801008270080436
+      ],
+      "tokens_input": 291981,
+      "tokens_output": 26115,
+      "latency": 147.91697788238525
     },
     {
       "sample_idx": 21,
@@ -216,7 +454,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        66.45258901148262
+      ],
+      "bleu_scores": [
+        27.961275597391367
+      ],
+      "term_success_rates": [
+        0.6445565969718818
+      ],
+      "tokens_input": 86150,
+      "tokens_output": 7177,
+      "latency": 115.84035968780518
     },
     {
       "sample_idx": 22,
@@ -224,7 +475,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        65.5979494318359
+      ],
+      "bleu_scores": [
+        25.991464858717308
+      ],
+      "term_success_rates": [
+        0.48697089947089944
+      ],
+      "tokens_input": 509009,
+      "tokens_output": 45996,
+      "latency": 209.85995197296143
     },
     {
       "sample_idx": 23,
@@ -232,7 +496,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.2684943170491
+      ],
+      "bleu_scores": [
+        34.96919335294519
+      ],
+      "term_success_rates": [
+        0.753762110904968
+      ],
+      "tokens_input": 381407,
+      "tokens_output": 31869,
+      "latency": 185.4436514377594
     },
     {
       "sample_idx": 24,
@@ -240,7 +517,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        67.47100439456104
+      ],
+      "bleu_scores": [
+        29.921463449287007
+      ],
+      "term_success_rates": [
+        0.388078588078588
+      ],
+      "tokens_input": 301265,
+      "tokens_output": 29252,
+      "latency": 170.56497240066528
     },
     {
       "sample_idx": 25,
@@ -248,7 +538,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.98452394410275
+      ],
+      "bleu_scores": [
+        32.4206727223352
+      ],
+      "term_success_rates": [
+        0.5731888481888484
+      ],
+      "tokens_input": 334251,
+      "tokens_output": 28712,
+      "latency": 155.9550018310547
     },
     {
       "sample_idx": 26,
@@ -256,7 +559,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.47485755349884
+      ],
+      "bleu_scores": [
+        34.01881178701188
+      ],
+      "term_success_rates": [
+        0.68197601010101
+      ],
+      "tokens_input": 255062,
+      "tokens_output": 23092,
+      "latency": 185.90124583244324
     },
     {
       "sample_idx": 27,
@@ -264,7 +580,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.3545112089897
+      ],
+      "bleu_scores": [
+        34.12183383847613
+      ],
+      "term_success_rates": [
+        0.6092762153913233
+      ],
+      "tokens_input": 376637,
+      "tokens_output": 35761,
+      "latency": 173.15093111991882
     },
     {
       "sample_idx": 28,
@@ -272,7 +601,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.09423346503941
+      ],
+      "bleu_scores": [
+        29.204807992702865
+      ],
+      "term_success_rates": [
+        0.6539390513387121
+      ],
+      "tokens_input": 324005,
+      "tokens_output": 29684,
+      "latency": 144.9163417816162
     },
     {
       "sample_idx": 29,
@@ -280,7 +622,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.85518196172383
+      ],
+      "bleu_scores": [
+        32.49369897725962
+      ],
+      "term_success_rates": [
+        0.5229791916766706
+      ],
+      "tokens_input": 347246,
+      "tokens_output": 30212,
+      "latency": 145.46546506881714
     },
     {
       "sample_idx": 30,
@@ -288,7 +643,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        75.83092001937138
+      ],
+      "bleu_scores": [
+        44.881370693091725
+      ],
+      "term_success_rates": [
+        0.6655172413793103
+      ],
+      "tokens_input": 325952,
+      "tokens_output": 28840,
+      "latency": 156.56140112876892
     },
     {
       "sample_idx": 31,
@@ -296,7 +664,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        67.38369473413542
+      ],
+      "bleu_scores": [
+        25.677513142922514
+      ],
+      "term_success_rates": [
+        0.49614197530864196
+      ],
+      "tokens_input": 213857,
+      "tokens_output": 18381,
+      "latency": 195.11613130569458
     },
     {
       "sample_idx": 32,
@@ -304,7 +685,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        67.8324564270399
+      ],
+      "bleu_scores": [
+        29.970623301164988
+      ],
+      "term_success_rates": [
+        0.5698412698412698
+      ],
+      "tokens_input": 68926,
+      "tokens_output": 6705,
+      "latency": 48.592323541641235
     },
     {
       "sample_idx": 33,
@@ -312,7 +706,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        66.3569981525407
+      ],
+      "bleu_scores": [
+        25.21685659122461
+      ],
+      "term_success_rates": [
+        0.39531590413943357
+      ],
+      "tokens_input": 473145,
+      "tokens_output": 43068,
+      "latency": 200.08812355995178
     },
     {
       "sample_idx": 34,
@@ -320,7 +727,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        72.76270442532132
+      ],
+      "bleu_scores": [
+        36.778621551581296
+      ],
+      "term_success_rates": [
+        0.6214927048260381
+      ],
+      "tokens_input": 245272,
+      "tokens_output": 23578,
+      "latency": 130.488929271698
     },
     {
       "sample_idx": 35,
@@ -328,7 +748,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.10831292310141
+      ],
+      "bleu_scores": [
+        34.64168586753269
+      ],
+      "term_success_rates": [
+        0.5629246018487583
+      ],
+      "tokens_input": 171338,
+      "tokens_output": 16230,
+      "latency": 90.410888671875
     },
     {
       "sample_idx": 36,
@@ -336,7 +769,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.94729996089033
+      ],
+      "bleu_scores": [
+        33.49769213759406
+      ],
+      "term_success_rates": [
+        0.5231023102310232
+      ],
+      "tokens_input": 426468,
+      "tokens_output": 36429,
+      "latency": 215.327410697937
     },
     {
       "sample_idx": 37,
@@ -344,7 +790,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        67.32710091198099
+      ],
+      "bleu_scores": [
+        29.222057329348523
+      ],
+      "term_success_rates": [
+        0.34638047138047146
+      ],
+      "tokens_input": 285711,
+      "tokens_output": 24608,
+      "latency": 177.44051003456116
     },
     {
       "sample_idx": 38,
@@ -352,7 +811,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.00766120664095
+      ],
+      "bleu_scores": [
+        33.43874211212642
+      ],
+      "term_success_rates": [
+        0.5735690235690236
+      ],
+      "tokens_input": 247274,
+      "tokens_output": 20858,
+      "latency": 189.1727077960968
     },
     {
       "sample_idx": 39,
@@ -360,7 +832,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.10321819147447
+      ],
+      "bleu_scores": [
+        34.00577296161833
+      ],
+      "term_success_rates": [
+        0.5492592592592592
+      ],
+      "tokens_input": 242371,
+      "tokens_output": 22610,
+      "latency": 124.75464987754822
     },
     {
       "sample_idx": 40,
@@ -368,7 +853,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.5882446493235
+      ],
+      "bleu_scores": [
+        31.78878954087291
+      ],
+      "term_success_rates": [
+        0.5676975945017182
+      ],
+      "tokens_input": 270657,
+      "tokens_output": 27588,
+      "latency": 142.62352538108826
     },
     {
       "sample_idx": 41,
@@ -376,7 +874,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.89719085574816
+      ],
+      "bleu_scores": [
+        29.394855119633856
+      ],
+      "term_success_rates": [
+        0.5458995047814208
+      ],
+      "tokens_input": 362203,
+      "tokens_output": 32763,
+      "latency": 168.53075408935547
     },
     {
       "sample_idx": 42,
@@ -384,7 +895,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        77.02015627372137
+      ],
+      "bleu_scores": [
+        45.43691586933805
+      ],
+      "term_success_rates": [
+        0.7131782945736435
+      ],
+      "tokens_input": 249836,
+      "tokens_output": 24020,
+      "latency": 124.48468232154846
     },
     {
       "sample_idx": 43,
@@ -392,7 +916,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        66.67579470200357
+      ],
+      "bleu_scores": [
+        24.73541681082159
+      ],
+      "term_success_rates": [
+        0.5869369369369369
+      ],
+      "tokens_input": 210091,
+      "tokens_output": 17692,
+      "latency": 151.97305488586426
     },
     {
       "sample_idx": 44,
@@ -400,7 +937,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        69.75287706749262
+      ],
+      "bleu_scores": [
+        31.59213494115087
+      ],
+      "term_success_rates": [
+        0.5857142857142857
+      ],
+      "tokens_input": 113629,
+      "tokens_output": 11341,
+      "latency": 69.55309104919434
     },
     {
       "sample_idx": 45,
@@ -408,7 +958,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        67.53873018418764
+      ],
+      "bleu_scores": [
+        30.187984755484813
+      ],
+      "term_success_rates": [
+        0.510287679799875
+      ],
+      "tokens_input": 439384,
+      "tokens_output": 41759,
+      "latency": 177.3283519744873
     },
     {
       "sample_idx": 46,
@@ -416,7 +979,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        74.6167404282564
+      ],
+      "bleu_scores": [
+        39.19749704196934
+      ],
+      "term_success_rates": [
+        0.6505376344086022
+      ],
+      "tokens_input": 322687,
+      "tokens_output": 31924,
+      "latency": 143.0791084766388
     },
     {
       "sample_idx": 47,
@@ -424,7 +1000,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        72.31304418288198
+      ],
+      "bleu_scores": [
+        42.2512066178315
+      ],
+      "term_success_rates": [
+        0.7270625231224564
+      ],
+      "tokens_input": 41778,
+      "tokens_output": 3416,
+      "latency": 37.4889132976532
     },
     {
       "sample_idx": 48,
@@ -432,7 +1021,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.42059591871411
+      ],
+      "bleu_scores": [
+        34.404490650795935
+      ],
+      "term_success_rates": [
+        0.5604659498207886
+      ],
+      "tokens_input": 279468,
+      "tokens_output": 26729,
+      "latency": 133.15782594680786
     },
     {
       "sample_idx": 49,
@@ -440,7 +1042,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        70.35944701850363
+      ],
+      "bleu_scores": [
+        37.6445302908048
+      ],
+      "term_success_rates": [
+        0.6108301727770755
+      ],
+      "tokens_input": 411055,
+      "tokens_output": 35361,
+      "latency": 218.82622408866882
     },
     {
       "sample_idx": 50,
@@ -448,7 +1063,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.18703780247381
+      ],
+      "bleu_scores": [
+        31.774597060116726
+      ],
+      "term_success_rates": [
+        0.505094130675526
+      ],
+      "tokens_input": 332015,
+      "tokens_output": 30424,
+      "latency": 174.4233033657074
     },
     {
       "sample_idx": 51,
@@ -456,7 +1084,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        72.55302469312453
+      ],
+      "bleu_scores": [
+        35.54647137545933
+      ],
+      "term_success_rates": [
+        0.6379365079365079
+      ],
+      "tokens_input": 242714,
+      "tokens_output": 20038,
+      "latency": 203.05538129806519
     },
     {
       "sample_idx": 52,
@@ -464,7 +1105,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.62691211552792
+      ],
+      "bleu_scores": [
+        31.80345702011553
+      ],
+      "term_success_rates": [
+        0.6260245901639344
+      ],
+      "tokens_input": 334174,
+      "tokens_output": 34517,
+      "latency": 153.84199142456055
     },
     {
       "sample_idx": 53,
@@ -472,7 +1126,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        71.82692133584585
+      ],
+      "bleu_scores": [
+        34.9935179400545
+      ],
+      "term_success_rates": [
+        0.6200788526369921
+      ],
+      "tokens_input": 288131,
+      "tokens_output": 27348,
+      "latency": 131.62491035461426
     },
     {
       "sample_idx": 54,
@@ -480,7 +1147,20 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        68.33275912610459
+      ],
+      "bleu_scores": [
+        30.303180093020192
+      ],
+      "term_success_rates": [
+        0.5242967946920848
+      ],
+      "tokens_input": 321456,
+      "tokens_output": 31037,
+      "latency": 192.69286489486694
     },
     {
       "sample_idx": 55,
@@ -488,22 +1168,35 @@
       "source_lang": "zht",
       "target_lang": "en",
       "lang_pair": "zht-en",
-      "error": "An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid."
+      "error": null,
+      "warnings": null,
+      "chrf_scores": [
+        77.49166380361405
+      ],
+      "bleu_scores": [
+        46.86668920750333
+      ],
+      "term_success_rates": [
+        0.6376190476190476
+      ],
+      "tokens_input": 322668,
+      "tokens_output": 28212,
+      "latency": 140.14128041267395
     }
   ],
   "summary": {
-    "total_tokens_input": 21594730,
-    "total_tokens_output": 1851411,
-    "total_latency_seconds": 10917.48413681984,
-    "avg_latency_seconds": 3639.1613789399466,
-    "avg_chrf_score": 10.230355462457188,
-    "min_chrf_score": 8.056603059488983,
-    "max_chrf_score": 14.240809281757095,
-    "avg_bleu_score": 0.17082451093426468,
-    "min_bleu_score": 0.0761571478662648,
-    "max_bleu_score": 0.2692291768600771,
-    "avg_term_success_rate": 0.10964734554850834,
-    "min_term_success_rate": 0.05965909090909091,
-    "max_term_success_rate": 0.16749723145071982
+    "total_tokens_input": 15643121,
+    "total_tokens_output": 1438989,
+    "total_latency_seconds": 8407.830998659134,
+    "avg_latency_seconds": 150.13983926177025,
+    "avg_chrf_score": 69.91307354109398,
+    "min_chrf_score": 64.54608116671547,
+    "max_chrf_score": 77.49166380361405,
+    "avg_bleu_score": 33.052959756972015,
+    "min_bleu_score": 24.73541681082159,
+    "max_bleu_score": 46.86668920750333,
+    "avg_term_success_rate": 0.5781257850604825,
+    "min_term_success_rate": 0.34638047138047146,
+    "max_term_success_rate": 0.7708333333333334
   }
 }
