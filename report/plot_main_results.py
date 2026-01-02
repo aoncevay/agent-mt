@@ -74,6 +74,9 @@ WORKFLOW_COLORS = {
     "SbS": "#bcbd22",           # olive
 }
 
+# Workflow order (matching table order)
+WORKFLOW_ORDER = ["ZS", "IRB", "MaMT", "SbS_chat", "MAATS_multi", "ADT", "DeLTA"]
+
 # Workflow display names for legend
 WORKFLOW_DISPLAY_NAMES = {
     "ZS": "Zero-shot",
@@ -93,8 +96,16 @@ MODEL_MARKERS = {
     "qwen3-235b": "s",          # square
     "gpt-oss-20b": "^",         # triangle up
     "gpt-oss-120b": "v",        # triangle down
-    "claude-sonnet-4": "P",     # plus (filled)
-    "gpt-4-1": "*"             # star
+    "gpt-4-1": "P"             # plus (filled)
+}
+
+# Model display names (for legends and tables)
+MODEL_DISPLAY_NAMES = {
+    "qwen3-32b": "Qwen 3 32B",
+    "qwen3-235b": "Qwen 3 235B",
+    "gpt-oss-20b": "GPT-OSS 20B",
+    "gpt-oss-120b": "GPT-OSS 120B",
+    "gpt-4-1": "GPT-4.1"
 }
 
 # Default marker if model not in dict
@@ -113,7 +124,6 @@ MODEL_PRICING_STANDARD = {
     "gpt-oss-120b": {"input": 0.00015, "output": 0.0006},
     
     # Anthropic models (Bedrock) - per 1k tokens
-    "claude-sonnet-4": {"input": 0.003, "output": 0.015},
     "claude-opus-4-5": {"input": 0.005, "output": 0.025},
     
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
@@ -132,7 +142,6 @@ MODEL_PRICING_BATCH = {
     "gpt-oss-120b": {"input": 0.000075, "output": 0.0003},
     
     # Anthropic models (Bedrock) - per 1k tokens
-    "claude-sonnet-4": {"input": 0.0015, "output": 0.0075},
     "claude-opus-4-5": {"input": 0.0025, "output": 0.0125},
     
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
@@ -362,16 +371,25 @@ def create_workflow_legend(workflows: Set[str], output_path: Path):
     _fig, ax = plt.subplots(figsize=(4, 3))
     ax.axis('off')
     
-    # Create legend entries for workflows
+    # Create legend entries for workflows, sorted by WORKFLOW_ORDER
     workflow_elements = []
     
-    for workflow in sorted(workflows):
-        if workflow in WORKFLOW_COLORS:
-            color = WORKFLOW_COLORS[workflow]
-            display_name = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
-            workflow_elements.append(
-                mpatches.Patch(facecolor=color, edgecolor='black', label=display_name)
-            )
+    # Sort workflows by WORKFLOW_ORDER, then by name for any not in the order
+    ordered_workflows = []
+    for workflow in WORKFLOW_ORDER:
+        if workflow in workflows and workflow in WORKFLOW_COLORS:
+            ordered_workflows.append(workflow)
+    
+    # Add any remaining workflows not in WORKFLOW_ORDER (sorted alphabetically)
+    remaining = sorted([w for w in workflows if w not in WORKFLOW_ORDER and w in WORKFLOW_COLORS])
+    ordered_workflows.extend(remaining)
+    
+    for workflow in ordered_workflows:
+        color = WORKFLOW_COLORS[workflow]
+        display_name = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
+        workflow_elements.append(
+            mpatches.Patch(facecolor=color, edgecolor='black', label=display_name)
+        )
     
     if workflow_elements:
         legend = ax.legend(handles=workflow_elements, loc='center', 
@@ -380,7 +398,8 @@ def create_workflow_legend(workflows: Set[str], output_path: Path):
                           handlelength=1.0)
         legend.get_title().set_fontweight('bold')
     
-    plt.tight_layout(pad=0.1)
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
     plt.close()
 
@@ -405,9 +424,10 @@ def create_model_legend(output_path: Path):
     
     for model, _ in models_with_costs:
         marker = MODEL_MARKERS[model]
+        display_name = MODEL_DISPLAY_NAMES.get(model, model)
         model_elements.append(
             plt.Line2D([0], [0], marker=marker, color='black', linestyle='None',
-                      markersize=10, label=model, markerfacecolor='black',
+                      markersize=10, label=display_name, markerfacecolor='black',
                       markeredgecolor='black')
         )
     
@@ -418,7 +438,88 @@ def create_model_legend(output_path: Path):
                           handlelength=1.0)
         legend.get_title().set_fontweight('bold')
     
-    plt.tight_layout(pad=0.1)
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
+    plt.close()
+
+
+def create_flat_workflow_legend(workflows: Set[str], output_path: Path):
+    """Create a flat legend with workflows in a single horizontal line."""
+    _fig, ax = plt.subplots(figsize=(10, 1))
+    ax.axis('off')
+    
+    # Create legend entries for workflows, sorted by WORKFLOW_ORDER
+    workflow_elements = []
+    
+    # Sort workflows by WORKFLOW_ORDER, then by name for any not in the order
+    ordered_workflows = []
+    for workflow in WORKFLOW_ORDER:
+        if workflow in workflows and workflow in WORKFLOW_COLORS:
+            ordered_workflows.append(workflow)
+    
+    # Add any remaining workflows not in WORKFLOW_ORDER (sorted alphabetically)
+    remaining = sorted([w for w in workflows if w not in WORKFLOW_ORDER and w in WORKFLOW_COLORS])
+    ordered_workflows.extend(remaining)
+    
+    for workflow in ordered_workflows:
+        color = WORKFLOW_COLORS[workflow]
+        display_name = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
+        workflow_elements.append(
+            mpatches.Patch(facecolor=color, edgecolor='black', label=display_name)
+        )
+    
+    if workflow_elements:
+        legend = ax.legend(handles=workflow_elements, loc='center', 
+                          frameon=True, fontsize=9, title='System',
+                          borderpad=0.2, columnspacing=0.8, handletextpad=0.3,
+                          handlelength=1.0, ncol=len(workflow_elements))
+        legend.get_title().set_fontweight('bold')
+        legend.get_title().set_fontsize(9)
+    
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
+    plt.close()
+
+
+def create_flat_model_legend(output_path: Path):
+    """Create a flat legend with models in a single horizontal line."""
+    _fig, ax = plt.subplots(figsize=(8, 1))
+    ax.axis('off')
+    
+    # Create legend entries for all models in MODEL_MARKERS, sorted by cost (most expensive first)
+    model_elements = []
+    
+    # Get all models with their base costs and sort by cost (descending)
+    models_with_costs = []
+    for model in MODEL_MARKERS.keys():
+        base_cost = get_model_base_cost(model, use_batch=False)
+        if base_cost is not None:
+            models_with_costs.append((model, base_cost))
+    
+    # Sort by cost (most expensive first)
+    models_with_costs.sort(key=lambda x: x[1], reverse=True)
+    
+    for model, _ in models_with_costs:
+        marker = MODEL_MARKERS[model]
+        display_name = MODEL_DISPLAY_NAMES.get(model, model)
+        model_elements.append(
+            plt.Line2D([0], [0], marker=marker, color='black', linestyle='None',
+                      markersize=10, label=display_name, markerfacecolor='black',
+                      markeredgecolor='black')
+        )
+    
+    if model_elements:
+        legend = ax.legend(handles=model_elements, loc='center', 
+                          frameon=True, fontsize=9, title='Model',
+                          borderpad=0.2, columnspacing=0.8, handletextpad=0.3,
+                          handlelength=1.0, ncol=len(model_elements))
+        legend.get_title().set_fontweight('bold')
+        legend.get_title().set_fontsize(9)
+    
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
     plt.close()
 
@@ -482,8 +583,7 @@ def plot_dataset_lang_pair(
             chrfs = [d["chrf"] for d in model_data]
             
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            # Make star markers slightly larger for better visibility
-            marker_size = 70 if marker == "*" else 50
+            marker_size = 50
             ax.scatter(tokens, chrfs, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
     
@@ -604,8 +704,7 @@ def plot_dataset_lang_pair_price(
         # Plot each model for this workflow (on top of lines)
         for cost, chrf, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            # Make star markers slightly larger for better visibility
-            marker_size = 70 if marker == "*" else 50
+            marker_size = 50
             ax.scatter(cost, chrf, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -735,8 +834,7 @@ def plot_dataset_lang_pair_term_acc(
         # Plot each model for this workflow (on top of lines)
         for cost, term_acc, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            # Make star markers slightly larger for better visibility
-            marker_size = 70 if marker == "*" else 50
+            marker_size = 50
             ax.scatter(cost, term_acc, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -880,8 +978,7 @@ def plot_dataset_avg_price(
         # Plot each model for this workflow (on top of lines)
         for cost, value, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            # Make star markers slightly larger for better visibility
-            marker_size = 70 if marker == "*" else 50
+            marker_size = 50
             ax.scatter(cost, value, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -923,6 +1020,325 @@ def plot_dataset_avg_price(
     print(f"Created AVG plot: {output_path}")
 
 
+def compute_pareto_ranks(costs: List[float], values: List[float]) -> Dict[int, List[int]]:
+    """
+    Compute Pareto optimality ranks for points where higher value and lower cost are both better.
+    
+    Args:
+        costs: List of cost values (lower is better)
+        values: List of performance values (higher is better)
+    
+    Returns:
+        Dictionary mapping rank -> list of point indices
+    """
+    n = len(costs)
+    if n == 0:
+        return {}
+    
+    # Rank 1: Pareto optimal points (not dominated by any other point)
+    # A point is dominated if there exists another point with both higher value AND lower cost
+    rank1_indices = []
+    for i in range(n):
+        is_dominated = False
+        for j in range(n):
+            if i != j:
+                # Point j dominates point i if: value[j] > value[i] AND cost[j] < cost[i]
+                if values[j] > values[i] and costs[j] < costs[i]:
+                    is_dominated = True
+                    break
+        if not is_dominated:
+            rank1_indices.append(i)
+    
+    # Rank 2: Points dominated only by rank 1 points
+    rank2_indices = []
+    for i in range(n):
+        if i in rank1_indices:
+            continue
+        # Check if dominated only by rank 1 points
+        dominated_by_rank1 = False
+        also_dominated_by_others = False
+        for j in rank1_indices:
+            if values[j] > values[i] and costs[j] < costs[i]:
+                dominated_by_rank1 = True
+                # Check if also dominated by non-rank1 points
+                for k in range(n):
+                    if k != i and k not in rank1_indices:
+                        if values[k] > values[i] and costs[k] < costs[i]:
+                            also_dominated_by_others = True
+                            break
+                if not also_dominated_by_others:
+                    rank2_indices.append(i)
+                break
+    
+    ranks = {}
+    if rank1_indices:
+        ranks[1] = rank1_indices
+    if rank2_indices:
+        ranks[2] = rank2_indices
+    
+    return ranks
+
+
+def plot_dataset_avg_price_pareto(
+    dataset: str,
+    reports_by_lang_pair: Dict[str, List[Dict]],
+    output_dir: Path,
+    metric: str = "chrf",  # "chrf" or "termacc"
+    use_batch: bool = False,
+    is_term: bool = False
+):
+    """
+    Create Pareto optimality plot for AVG dataset results.
+    Shows rank 1 and rank 2 Pareto optimal points with gold/silver stars.
+    """
+    # Aggregate data across language pairs (same logic as plot_dataset_avg_price)
+    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    
+    for lang_pair, reports in reports_by_lang_pair.items():
+        for report in reports:
+            workflow_name = report.get("workflow", "")
+            workflow = get_workflow_acronym(workflow_name)
+            model = report["model"]
+            key = (workflow, model)
+            
+            # Get metric value
+            if metric == "chrf":
+                value = report.get("chrf")
+            elif metric == "termacc":
+                value = report.get("term_acc")
+            else:
+                continue
+            
+            if value is None:
+                continue
+            
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
+            
+            if cost is None:
+                continue
+            
+            aggregated_data[key]["values"].append(value)
+            aggregated_data[key]["costs"].append(cost)
+    
+    workflows = set()
+    models = set()
+    data_points = []
+    
+    for (workflow, model), data in aggregated_data.items():
+        if not data["values"] or not data["costs"]:
+            continue
+        
+        avg_value = sum(data["values"]) / len(data["values"])
+        total_cost = sum(data["costs"])  # Total cost across all lang pairs
+        
+        workflows.add(workflow)
+        models.add(model)
+        
+        data_points.append({
+            "workflow": workflow,
+            "model": model,
+            "value": avg_value,
+            "cost": total_cost
+        })
+    
+    if not data_points:
+        return
+    
+    # Extract costs and values for Pareto analysis
+    costs = [d["cost"] for d in data_points]
+    values = [d["value"] for d in data_points]
+    
+    # Compute Pareto ranks
+    pareto_ranks = compute_pareto_ranks(costs, values)
+    
+    # Create figure
+    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    
+    # Set axis limits first (needed for visibility checking)
+    ax.set_xscale('log')
+    if metric == "chrf":
+        if dataset == "dolfin":
+            y_min, y_max = 55, 80
+        else:  # wmt25
+            y_min, y_max = 35, 60
+    elif metric == "termacc":
+        y_min, y_max = 0.5, 0.8
+    
+    ax.set_ylim(y_min, y_max)
+    
+    # First pass: collect all workflow points and identify which have stars
+    workflow_points_dict = {}
+    points_with_stars = set()  # Track which points have stars (Pareto optimal)
+    
+    for workflow in sorted(workflows):
+        workflow_data = [d for d in data_points if d["workflow"] == workflow]
+        
+        if not workflow_data:
+            continue
+        
+        color = WORKFLOW_COLORS.get(workflow, "#000000")
+        
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
+            model_data = [d for d in workflow_data if d["model"] == model]
+            if model_data:
+                point = model_data[0]
+                # Find index in data_points to check if it has a star
+                point_idx = None
+                for idx, dp in enumerate(data_points):
+                    if dp["workflow"] == workflow and dp["model"] == model:
+                        point_idx = idx
+                        break
+                
+                # Check if this point has a star (rank 1 or 2)
+                has_star = False
+                if point_idx is not None:
+                    if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
+                        has_star = True
+                    elif 2 in pareto_ranks and point_idx in pareto_ranks[2]:
+                        has_star = True
+                
+                if has_star:
+                    points_with_stars.add((workflow, model))
+                
+                workflow_points.append((point["cost"], point["value"], model, has_star))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines, but only connect points that are visible in the plot
+        # (i.e., within y-axis bounds)
+        if len(workflow_points_sorted) > 1:
+            # Filter to only visible points (within y-axis bounds)
+            visible_points = [(p[0], p[1]) for p in workflow_points_sorted 
+                            if y_min <= p[1] <= y_max]
+            
+            # Only draw line if we have at least 2 visible points
+            if len(visible_points) >= 2:
+                costs_line = [p[0] for p in visible_points]
+                values_line = [p[1] for p in visible_points]
+                ax.plot(costs_line, values_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=1)
+    
+    # Second pass: plot all markers on top
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow (on top of lines)
+        for cost, value, model, has_star in workflow_points_sorted:
+            # Find index of this point in data_points
+            point_idx = None
+            for idx, dp in enumerate(data_points):
+                if dp["workflow"] == workflow and dp["model"] == model:
+                    point_idx = idx
+                    break
+            
+            marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
+            ax.scatter(cost, value, c=color, marker=marker, s=50, 
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+    
+    # Set log scale for x-axis and y-axis limits FIRST (before checking visibility)
+    ax.set_xscale('log')
+    
+    # Labels and set y-axis limits
+    ax.set_xlabel('Cost ($, log scale)', fontsize=10)
+    if metric == "chrf":
+        ax.set_ylabel('chrF++', fontsize=10)
+        if dataset == "dolfin":
+            ax.set_ylim(55, 80)
+            y_offset_abs = 1.5
+            y_min, y_max = 55, 80
+        else:  # wmt25
+            ax.set_ylim(35, 60)
+            y_offset_abs = 1.2
+            y_min, y_max = 35, 60
+    elif metric == "termacc":
+        ax.set_ylabel('Terminology Accuracy', fontsize=10)
+        ax.set_ylim(0.5, 0.8)
+        y_offset_abs = 0.03
+        y_min, y_max = 0.5, 0.8
+    
+    # Get x-axis limits (will be auto-set, but we can check bounds)
+    ax.set_xlim(auto=True)
+    x_lim = ax.get_xlim()
+    x_min, x_max = x_lim[0], x_lim[1]
+    
+    # Grid (behind everything)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
+    
+    # Now add stars at upper-left corners (after axes are set)
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        for cost, value, model, has_star in workflow_points_sorted:
+            # Find index of this point in data_points
+            point_idx = None
+            for idx, dp in enumerate(data_points):
+                if dp["workflow"] == workflow and dp["model"] == model:
+                    point_idx = idx
+                    break
+            
+            if point_idx is not None:
+                # Position star center at upper-left corner of marker (imagining marker as circle/dot)
+                # Marker size is s=50, which corresponds to roughly sqrt(50) ≈ 7 points radius
+                # We need to convert this to data coordinates
+                # Get axis ranges to calculate appropriate offset
+                x_lim = ax.get_xlim()
+                y_lim = ax.get_ylim()
+                
+                # For log scale x-axis: marker radius in data coordinates
+                # Approximate: marker radius is ~7 points, figure width is ~3.5 inches = 252 points
+                # So marker radius is ~7/252 = 0.028 of figure width
+                marker_size_points = 7  # Approximate radius of s=50 marker
+                fig_width_points = 3.5 * 72  # 3.5 inches * 72 points/inch
+                marker_fraction_of_fig = marker_size_points / fig_width_points
+                
+                # For log scale: move left by full marker radius (to reach the left edge)
+                # In log space, divide by (1 + offset_factor)
+                x_offset_factor = marker_fraction_of_fig * 1.2  # Full radius + a bit more
+                star_x = cost / (1 + x_offset_factor)
+                
+                # For linear y-axis: move up by full marker radius (to reach the top edge)
+                y_range = y_lim[1] - y_lim[0]
+                marker_height_data = y_range * marker_fraction_of_fig * 1.2  # Full radius + a bit more
+                star_y = value + marker_height_data
+                
+                if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
+                    # Gold star for rank 1
+                    ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
+                              edgecolors='none', linewidths=0, alpha=0.9, zorder=6)
+                elif 2 in pareto_ranks and point_idx in pareto_ranks[2]:
+                    # Silver star for rank 2
+                    ax.scatter(star_x, star_y, marker='*', s=90, c='silver', 
+                              edgecolors='none', linewidths=0, alpha=0.9, zorder=6)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    safe_dataset = dataset.replace("/", "_")
+    if is_term:
+        if metric == "chrf":
+            output_path = output_dir / f"{safe_dataset}+T_AVG_chrF_x_price_pareto.pdf"
+        else:  # termacc
+            output_path = output_dir / f"{safe_dataset}+T_AVG_TAcc_x_price_pareto.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_AVG_chrF_x_price_pareto.pdf"
+    
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    print(f"Created Pareto plot: {output_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Plot cost-performance trade-off for agentic MT workflows"
@@ -944,6 +1360,11 @@ def main():
         "--include-tokens",
         action="store_true",
         help="Also create token-based plots (default: only price plots)"
+    )
+    parser.add_argument(
+        "--flat-legend",
+        action="store_true",
+        help="Also create a flat legend with workflows and models in a single horizontal line"
     )
     
     args = parser.parse_args()
@@ -1001,6 +1422,17 @@ def main():
     create_model_legend(model_legend_path)
     print(f"Created model legend: {model_legend_path}")
     
+    # Create flat legends if requested
+    if args.flat_legend:
+        if all_workflows:
+            flat_workflow_legend_path = output_dir / "legend_flat_workflow.pdf"
+            create_flat_workflow_legend(all_workflows, flat_workflow_legend_path)
+            print(f"Created flat workflow legend: {flat_workflow_legend_path}")
+        
+        flat_model_legend_path = output_dir / "legend_flat_model.pdf"
+        create_flat_model_legend(flat_model_legend_path)
+        print(f"Created flat model legend: {flat_model_legend_path}")
+    
     # Create plots for each dataset/lang_pair
     print("\nCreating plots...")
     
@@ -1032,6 +1464,13 @@ def main():
     if wmt25_term_reports:
         plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True)
         plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True)
+        # Pareto plots
+        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True)
+        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True)
+    
+    # DOLFIN AVG Pareto plot
+    if dolfin_reports:
+        plot_dataset_avg_price_pareto("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False)
     
     # Print incomplete settings
     if incomplete_settings:

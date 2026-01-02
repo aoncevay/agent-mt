@@ -34,6 +34,7 @@ parse_report = plot_module.parse_report
 collect_reports = plot_module.collect_reports
 calculate_cost = plot_module.calculate_cost
 get_model_base_cost = plot_module.get_model_base_cost
+compute_pareto_ranks = plot_module.compute_pareto_ranks
 
 # Model display names
 MODEL_DISPLAY_NAMES = {
@@ -41,7 +42,6 @@ MODEL_DISPLAY_NAMES = {
     "qwen3-235b": "Qwen 3 235B",
     "gpt-oss-20b": "GPT-OSS 20B",
     "gpt-oss-120b": "GPT-OSS 120B",
-    "claude-sonnet-4": "Claude Sonnet 4",
     "gpt-4-1": "GPT-4.1"
 }
 
@@ -58,7 +58,7 @@ WORKFLOW_DISPLAY_NAMES = {
 }
 
 # Model order (from larger to smaller) - will be sorted by cost in tables
-MODEL_ORDER = ["gpt-4-1", "claude-sonnet-4", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-oss-20b"]
+MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-oss-20b"]
 
 def get_models_sorted_by_cost() -> List[str]:
     """Get models sorted by base API cost (most expensive first)."""
@@ -123,6 +123,34 @@ def format_cost(value: Optional[float]) -> str:
     if value is None:
         return "---"
     return f"{value:.2f}"
+
+
+def format_value_with_star(value: Optional[float], metric_type: str, rank: Optional[int]) -> str:
+    """
+    Format a numeric value for LaTeX with optional Pareto star.
+    
+    Args:
+        value: The numeric value
+        metric_type: Type of metric ("chrf", "termacc", etc.)
+        rank: Pareto rank (1 for gold star, 2 for silver star, None for no star)
+    
+    Returns:
+        LaTeX formatted string with value and optional star
+    """
+    formatted = format_value(value, metric_type)
+    if formatted == "---":
+        return formatted
+    
+    if rank == 1:
+        # Gold star: position it slightly to the right and above, half behind the color
+        # Use \rlap to overlay without taking space, \hspace to shift right, \raisebox to shift up
+        # Make it smaller with \scriptsize
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.25ex}}{{\\textcolor{{gold}}{{\\scriptsize$\\star$}}}}}}"
+    elif rank == 2:
+        # Silver star: same positioning but gray
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.25ex}}{{\\textcolor{{gray!60}}{{\\scriptsize$\\star$}}}}}}"
+    else:
+        return formatted
 
 
 def collect_data_by_workflow_model(
@@ -273,6 +301,31 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     cost_min = min(cost_values) if cost_values else 0
     cost_max = max(cost_values) if cost_values else 1000
     
+    # Compute Pareto ranks for chrF++ (cost vs avg_chrf)
+    # Collect all (workflow, model) pairs with data
+    chrf_costs = []
+    chrf_values_list = []
+    chrf_keys = []  # List of (workflow, model) tuples in same order
+    
+    for workflow in WORKFLOW_ORDER:
+        for model in MODEL_ORDER:
+            key = (workflow, model)
+            avg_chrf = dolfin_chrf_avg.get(key)
+            total_cost = dolfin_total_costs.get(key)
+            if avg_chrf is not None and total_cost is not None:
+                chrf_costs.append(total_cost)
+                chrf_values_list.append(avg_chrf)
+                chrf_keys.append(key)
+    
+    # Compute Pareto ranks
+    pareto_ranks_chrf = {}
+    if chrf_costs and chrf_values_list:
+        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list)
+        # Map ranks back to (workflow, model) keys
+        for rank, indices in ranks.items():
+            for idx in indices:
+                pareto_ranks_chrf[chrf_keys[idx]] = rank
+    
     # Start LaTeX table
     lines = []
     lines.append("% This table requires the following packages in your LaTeX preamble:")
@@ -331,7 +384,9 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
             # chrF++ columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It)
             avg_val = dolfin_chrf_avg.get((workflow, model))
             color = get_color_for_value(avg_val, chrf_min, chrf_max, "chrf") if avg_val is not None else ""
-            row_parts.append(f"{color}{format_value(avg_val, 'chrf')}")
+            rank = pareto_ranks_chrf.get((workflow, model))
+            formatted_with_star = format_value_with_star(avg_val, "chrf", rank)
+            row_parts.append(f"{color}{formatted_with_star}")
             
             for lang_pair in DOLFIN_LANG_PAIRS:
                 val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("chrf")
@@ -370,7 +425,7 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for DOLFIN dataset.}")
+    lines.append("\\caption{Main results for DOLFIN dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ performance vs. cost trade-off.}")
     lines.append("\\label{tab:main_results_dolfin}")
     lines.append("\\end{table*}")
     
@@ -403,6 +458,50 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     cost_values = [cost for cost in wmt25_total_costs.values() if cost is not None]
     cost_min = min(cost_values) if cost_values else 0
     cost_max = max(cost_values) if cost_values else 1000
+    
+    # Compute Pareto ranks for chrF++ (cost vs avg_chrf)
+    chrf_costs = []
+    chrf_values_list = []
+    chrf_keys = []
+    
+    for workflow in WORKFLOW_ORDER:
+        for model in MODEL_ORDER:
+            key = (workflow, model)
+            avg_chrf = wmt25_chrf_avg.get(key)
+            total_cost = wmt25_total_costs.get(key)
+            if avg_chrf is not None and total_cost is not None:
+                chrf_costs.append(total_cost)
+                chrf_values_list.append(avg_chrf)
+                chrf_keys.append(key)
+    
+    pareto_ranks_chrf = {}
+    if chrf_costs and chrf_values_list:
+        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list)
+        for rank, indices in ranks.items():
+            for idx in indices:
+                pareto_ranks_chrf[chrf_keys[idx]] = rank
+    
+    # Compute Pareto ranks for TermAcc (cost vs avg_termacc)
+    termacc_costs = []
+    termacc_values_list = []
+    termacc_keys = []
+    
+    for workflow in WORKFLOW_ORDER:
+        for model in MODEL_ORDER:
+            key = (workflow, model)
+            avg_termacc = wmt25_termacc_avg.get(key)
+            total_cost = wmt25_total_costs.get(key)
+            if avg_termacc is not None and total_cost is not None:
+                termacc_costs.append(total_cost)
+                termacc_values_list.append(avg_termacc)
+                termacc_keys.append(key)
+    
+    pareto_ranks_termacc = {}
+    if termacc_costs and termacc_values_list:
+        ranks = compute_pareto_ranks(termacc_costs, termacc_values_list)
+        for rank, indices in ranks.items():
+            for idx in indices:
+                pareto_ranks_termacc[termacc_keys[idx]] = rank
     
     # Start LaTeX table
     lines = []
@@ -463,7 +562,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
             # chrF++ columns (3 columns: Avg, En-Zht, Zht-En)
             avg_val = wmt25_chrf_avg.get((workflow, model))
             color = get_color_for_value(avg_val, chrf_min, chrf_max, "chrf") if avg_val is not None else ""
-            row_parts.append(f"{color}{format_value(avg_val, 'chrf')}")
+            rank = pareto_ranks_chrf.get((workflow, model))
+            formatted_with_star = format_value_with_star(avg_val, "chrf", rank)
+            row_parts.append(f"{color}{formatted_with_star}")
             
             for lang_pair in WMT25_LANG_PAIRS:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("chrf")
@@ -477,7 +578,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
             # TermAcc columns (3 columns: Avg, En-Zht, Zht-En)
             avg_val = wmt25_termacc_avg.get((workflow, model))
             color = get_color_for_value(avg_val, termacc_min, termacc_max, "termacc") if avg_val is not None else ""
-            row_parts.append(f"{color}{format_value(avg_val, 'termacc')}")
+            rank = pareto_ranks_termacc.get((workflow, model))
+            formatted_with_star = format_value_with_star(avg_val, "termacc", rank)
+            row_parts.append(f"{color}{formatted_with_star}")
             
             for lang_pair in WMT25_LANG_PAIRS:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("termacc")
@@ -511,7 +614,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for WMT25+Term dataset.}")
+    lines.append("\\caption{Main results for WMT25+Term dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ and TermAcc performance vs. cost trade-offs.}")
     lines.append("\\label{tab:main_results_wmt25}")
     lines.append("\\end{table*}")
     
