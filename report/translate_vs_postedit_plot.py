@@ -448,7 +448,7 @@ def plot_translate_vs_postedit(
     
     # Create figure with two subplots side by side (square shape)
     # Each subplot should be square, so if width is 3.5, height should also be 3.5
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3.5))  # Two square subplots side by side
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(4, 2))  # Two square subplots side by side
     
     # Plot DOLFIN
     plot_dataset_subplot(ax1, dolfin_data, "DOLFIN")
