@@ -143,12 +143,13 @@ def format_value_with_star(value: Optional[float], metric_type: str, rank: Optio
         return formatted
     
     if rank == 1:
-        # Gold star: use a more visible gold color and larger size
+        # Gold star: use a more visible gold color and larger size (1.5x)
         # Use \rlap to overlay without taking space, \hspace to shift right, \raisebox to shift up
-        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{rgb,1:red,0.85;green,0.65;blue,0.13}}{{$\\star$}}}}}}"
+        # Use \scalebox{1.5} to make star 1.5x bigger
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{rgb,1:red,0.85;green,0.65;blue,0.13}}{{\\scalebox{{1.5}}{{$\\star$}}}}}}}}"
     elif rank == 2:
-        # Silver star: same positioning but gray, larger size
-        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{gray!60}}{{$\\star$}}}}}}"
+        # Silver star: same positioning but gray, larger size (1.5x)
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{gray!60}}{{\\scalebox{{1.5}}{{$\\star$}}}}}}}}"
     else:
         return formatted
 
@@ -335,6 +336,7 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("% \\usepackage[table]{xcolor}  % For \\cellcolor command")
     lines.append("% \\usepackage{booktabs}        % For \\toprule, \\midrule, \\bottomrule, \\cmidrule")
     lines.append("% \\usepackage{multirow}        % For \\multirow command")
+    lines.append("% \\usepackage{graphicx}        % For \\scalebox command (for star sizing)")
     lines.append("")
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
@@ -516,6 +518,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("% \\usepackage[table]{xcolor}  % For \\cellcolor command")
     lines.append("% \\usepackage{booktabs}        % For \\toprule, \\midrule, \\bottomrule, \\cmidrule")
     lines.append("% \\usepackage{multirow}        % For \\multirow command")
+    lines.append("% \\usepackage{graphicx}        % For \\scalebox command (for star sizing)")
     lines.append("")
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
