@@ -119,7 +119,13 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
             continue
         
         # Iterate through dataset directories
-        for dataset_dir in outputs_dir.iterdir():
+        try:
+            dataset_dirs = list(outputs_dir.iterdir())
+        except (PermissionError, OSError) as e:
+            print(f"DEBUG: Error accessing {outputs_dir}: {e}")
+            continue
+        
+        for dataset_dir in dataset_dirs:
             if not dataset_dir.is_dir():
                 continue
             
@@ -132,29 +138,40 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
             print(f"DEBUG: Processing dataset: {dataset}")
             
             # Iterate through language pair directories
+            try:
+                lang_pair_dirs = list(dataset_dir.iterdir())
+            except (PermissionError, OSError) as e:
+                print(f"DEBUG: Error accessing {dataset_dir}: {e}")
+                continue
+            
             lang_pairs_found = []
-            for lang_pair_dir in dataset_dir.iterdir():
-                if not lang_pair_dir.is_dir():
-                    continue
-                lang_pairs_found.append(lang_pair_dir.name)
+            for lang_pair_dir in lang_pair_dirs:
+                if lang_pair_dir.is_dir():
+                    lang_pairs_found.append(lang_pair_dir.name)
             
             print(f"DEBUG: Found {len(lang_pairs_found)} language pairs in {dataset}: {lang_pairs_found}")
             
-            for lang_pair_dir in dataset_dir.iterdir():
+            for lang_pair_dir in lang_pair_dirs:
                 if not lang_pair_dir.is_dir():
                     continue
                 
                 lang_pair = lang_pair_dir.name
                 
                 # List all workflow directories found
+                try:
+                    workflow_dirs = list(lang_pair_dir.iterdir())
+                except (PermissionError, OSError) as e:
+                    print(f"DEBUG: Error accessing {lang_pair_dir}: {e}")
+                    continue
+                
                 workflows_found = []
-                for wf_dir in lang_pair_dir.iterdir():
+                for wf_dir in workflow_dirs:
                     if wf_dir.is_dir():
                         workflows_found.append(wf_dir.name)
                 print(f"DEBUG: Found {len(workflows_found)} workflow directories in {dataset}/{lang_pair}: {workflows_found}")
                 
                 # Iterate through workflow directories
-                for workflow_dir in lang_pair_dir.iterdir():
+                for workflow_dir in workflow_dirs:
                     if not workflow_dir.is_dir():
                         continue
                     
@@ -169,11 +186,21 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                     print(f"DEBUG: Found target workflow directory: {workflow_dir_name} in {dataset}/{lang_pair}")
                     
                     # Iterate through model directories
-                    for model_dir in workflow_dir.iterdir():
+                    try:
+                        model_dirs = list(workflow_dir.iterdir())
+                    except (PermissionError, OSError) as e:
+                        print(f"DEBUG: Error accessing {workflow_dir}: {e}")
+                        continue
+                    
+                    for model_dir in model_dirs:
                         if not model_dir.is_dir():
                             continue
                         
-                        model = model_dir.name
+                        try:
+                            model = model_dir.name
+                        except (OSError, AttributeError) as e:
+                            print(f"DEBUG: Error reading model directory name: {e}")
+                            continue
                         
                         # Parse model combination
                         parsed = parse_model_combination(model)
@@ -195,13 +222,18 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                         
                         report_path = model_dir / "report.json"
                         if not report_path.exists():
-                            print(f"DEBUG: Report.json not found: {report_path}")
+                            print(f"DEBUG: Report.json not found (experiment may still be running): {report_path}")
                             continue
                         
                         print(f"DEBUG: Parsing report: {report_path}")
-                        report_data = parse_report(report_path)
+                        try:
+                            report_data = parse_report(report_path)
+                        except Exception as e:
+                            print(f"DEBUG: Error parsing report {report_path}: {e}")
+                            continue
+                        
                         if report_data is None:
-                            print(f"DEBUG: Failed to parse report (incomplete or invalid): {report_path}")
+                            print(f"DEBUG: Failed to parse report (incomplete or invalid, experiment may still be running): {report_path}")
                             continue
                         
                         print(f"DEBUG: Successfully parsed report for {workflow_dir_name}/{model}: chrF={report_data.get('chrf')}, tokens={report_data.get('tokens_input')}+{report_data.get('tokens_output')}")
@@ -427,7 +459,7 @@ def plot_translate_vs_postedit(
     # Create legend above subplots
     create_legend_above(fig, dolfin_data, wmt25_data)
     
-    plt.tight_layout(rect=[0, 0, 1, 0.92])  # Leave space at top for legend
+    plt.tight_layout(rect=[0, 0, 1, 0.88])  # Leave space at top for two legend lines
     plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
     plt.close()
     
@@ -462,34 +494,59 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         color = WORKFLOW_COLORS.get(workflow, "#000000")
         wf_data = workflow_data[workflow]
         
-        # Collect points for this workflow in order: gpt-oss-120b -> combinations -> gpt-4-1
-        points_order = [
+        # Define two lines:
+        # Line 1: gpt-oss-120b -> gpt-oss-120b+gpt-4-1 -> gpt-4-1
+        # Line 2: gpt-oss-120b -> gpt-4-1+gpt-oss-120b -> gpt-4-1
+        line1_order = [
             ("gpt-oss-120b", wf_data["gpt-oss-120b"]),
             ("gpt-oss-120b+gpt-4-1", wf_data["gpt-oss-120b+gpt-4-1"]),
+            ("gpt-4-1", wf_data["gpt-4-1"]),
+        ]
+        line2_order = [
+            ("gpt-oss-120b", wf_data["gpt-oss-120b"]),
             ("gpt-4-1+gpt-oss-120b", wf_data["gpt-4-1+gpt-oss-120b"]),
             ("gpt-4-1", wf_data["gpt-4-1"]),
         ]
         
-        # Filter out None points
-        valid_points = [(name, data) for name, data in points_order if data is not None]
+        # Filter out None points for each line (handles missing experiments gracefully)
+        valid_points_line1 = [(name, data) for name, data in line1_order if data is not None]
+        valid_points_line2 = [(name, data) for name, data in line2_order if data is not None]
         
-        if len(valid_points) < 2:
-            continue
+        # Draw line 1 if we have at least 2 points (skip if experiment is still running)
+        if len(valid_points_line1) >= 2:
+            try:
+                costs_line1 = [p[1]["cost"] for p in valid_points_line1]
+                chrfs_line1 = [p[1]["chrf"] for p in valid_points_line1]
+                ax.plot(costs_line1, chrfs_line1, color=color, linestyle=':', linewidth=1.5, 
+                        alpha=0.6, zorder=1)
+            except (KeyError, TypeError) as e:
+                print(f"DEBUG: Error plotting line 1 for {workflow}: {e}")
         
-        # Extract costs and chrfs for line
-        costs_line = [p[1]["cost"] for p in valid_points]
-        chrfs_line = [p[1]["chrf"] for p in valid_points]
+        # Draw line 2 if we have at least 2 points (skip if experiment is still running)
+        if len(valid_points_line2) >= 2:
+            try:
+                costs_line2 = [p[1]["cost"] for p in valid_points_line2]
+                chrfs_line2 = [p[1]["chrf"] for p in valid_points_line2]
+                ax.plot(costs_line2, chrfs_line2, color=color, linestyle=':', linewidth=1.5, 
+                        alpha=0.6, zorder=1)
+            except (KeyError, TypeError) as e:
+                print(f"DEBUG: Error plotting line 2 for {workflow}: {e}")
         
-        # Draw dotted line connecting points
-        ax.plot(costs_line, chrfs_line, color=color, linestyle=':', linewidth=1.5, 
-                alpha=0.6, zorder=1)
+        # Collect all unique points to plot markers (only plot points that exist)
+        all_points = {}
+        for name, data in valid_points_line1 + valid_points_line2:
+            if name not in all_points and data is not None:
+                all_points[name] = data
         
-        # Plot markers
-        for model_name, point_data in valid_points:
-            marker = MODEL_MARKERS.get(model_name, "o")
-            ax.scatter(point_data["cost"], point_data["chrf"], 
-                      c=color, marker=marker, s=63,
-                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+        # Plot markers for all points (skip missing experiments)
+        for model_name, point_data in all_points.items():
+            try:
+                marker = MODEL_MARKERS.get(model_name, "o")
+                ax.scatter(point_data["cost"], point_data["chrf"], 
+                          c=color, marker=marker, s=63,
+                          edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+            except (KeyError, TypeError) as e:
+                print(f"DEBUG: Error plotting marker for {workflow}/{model_name}: {e}")
     
     # Set log scale for x-axis
     ax.set_xscale('log')
@@ -507,7 +564,7 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
 
 
 def create_legend_above(fig, dolfin_data: Dict, wmt25_data: Dict):
-    """Create legend above the subplots."""
+    """Create legend above the subplots with workflows on top line and models on bottom line."""
     
     # Collect unique workflows and models from both datasets
     all_workflows = set()
@@ -518,9 +575,12 @@ def create_legend_above(fig, dolfin_data: Dict, wmt25_data: Dict):
             all_workflows.add(workflow)
             all_models.add(model_name)
     
-    # Create legend elements
+    # Create legend elements for workflows
     workflow_elements = []
-    for workflow in sorted(all_workflows):
+    workflow_order = ["IRB", "MaMT", "MAATS_multi"]  # Maintain consistent order
+    for workflow in workflow_order:
+        if workflow not in all_workflows:
+            continue
         if workflow in WORKFLOW_COLORS:
             color = WORKFLOW_COLORS[workflow]
             workflow_display = {
@@ -554,14 +614,16 @@ def create_legend_above(fig, dolfin_data: Dict, wmt25_data: Dict):
                       markeredgecolor='black')
         )
     
-    # Combine elements
-    all_elements = workflow_elements + model_elements
-    
-    # Create legend at top
-    if all_elements:
-        fig.legend(handles=all_elements, loc='upper center', ncol=min(len(all_elements), 7),
+    # Create two separate legends: workflows on top, models below
+    if workflow_elements:
+        fig.legend(handles=workflow_elements, loc='upper center', ncol=len(workflow_elements),
                   frameon=True, fontsize=9, borderpad=0.2, columnspacing=0.8,
                   handletextpad=0.3, handlelength=1.0, bbox_to_anchor=(0.5, 0.98))
+    
+    if model_elements:
+        fig.legend(handles=model_elements, loc='upper center', ncol=len(model_elements),
+                  frameon=True, fontsize=9, borderpad=0.2, columnspacing=0.8,
+                  handletextpad=0.3, handlelength=1.0, bbox_to_anchor=(0.5, 0.94))
 
 
 def main():
