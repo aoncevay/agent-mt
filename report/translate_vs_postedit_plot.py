@@ -516,7 +516,7 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
             try:
                 costs_line1 = [p[1]["cost"] for p in valid_points_line1]
                 chrfs_line1 = [p[1]["chrf"] for p in valid_points_line1]
-                ax.plot(costs_line1, chrfs_line1, color=color, linestyle=':', linewidth=1.5, 
+                ax.plot(costs_line1, chrfs_line1, color=color, linestyle=':', linewidth=1.0, 
                         alpha=0.6, zorder=1)
             except (KeyError, TypeError) as e:
                 print(f"DEBUG: Error plotting line 1 for {workflow}: {e}")
@@ -526,7 +526,7 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
             try:
                 costs_line2 = [p[1]["cost"] for p in valid_points_line2]
                 chrfs_line2 = [p[1]["chrf"] for p in valid_points_line2]
-                ax.plot(costs_line2, chrfs_line2, color=color, linestyle=':', linewidth=1.5, 
+                ax.plot(costs_line2, chrfs_line2, color=color, linestyle=':', linewidth=1.0, 
                         alpha=0.6, zorder=1)
             except (KeyError, TypeError) as e:
                 print(f"DEBUG: Error plotting line 2 for {workflow}: {e}")
@@ -542,8 +542,8 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
             try:
                 marker = MODEL_MARKERS.get(model_name, "o")
                 ax.scatter(point_data["cost"], point_data["chrf"], 
-                          c=color, marker=marker, s=63,
-                          edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+                          c=color, marker=marker, s=95,  # Increased from 63 (1.5x)
+                          edgecolors='black', linewidths=0.5, alpha=1.0, zorder=5)  # Non-transparent
             except (KeyError, TypeError) as e:
                 print(f"DEBUG: Error plotting marker for {workflow}/{model_name}: {e}")
     
