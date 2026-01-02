@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 from collections import defaultdict
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -583,7 +584,7 @@ def plot_dataset_lang_pair(
             chrfs = [d["chrf"] for d in model_data]
             
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            marker_size = 50
+            marker_size = 63  # 50 * 1.25 = 62.5, rounded to 63
             ax.scatter(tokens, chrfs, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=3)
     
@@ -624,7 +625,8 @@ def plot_dataset_lang_pair_price(
     reports: List[Dict],
     output_dir: Path,
     use_batch: bool = False,
-    is_term: bool = False
+    is_term: bool = False,
+    connect_points: bool = False
 ):
     """Create a price-based plot for a specific dataset/lang_pair combination."""
     if not reports:
@@ -688,8 +690,8 @@ def plot_dataset_lang_pair_price(
         workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
         workflow_points_dict[workflow] = (workflow_points_sorted, color)
         
-        # Draw dotted lines first (behind markers)
-        if len(workflow_points_sorted) > 1:
+        # Draw dotted lines first (behind markers) if requested
+        if connect_points and len(workflow_points_sorted) > 1:
             costs_line = [p[0] for p in workflow_points_sorted]
             chrfs_line = [p[1] for p in workflow_points_sorted]
             # Draw dotted line connecting points (thicker line, behind markers)
@@ -704,7 +706,7 @@ def plot_dataset_lang_pair_price(
         # Plot each model for this workflow (on top of lines)
         for cost, chrf, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            marker_size = 50
+            marker_size = 63  # 50 * 1.25 = 62.5, rounded to 63
             ax.scatter(cost, chrf, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -748,7 +750,8 @@ def plot_dataset_lang_pair_term_acc(
     lang_pair: str,
     reports: List[Dict],
     output_dir: Path,
-    use_batch: bool = False
+    use_batch: bool = False,
+    connect_points: bool = False
 ):
     """Create a terminology accuracy plot for *.term workflows."""
     if not reports:
@@ -818,8 +821,8 @@ def plot_dataset_lang_pair_term_acc(
         workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
         workflow_points_dict[workflow] = (workflow_points_sorted, color)
         
-        # Draw dotted lines first (behind markers)
-        if len(workflow_points_sorted) > 1:
+        # Draw dotted lines first (behind markers) if requested
+        if connect_points and len(workflow_points_sorted) > 1:
             costs_line = [p[0] for p in workflow_points_sorted]
             term_accs_line = [p[1] for p in workflow_points_sorted]
             # Draw dotted line connecting points (thicker line, behind markers)
@@ -834,7 +837,7 @@ def plot_dataset_lang_pair_term_acc(
         # Plot each model for this workflow (on top of lines)
         for cost, term_acc, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            marker_size = 50
+            marker_size = 63  # 50 * 1.25 = 62.5, rounded to 63
             ax.scatter(cost, term_acc, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -870,7 +873,8 @@ def plot_dataset_avg_price(
     output_dir: Path,
     metric: str = "chrf",  # "chrf" or "termacc"
     use_batch: bool = False,
-    is_term: bool = False
+    is_term: bool = False,
+    connect_points: bool = False
 ):
     """Create an average plot across all language pairs for a dataset."""
     if not reports_by_lang_pair:
@@ -962,8 +966,8 @@ def plot_dataset_avg_price(
         workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
         workflow_points_dict[workflow] = (workflow_points_sorted, color)
         
-        # Draw dotted lines first (behind markers)
-        if len(workflow_points_sorted) > 1:
+        # Draw dotted lines first (behind markers) if requested
+        if connect_points and len(workflow_points_sorted) > 1:
             costs_line = [p[0] for p in workflow_points_sorted]
             values_line = [p[1] for p in workflow_points_sorted]
             # Draw dotted line connecting points (thicker line, behind markers)
@@ -978,7 +982,7 @@ def plot_dataset_avg_price(
         # Plot each model for this workflow (on top of lines)
         for cost, value, model in workflow_points_sorted:
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            marker_size = 50
+            marker_size = 63  # 50 * 1.25 = 62.5, rounded to 63
             ax.scatter(cost, value, c=color, marker=marker, s=marker_size, 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
@@ -991,12 +995,12 @@ def plot_dataset_avg_price(
         ax.set_ylabel('chrF++', fontsize=10)
         # Set y-axis limits based on dataset
         if dataset == "dolfin":
-            ax.set_ylim(55, 80)
+            ax.set_ylim(57.5, 77.5)
         else:  # wmt25
-            ax.set_ylim(35, 60)
+            ax.set_ylim(42.5, 62.5)
     elif metric == "termacc":
         ax.set_ylabel('Terminology Accuracy', fontsize=10)
-        ax.set_ylim(0.5, 0.8)
+        ax.set_ylim(0.5, 0.7)
     
     # Grid (behind everything)
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
@@ -1098,7 +1102,8 @@ def plot_dataset_avg_price_pareto(
     output_dir: Path,
     metric: str = "chrf",  # "chrf" or "termacc"
     use_batch: bool = False,
-    is_term: bool = False
+    is_term: bool = False,
+    connect_points: bool = False
 ):
     """
     Create Pareto optimality plot for AVG dataset results.
@@ -1164,8 +1169,9 @@ def plot_dataset_avg_price_pareto(
     costs = [d["cost"] for d in data_points]
     values = [d["value"] for d in data_points]
     
-    # Compute Pareto ranks
-    pareto_ranks = compute_pareto_ranks(costs, values)
+    # Compute Pareto ranks with percentile-based quality threshold (75th percentile)
+    min_value = np.percentile(values, 75) if len(values) > 1 else None
+    pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
     
     # Create figure
     _fig, ax = plt.subplots(figsize=(3.5, 2.5))
@@ -1174,11 +1180,11 @@ def plot_dataset_avg_price_pareto(
     ax.set_xscale('log')
     if metric == "chrf":
         if dataset == "dolfin":
-            y_min, y_max = 55, 80
+            y_min, y_max = 57.5, 77.5
         else:  # wmt25
-            y_min, y_max = 35, 60
+            y_min, y_max = 42.5, 62.5
     elif metric == "termacc":
-        y_min, y_max = 0.5, 0.8
+        y_min, y_max = 0.5, 0.7
     
     ax.set_ylim(y_min, y_max)
     
@@ -1224,9 +1230,9 @@ def plot_dataset_avg_price_pareto(
         workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
         workflow_points_dict[workflow] = (workflow_points_sorted, color)
         
-        # Draw dotted lines, but only connect points that are visible in the plot
+        # Draw dotted lines, but only connect points that are visible in the plot (if requested)
         # (i.e., within y-axis bounds)
-        if len(workflow_points_sorted) > 1:
+        if connect_points and len(workflow_points_sorted) > 1:
             # Filter to only visible points (within y-axis bounds)
             visible_points = [(p[0], p[1]) for p in workflow_points_sorted 
                             if y_min <= p[1] <= y_max]
@@ -1253,7 +1259,7 @@ def plot_dataset_avg_price_pareto(
                     break
             
             marker = MODEL_MARKERS.get(model, DEFAULT_MARKER)
-            ax.scatter(cost, value, c=color, marker=marker, s=50, 
+            ax.scatter(cost, value, c=color, marker=marker, s=63,  # 50 * 1.25 = 62.5, rounded to 63 
                       edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
     
     # Set log scale for x-axis and y-axis limits FIRST (before checking visibility)
@@ -1264,18 +1270,18 @@ def plot_dataset_avg_price_pareto(
     if metric == "chrf":
         ax.set_ylabel('chrF++', fontsize=10)
         if dataset == "dolfin":
-            ax.set_ylim(55, 80)
+            ax.set_ylim(57.5, 77.5)
             y_offset_abs = 1.5
-            y_min, y_max = 55, 80
+            y_min, y_max = 57.5, 77.5
         else:  # wmt25
-            ax.set_ylim(35, 60)
+            ax.set_ylim(42.5, 62.5)
             y_offset_abs = 1.2
-            y_min, y_max = 35, 60
+            y_min, y_max = 42.5, 62.5
     elif metric == "termacc":
         ax.set_ylabel('Terminology Accuracy', fontsize=10)
-        ax.set_ylim(0.5, 0.8)
-        y_offset_abs = 0.03
-        y_min, y_max = 0.5, 0.8
+        ax.set_ylim(0.5, 0.7)
+        y_offset_abs = 0.02
+        y_min, y_max = 0.5, 0.7
     
     # Get x-axis limits (will be auto-set, but we can check bounds)
     ax.set_xlim(auto=True)
@@ -1379,6 +1385,11 @@ def main():
         action="store_true",
         help="Also create a flat legend with workflows and models in a single horizontal line"
     )
+    parser.add_argument(
+        "--connect-points",
+        action="store_true",
+        help="Draw dotted lines connecting points of the same workflow (default: False)"
+    )
     
     args = parser.parse_args()
     
@@ -1455,14 +1466,14 @@ def main():
         if args.include_tokens:
             plot_dataset_lang_pair(dataset, lang_pair, reports, output_dir)
         # Create price-based plots (standard pricing)
-        plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False)
+        plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False, connect_points=args.connect_points)
     
     # Create plots for term workflows (WMT25 only)
     for (dataset, lang_pair), reports in sorted(reports_by_dataset_lang_term.items()):
         # Create chrF vs price plots for term workflows
-        plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False, is_term=True)
+        plot_dataset_lang_pair_price(dataset, lang_pair, reports, output_dir, use_batch=False, is_term=True, connect_points=args.connect_points)
         # Create Terminology Accuracy vs price plots
-        plot_dataset_lang_pair_term_acc(dataset, lang_pair, reports, output_dir, use_batch=False)
+        plot_dataset_lang_pair_term_acc(dataset, lang_pair, reports, output_dir, use_batch=False, connect_points=args.connect_points)
     
     # Create AVG plots per dataset
     print("\nCreating AVG plots...")
@@ -1470,20 +1481,20 @@ def main():
     # DOLFIN AVG plot
     dolfin_reports = {lp: reports for (ds, lp), reports in reports_by_dataset_lang.items() if ds == "dolfin"}
     if dolfin_reports:
-        plot_dataset_avg_price("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False)
+        plot_dataset_avg_price("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False, connect_points=args.connect_points)
     
     # WMT25+Term AVG plots
     wmt25_term_reports = {lp: reports for (ds, lp), reports in reports_by_dataset_lang_term.items() if ds == "wmt25"}
     if wmt25_term_reports:
-        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True)
-        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True)
+        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True, connect_points=args.connect_points)
+        plot_dataset_avg_price("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True, connect_points=args.connect_points)
         # Pareto plots
-        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True)
-        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True)
+        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="chrf", use_batch=False, is_term=True, connect_points=args.connect_points)
+        plot_dataset_avg_price_pareto("wmt25", wmt25_term_reports, output_dir, metric="termacc", use_batch=False, is_term=True, connect_points=args.connect_points)
     
     # DOLFIN AVG Pareto plot
     if dolfin_reports:
-        plot_dataset_avg_price_pareto("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False)
+        plot_dataset_avg_price_pareto("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False, connect_points=args.connect_points)
     
     # Print incomplete settings
     if incomplete_settings:
