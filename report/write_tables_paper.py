@@ -19,6 +19,7 @@ import math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
+import numpy as np
 
 # Import from plot script
 import importlib.util
@@ -142,13 +143,12 @@ def format_value_with_star(value: Optional[float], metric_type: str, rank: Optio
         return formatted
     
     if rank == 1:
-        # Gold star: position it slightly to the right and above, half behind the color
+        # Gold star: use a more visible gold color and larger size
         # Use \rlap to overlay without taking space, \hspace to shift right, \raisebox to shift up
-        # Make it smaller with \scriptsize
-        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.25ex}}{{\\textcolor{{gold}}{{\\scriptsize$\\star$}}}}}}"
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{rgb,1:red,0.85;green,0.65;blue,0.13}}{{$\\star$}}}}}}"
     elif rank == 2:
-        # Silver star: same positioning but gray
-        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.25ex}}{{\\textcolor{{gray!60}}{{\\scriptsize$\\star$}}}}}}"
+        # Silver star: same positioning but gray, larger size
+        return f"{formatted}\\rlap{{\\hspace{{0.15em}}\\raisebox{{0.3ex}}{{\\textcolor{{gray!60}}{{$\\star$}}}}}}"
     else:
         return formatted
 
@@ -317,10 +317,13 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
                 chrf_values_list.append(avg_chrf)
                 chrf_keys.append(key)
     
-    # Compute Pareto ranks
+    # Compute Pareto ranks with percentile-based quality threshold
+    # For chrF++, exclude points below 75th percentile (keep top 25% quality)
     pareto_ranks_chrf = {}
     if chrf_costs and chrf_values_list:
-        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list)
+        # Calculate 75th percentile threshold (keep systems above this)
+        min_value = np.percentile(chrf_values_list, 75) if len(chrf_values_list) > 1 else None
+        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list, min_value=min_value)
         # Map ranks back to (workflow, model) keys
         for rank, indices in ranks.items():
             for idx in indices:
@@ -425,7 +428,7 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for DOLFIN dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ performance vs. cost trade-off.}")
+    lines.append("\\caption{Main results for DOLFIN dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ performance vs. cost trade-off. Only systems above the 75th percentile in performance are considered for Pareto ranking.}")
     lines.append("\\label{tab:main_results_dolfin}")
     lines.append("\\end{table*}")
     
@@ -476,7 +479,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     pareto_ranks_chrf = {}
     if chrf_costs and chrf_values_list:
-        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list)
+        # For chrF++, exclude points below 75th percentile (keep top 25% quality)
+        min_value = np.percentile(chrf_values_list, 75) if len(chrf_values_list) > 1 else None
+        ranks = compute_pareto_ranks(chrf_costs, chrf_values_list, min_value=min_value)
         for rank, indices in ranks.items():
             for idx in indices:
                 pareto_ranks_chrf[chrf_keys[idx]] = rank
@@ -498,7 +503,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     pareto_ranks_termacc = {}
     if termacc_costs and termacc_values_list:
-        ranks = compute_pareto_ranks(termacc_costs, termacc_values_list)
+        # For TermAcc, exclude points below 75th percentile (keep top 25% quality)
+        min_value = np.percentile(termacc_values_list, 75) if len(termacc_values_list) > 1 else None
+        ranks = compute_pareto_ranks(termacc_costs, termacc_values_list, min_value=min_value)
         for rank, indices in ranks.items():
             for idx in indices:
                 pareto_ranks_termacc[termacc_keys[idx]] = rank
@@ -614,7 +621,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for WMT25+Term dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ and TermAcc performance vs. cost trade-offs.}")
+    lines.append("\\caption{Main results for WMT25+Term dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ and TermAcc performance vs. cost trade-offs. Only systems above the 75th percentile in performance are considered for Pareto ranking.}")
     lines.append("\\label{tab:main_results_wmt25}")
     lines.append("\\end{table*}")
     

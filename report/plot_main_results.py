@@ -1020,13 +1020,14 @@ def plot_dataset_avg_price(
     print(f"Created AVG plot: {output_path}")
 
 
-def compute_pareto_ranks(costs: List[float], values: List[float]) -> Dict[int, List[int]]:
+def compute_pareto_ranks(costs: List[float], values: List[float], min_value: Optional[float] = None) -> Dict[int, List[int]]:
     """
     Compute Pareto optimality ranks for points where higher value and lower cost are both better.
     
     Args:
         costs: List of cost values (lower is better)
         values: List of performance values (higher is better)
+        min_value: Optional minimum value threshold. Points below this threshold are excluded from ranking.
     
     Returns:
         Dictionary mapping rank -> list of point indices
@@ -1035,12 +1036,24 @@ def compute_pareto_ranks(costs: List[float], values: List[float]) -> Dict[int, L
     if n == 0:
         return {}
     
+    # Filter out points below minimum value threshold if specified
+    valid_indices = []
+    if min_value is not None:
+        for i in range(n):
+            if values[i] >= min_value:
+                valid_indices.append(i)
+    else:
+        valid_indices = list(range(n))
+    
+    if not valid_indices:
+        return {}
+    
     # Rank 1: Pareto optimal points (not dominated by any other point)
     # A point is dominated if there exists another point with both higher value AND lower cost
     rank1_indices = []
-    for i in range(n):
+    for i in valid_indices:
         is_dominated = False
-        for j in range(n):
+        for j in valid_indices:
             if i != j:
                 # Point j dominates point i if: value[j] > value[i] AND cost[j] < cost[i]
                 if values[j] > values[i] and costs[j] < costs[i]:
@@ -1051,7 +1064,7 @@ def compute_pareto_ranks(costs: List[float], values: List[float]) -> Dict[int, L
     
     # Rank 2: Points dominated only by rank 1 points
     rank2_indices = []
-    for i in range(n):
+    for i in valid_indices:
         if i in rank1_indices:
             continue
         # Check if dominated only by rank 1 points
@@ -1061,7 +1074,7 @@ def compute_pareto_ranks(costs: List[float], values: List[float]) -> Dict[int, L
             if values[j] > values[i] and costs[j] < costs[i]:
                 dominated_by_rank1 = True
                 # Check if also dominated by non-rank1 points
-                for k in range(n):
+                for k in valid_indices:
                     if k != i and k not in rank1_indices:
                         if values[k] > values[i] and costs[k] < costs[i]:
                             also_dominated_by_others = True
