@@ -35,15 +35,14 @@ calculate_cost = plot_module.calculate_cost
 MODEL_DISPLAY_NAMES = plot_module.MODEL_DISPLAY_NAMES
 
 # Workflows to analyze (directory names as they appear in outputs/)
+# Note: Directory names are the acronyms (IRB, MaMT, MAATS_multi), not the full workflow names
 TARGET_WORKFLOWS = {
     "IRB": "IRB",
     "IRB.term": "IRB",
-    "IRB_refine": "IRB",
-    "IRB_refine.term": "IRB",
-    "MaMT_translate_postedit_proofread": "MaMT",
-    "MaMT_translate_postedit_proofread.term": "MaMT",
-    "MAATS_multi_agents": "MAATS_multi",
-    "MAATS_multi_agents.term": "MAATS_multi"
+    "MaMT": "MaMT",
+    "MaMT.term": "MaMT",
+    "MAATS_multi": "MAATS_multi",
+    "MAATS_multi.term": "MAATS_multi"
 }
 
 # Base models
