@@ -34,11 +34,16 @@ parse_report = plot_module.parse_report
 calculate_cost = plot_module.calculate_cost
 MODEL_DISPLAY_NAMES = plot_module.MODEL_DISPLAY_NAMES
 
-# Workflows to analyze
+# Workflows to analyze (directory names as they appear in outputs/)
 TARGET_WORKFLOWS = {
+    "IRB": "IRB",
+    "IRB.term": "IRB",
     "IRB_refine": "IRB",
+    "IRB_refine.term": "IRB",
     "MaMT_translate_postedit_proofread": "MaMT",
-    "MAATS_multi_agents": "MAATS_multi"
+    "MaMT_translate_postedit_proofread.term": "MaMT",
+    "MAATS_multi_agents": "MAATS_multi",
+    "MAATS_multi_agents.term": "MAATS_multi"
 }
 
 # Base models
@@ -94,8 +99,23 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
     """
     reports_by_dataset = defaultdict(lambda: defaultdict(list))
     
+    print(f"DEBUG: Looking for reports in {len(outputs_dirs)} output directories")
+    print(f"DEBUG: Target workflows: {list(TARGET_WORKFLOWS.keys())}")
+    print(f"DEBUG: Target base models: {BASE_MODELS}")
+    
     for outputs_dir in outputs_dirs:
         if not outputs_dir.exists():
+            print(f"DEBUG: Outputs directory does not exist: {outputs_dir}")
+            continue
+        
+        print(f"DEBUG: Scanning {outputs_dir}")
+        
+        # Check if outputs_dir has any subdirectories
+        try:
+            subdirs = [d.name for d in outputs_dir.iterdir() if d.is_dir()]
+            print(f"DEBUG: Found subdirectories in {outputs_dir}: {subdirs}")
+        except Exception as e:
+            print(f"DEBUG: Error listing {outputs_dir}: {e}")
             continue
         
         # Iterate through dataset directories
@@ -104,26 +124,49 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                 continue
             
             dataset = dataset_dir.name
+            print(f"DEBUG: Checking dataset: {dataset}")
             if dataset not in ["dolfin", "wmt25"]:
+                print(f"DEBUG: Skipping dataset {dataset} (not dolfin or wmt25)")
                 continue
             
+            print(f"DEBUG: Processing dataset: {dataset}")
+            
             # Iterate through language pair directories
+            lang_pairs_found = []
+            for lang_pair_dir in dataset_dir.iterdir():
+                if not lang_pair_dir.is_dir():
+                    continue
+                lang_pairs_found.append(lang_pair_dir.name)
+            
+            print(f"DEBUG: Found {len(lang_pairs_found)} language pairs in {dataset}: {lang_pairs_found}")
+            
             for lang_pair_dir in dataset_dir.iterdir():
                 if not lang_pair_dir.is_dir():
                     continue
                 
                 lang_pair = lang_pair_dir.name
                 
+                # List all workflow directories found
+                workflows_found = []
+                for wf_dir in lang_pair_dir.iterdir():
+                    if wf_dir.is_dir():
+                        workflows_found.append(wf_dir.name)
+                print(f"DEBUG: Found {len(workflows_found)} workflow directories in {dataset}/{lang_pair}: {workflows_found}")
+                
                 # Iterate through workflow directories
                 for workflow_dir in lang_pair_dir.iterdir():
                     if not workflow_dir.is_dir():
                         continue
                     
-                    workflow_name = workflow_dir.name
+                    workflow_dir_name = workflow_dir.name
+                    print(f"DEBUG: Checking workflow directory: {workflow_dir_name} in {dataset}/{lang_pair}")
                     
-                    # Check if this is one of our target workflows
-                    if workflow_name not in TARGET_WORKFLOWS:
+                    # Check if this is one of our target workflows (by directory name)
+                    if workflow_dir_name not in TARGET_WORKFLOWS:
+                        print(f"DEBUG: Skipping workflow {workflow_dir_name} (not in TARGET_WORKFLOWS)")
                         continue
+                    
+                    print(f"DEBUG: Found target workflow directory: {workflow_dir_name} in {dataset}/{lang_pair}")
                     
                     # Iterate through model directories
                     for model_dir in workflow_dir.iterdir():
@@ -141,20 +184,28 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                         
                         # Only include if base model is one of our target base models
                         if base_model not in BASE_MODELS:
+                            print(f"DEBUG: Skipping {model} - base_model {base_model} not in BASE_MODELS")
                             continue
                         
                         # Check if it's a combination or single model
                         # We want: gpt-4-1, gpt-oss-120b, gpt-oss-120b+gpt-4-1, gpt-4-1+gpt-oss-120b
                         if postedit_model is not None and postedit_model not in BASE_MODELS:
+                            print(f"DEBUG: Skipping {model} - postedit_model {postedit_model} not in BASE_MODELS")
                             continue
                         
                         report_path = model_dir / "report.json"
                         if not report_path.exists():
+                            print(f"DEBUG: Report.json not found: {report_path}")
                             continue
                         
+                        print(f"DEBUG: Parsing report: {report_path}")
                         report_data = parse_report(report_path)
                         if report_data is None:
+                            print(f"DEBUG: Failed to parse report (incomplete or invalid): {report_path}")
                             continue
+                        
+                        print(f"DEBUG: Successfully parsed report for {workflow_dir_name}/{model}: chrF={report_data.get('chrf')}, tokens={report_data.get('tokens_input')}+{report_data.get('tokens_output')}")
+                        print(f"DEBUG: Workflow name stored in report.json: '{report_data.get('workflow')}'")
                         
                         # Add model name to report data
                         report_data["model_name"] = model
@@ -169,11 +220,25 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                             summary = full_data.get("summary", {})
                             report_data["base_model_tokens_input"] = summary.get("total_base_model_tokens_input", 0)
                             report_data["base_model_tokens_output"] = summary.get("total_base_model_tokens_output", 0)
-                        except (json.JSONDecodeError, KeyError, FileNotFoundError):
+                            print(f"DEBUG: Base model tokens: {report_data['base_model_tokens_input']}+{report_data['base_model_tokens_output']}")
+                        except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
                             report_data["base_model_tokens_input"] = 0
                             report_data["base_model_tokens_output"] = 0
+                            print(f"DEBUG: Could not extract base_model_tokens: {e}")
                         
                         reports_by_dataset[dataset][lang_pair].append(report_data)
+                        print(f"DEBUG: Added report to collection (total for {dataset}/{lang_pair}: {len(reports_by_dataset[dataset][lang_pair])})")
+    
+    # Print summary
+    print(f"\nDEBUG: Collection summary:")
+    for dataset, lang_pairs in reports_by_dataset.items():
+        total_reports = sum(len(reports) for reports in lang_pairs.values())
+        print(f"  {dataset}: {total_reports} reports across {len(lang_pairs)} language pairs")
+        for lang_pair, reports in lang_pairs.items():
+            if reports:
+                print(f"    {lang_pair}: {len(reports)} reports")
+                for r in reports:
+                    print(f"      - {r.get('workflow')}/{r.get('model_name')}: chrF={r.get('chrf'):.2f}")
     
     return reports_by_dataset
 
@@ -272,9 +337,17 @@ def aggregate_data_by_workflow_model(
         workflow_name = report.get("workflow", "")
         workflow = get_workflow_acronym(workflow_name)
         
+        print(f"DEBUG: Processing report - workflow_name in report.json: '{workflow_name}', acronym: '{workflow}'")
+        
         # Only include target workflows
-        if workflow not in TARGET_WORKFLOWS.values():
+        # Note: TARGET_WORKFLOWS.values() contains the acronyms: "IRB", "MaMT", "MAATS_multi"
+        target_acronyms = set(TARGET_WORKFLOWS.values())
+        print(f"DEBUG: Target acronyms: {target_acronyms}")
+        if workflow not in target_acronyms:
+            print(f"DEBUG: Skipping workflow '{workflow}' (from '{workflow_name}') - not in target workflows {target_acronyms}")
             continue
+        
+        print(f"DEBUG: Workflow '{workflow}' (from '{workflow_name}') matches target workflows")
         
         model_name = report.get("model_name", "")
         base_model = report.get("base_model")
@@ -302,7 +375,10 @@ def aggregate_data_by_workflow_model(
         )
         
         if cost is None:
+            print(f"DEBUG: Failed to calculate cost for {workflow}/{model_name}")
             continue
+        
+        print(f"DEBUG: Calculated cost for {workflow}/{model_name}: ${cost:.4f} (base_tokens: {base_model_tokens_input}+{base_model_tokens_output}, main_tokens: {tokens_input}+{tokens_output})")
         
         key = (workflow, model_name)
         aggregated[key]["chrf_values"].append(chrf)
@@ -316,6 +392,7 @@ def aggregate_data_by_workflow_model(
     result = {}
     for (workflow, model_name), data in aggregated.items():
         if not data["chrf_values"] or not data["costs"]:
+            print(f"DEBUG: Skipping {workflow}/{model_name} - no valid data (chrf_values: {len(data['chrf_values'])}, costs: {len(data['costs'])})")
             continue
         
         result[(workflow, model_name)] = {
@@ -324,7 +401,9 @@ def aggregate_data_by_workflow_model(
             "base_model": data["base_model"],
             "postedit_model": data["postedit_model"]
         }
+        print(f"DEBUG: Aggregated {workflow}/{model_name}: chrF={result[(workflow, model_name)]['chrf']:.2f}, cost=${result[(workflow, model_name)]['cost']:.4f}")
     
+    print(f"\nDEBUG: Aggregation summary: {len(result)} workflow+model combinations")
     return result
 
 
