@@ -706,7 +706,8 @@ def save_single_sample(
     """
     Save a single sample incrementally.
     Updates report.json after each sample, but only computes summary statistics
-    when all expected samples are successfully completed.
+    when all expected samples are processed (successful or failed).
+    Failed samples are NOT added to the report (they will be re-run on resume).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -752,68 +753,76 @@ def save_single_sample(
     if "expected_total_samples" not in report:
         report["expected_total_samples"] = expected_total_samples
     
-    # Get existing sample IDs to check for duplicates
+    # Remove any existing failed samples from the report (they should be re-run)
+    # Keep only successful samples
+    report["samples"] = [s for s in report["samples"] if not s.get("error")]
+    
+    # Get existing sample IDs to check for duplicates (only successful samples)
     existing_sample_ids = get_processed_sample_ids(report)
     
     sample_id = result.get("sample_id", str(result["sample_idx"]))
     lang_pair = result.get("lang_pair", "")
     sample_key = str(sample_id) if sample_id != str(result["sample_idx"]) else f"{lang_pair}_{result['sample_idx']}"
     
-    # Skip if already processed (shouldn't happen in incremental save, but safety check)
+    # Skip if already processed successfully (shouldn't happen in incremental save, but safety check)
     if sample_key in existing_sample_ids:
         return
     
-    # Save output files if sample succeeded
-    if not result.get("error"):
-        sample_idx = result["sample_idx"]
-        outputs = result["outputs"]
-        
-        # Use sample_id in filename if it's different from sample_idx, otherwise use sample_idx
-        if sample_id != str(sample_idx) and sample_id:
-            safe_id = str(sample_id).replace("/", "_").replace("\\", "_")[:50]
-            file_prefix = f"sample_{safe_id}"
-        else:
-            file_prefix = f"sample_{sample_idx:05d}"
-        
-        # Save each agent's output
-        for agent_id, output in enumerate(outputs):
-            output_file = output_dir / f"{file_prefix}_agent_{agent_id}.txt"
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(output)
+    # If sample has an error, don't add it to the report (it will be re-run on resume)
+    if result.get("error"):
+        # Don't add failed samples to the report
+        # Update counts to reflect that we attempted this sample but it failed
+        # But don't count it in total_samples since we're not keeping it
+        return
     
-    # Create sample data
+    # Sample succeeded - save output files
+    sample_idx = result["sample_idx"]
+    outputs = result["outputs"]
+    
+    # Use sample_id in filename if it's different from sample_idx, otherwise use sample_idx
+    if sample_id != str(sample_idx) and sample_id:
+        safe_id = str(sample_id).replace("/", "_").replace("\\", "_")[:50]
+        file_prefix = f"sample_{safe_id}"
+    else:
+        file_prefix = f"sample_{sample_idx:05d}"
+    
+    # Save each agent's output
+    for agent_id, output in enumerate(outputs):
+        output_file = output_dir / f"{file_prefix}_agent_{agent_id}.txt"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(output)
+    
+    # Create sample data (only for successful samples)
     sample_data = {
         "sample_idx": result["sample_idx"],
         "sample_id": sample_id,
         "source_lang": result["source_lang"],
         "target_lang": result["target_lang"],
         "lang_pair": lang_pair,
-        "error": result.get("error"),
+        "error": None,  # No error for successful samples
         "warnings": result.get("warnings"),
+        "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
+        "bleu_scores": [e.get("bleu_score") for e in result["evaluations"]],
+        "term_success_rates": [e.get("term_success_rate", -1.0) for e in result["evaluations"]],
+        "tokens_input": result["tokens_input"],
+        "tokens_output": result["tokens_output"],
+        "base_model_tokens_input": result.get("base_model_tokens_input", 0),
+        "base_model_tokens_output": result.get("base_model_tokens_output", 0),
+        "latency": result["latency"]
     }
     
-    if not result.get("error"):
-        sample_data.update({
-            "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
-            "bleu_scores": [e.get("bleu_score") for e in result["evaluations"]],
-            "term_success_rates": [e.get("term_success_rate", -1.0) for e in result["evaluations"]],
-            "tokens_input": result["tokens_input"],
-            "tokens_output": result["tokens_output"],
-            "base_model_tokens_input": result.get("base_model_tokens_input", 0),
-            "base_model_tokens_output": result.get("base_model_tokens_output", 0),
-            "latency": result["latency"]
-        })
-    
-    # Append sample to report
+    # Append successful sample to report
     report["samples"].append(sample_data)
     
-    # Update counts
+    # Update counts (only successful samples are in the report)
     report["total_samples"] = len(report["samples"])
-    report["successful_samples"] = sum(1 for s in report["samples"] if not s.get("error"))
-    report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
+    report["successful_samples"] = report["total_samples"]  # All samples in report are successful
+    report["failed_samples"] = 0  # Failed samples are not kept in report
     report["warnings_count"] = sum(1 for s in report["samples"] if s.get("warnings"))
     
-    # Only compute summary statistics if all expected samples are successfully completed
+    # Compute summary statistics when we have processed all expected samples
+    # (i.e., when successful_samples == expected_total_samples)
+    # This means all samples were processed successfully
     if report["successful_samples"] == expected_total_samples:
         report["summary"] = compute_summary_statistics(report["samples"])
     else:
@@ -855,8 +864,15 @@ def save_outputs(
             try:
                 with open(report_file, 'r', encoding='utf-8') as f:
                     report = json.load(f)
+                
+                # Remove any failed samples from the report
+                report["samples"] = [s for s in report["samples"] if not s.get("error")]
+                report["total_samples"] = len(report["samples"])
+                report["successful_samples"] = report["total_samples"]
+                report["failed_samples"] = 0
+                
                 expected_total = report.get("expected_total_samples", report.get("total_samples", 0))
-                # Compute summary if all samples are done
+                # Compute summary if all samples are done successfully
                 if report.get("successful_samples", 0) == expected_total:
                     report["summary"] = compute_summary_statistics(report["samples"])
                 else:
@@ -1005,6 +1021,7 @@ def save_outputs(
             "warnings": result.get("warnings"),  # Include warnings
         }
         
+        # Only add successful samples to the report (failed samples will be re-run on resume)
         if not result.get("error"):
             sample_data.update({
                 "chrf_scores": [e["chrf_score"] for e in result["evaluations"]],
@@ -1032,17 +1049,23 @@ def save_outputs(
                     bleu_scores.append(last_eval["bleu_score"])
                 if last_eval.get("term_success_rate", -1.0) >= 0:
                     term_success_rates.append(last_eval["term_success_rate"])
-        
-        report["samples"].append(sample_data)
+            
+            # Only append successful samples
+            report["samples"].append(sample_data)
+        # Failed samples are not added to the report (they will be re-run on resume)
     
-    # Update report statistics
+    # Update report statistics (only successful samples are in the report)
     report["total_samples"] = len(report["samples"])
-    report["successful_samples"] = sum(1 for s in report["samples"] if not s.get("error"))
-    report["failed_samples"] = sum(1 for s in report["samples"] if s.get("error"))
+    report["successful_samples"] = report["total_samples"]  # All samples in report are successful
+    report["failed_samples"] = 0  # Failed samples are not kept in report
     report["warnings_count"] = sum(1 for s in report["samples"] if s.get("warnings"))  # Count samples with warnings
     
     # Compute summary statistics (always computed in batch save_outputs, since it's called at the end)
-    report["summary"] = compute_summary_statistics(report["samples"])
+    # Only compute if we have samples
+    if report["samples"]:
+        report["summary"] = compute_summary_statistics(report["samples"])
+    else:
+        report["summary"] = {}
     
     # Save report
     with open(report_file, "w", encoding="utf-8") as f:
@@ -1275,6 +1298,11 @@ def main():
                     print(f"  ✗ Failed to ensure base_model zero-shot exists. Skipping {lang_pair}...")
                     continue
             
+            # Determine expected total samples
+            expected_total_samples = len(pair_samples)
+            if args.max_samples:
+                expected_total_samples = min(expected_total_samples, args.max_samples)
+            
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
             if args.resume:
@@ -1283,12 +1311,16 @@ def main():
                 existing_report = load_existing_report(report_file)
                 if existing_report:
                     processed_sample_ids = get_processed_sample_ids(existing_report)
+                    successful_samples = existing_report.get("successful_samples", 0)
+                    expected_total = existing_report.get("expected_total_samples", expected_total_samples)
+                    
                     print(f"  Found {len(processed_sample_ids)} already processed samples")
-            
-            # Determine expected total samples
-            expected_total_samples = len(pair_samples)
-            if args.max_samples:
-                expected_total_samples = min(expected_total_samples, args.max_samples)
+                    print(f"  Successful: {successful_samples}/{expected_total}")
+                    
+                    # Check if already complete
+                    if successful_samples >= expected_total:
+                        print(f"  ✓ All {expected_total} samples already processed successfully. Skipping {lang_pair}...")
+                        continue
             
             # Process samples with incremental saving
             print("\nProcessing samples...")
@@ -1469,6 +1501,11 @@ def main():
                     print(f"  ✗ Failed to ensure base_model zero-shot exists. Skipping {lang_pair}...")
                     continue
             
+            # Determine expected total samples
+            expected_total_samples = len(samples)
+            if args.max_samples:
+                expected_total_samples = min(expected_total_samples, args.max_samples)
+            
             # Check for existing processed samples if resuming
             processed_sample_ids = set()
             if args.resume:
@@ -1477,12 +1514,16 @@ def main():
                 existing_report = load_existing_report(report_file)
                 if existing_report:
                     processed_sample_ids = get_processed_sample_ids(existing_report)
+                    successful_samples = existing_report.get("successful_samples", 0)
+                    expected_total = existing_report.get("expected_total_samples", expected_total_samples)
+                    
                     print(f"  Found {len(processed_sample_ids)} already processed samples")
-            
-            # Determine expected total samples
-            expected_total_samples = len(samples)
-            if args.max_samples:
-                expected_total_samples = min(expected_total_samples, args.max_samples)
+                    print(f"  Successful: {successful_samples}/{expected_total}")
+                    
+                    # Check if already complete
+                    if successful_samples >= expected_total:
+                        print(f"  ✓ All {expected_total} samples already processed successfully. Skipping {lang_pair}...")
+                        continue
             
             # Process samples with incremental saving
             print("\nProcessing samples...")
