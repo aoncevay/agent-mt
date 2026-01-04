@@ -1172,10 +1172,31 @@ def plot_dataset_avg_price_pareto(
     Create Pareto optimality plot for AVG dataset results.
     Shows rank 1 and rank 2 Pareto optimal points with gold/silver stars.
     """
+    # Filter lang pairs to match table logic (use same lang pairs as tables)
+    # Import lang pair lists from write_tables_paper to ensure consistency
+    import importlib.util
+    table_script_path = Path(__file__).parent / "write_tables_paper.py"
+    spec = importlib.util.spec_from_file_location("write_tables_paper", table_script_path)
+    table_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(table_module)
+    
+    if dataset == "dolfin":
+        valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
+    elif dataset == "wmt25" and is_term:
+        valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
+    else:
+        valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
+    
+    # Filter reports_by_lang_pair to only include valid lang pairs
+    filtered_reports_by_lang_pair = {
+        lp: reports for lp, reports in reports_by_lang_pair.items() 
+        if lp in valid_lang_pairs
+    }
+    
     # Aggregate data across language pairs (same logic as plot_dataset_avg_price)
     aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
     
-    for lang_pair, reports in reports_by_lang_pair.items():
+    for lang_pair, reports in filtered_reports_by_lang_pair.items():
         for report in reports:
             workflow_name = report.get("workflow", "")
             workflow = get_workflow_acronym(workflow_name)
