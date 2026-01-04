@@ -299,7 +299,9 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                         continue
                     
                     # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-                    if model in ["gpt-5", "gpt-4-1-mini"] and workflow_acronym != "ZS":
+                    # Check if workflow is zero-shot (either "ZS" or "ZS.term")
+                    is_zero_shot = workflow_acronym == "ZS" or workflow_acronym.startswith("ZS.")
+                    if model in ["gpt-5", "gpt-4-1-mini"] and not is_zero_shot:
                         continue
                     
                     # Mark as seen and add to reports
