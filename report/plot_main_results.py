@@ -95,7 +95,6 @@ WORKFLOW_DISPLAY_NAMES = {
 MODEL_MARKERS = {
     "qwen3-32b": "o",           # circle
     "qwen3-235b": "s",          # square
-    "gpt-oss-120b": "v",        # triangle down
     "gpt-4-1": "P",             # plus (filled)
     "gpt-4-1-nano": "D",        # diamond
     "gpt-5": "H",               # hexagon (filled) - for zero-shot baseline
@@ -106,7 +105,6 @@ MODEL_MARKERS = {
 MODEL_DISPLAY_NAMES = {
     "qwen3-32b": "Qwen 3 32B",
     "qwen3-235b": "Qwen 3 235B",
-    "gpt-oss-120b": "GPT-OSS 120B",
     "gpt-4-1": "GPT-4.1",
     "gpt-4-1-nano": "GPT-4.1 nano",
     "gpt-5": "GPT-5",

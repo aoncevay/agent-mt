@@ -23,7 +23,9 @@ MODEL_DISPLAY_NAMES = plot_module.MODEL_DISPLAY_NAMES
 get_model_base_cost = plot_module.get_model_base_cost
 
 # Model order (from most expensive to least expensive)
-MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-4-1-nano"]
+# Note: The get_models_sorted_by_cost() function will sort by base cost, but this order
+# provides a fallback. Based on pricing: GPT-5 > GPT-4.1 > GPT-4.1-mini > qwen3-235b > qwen3-32b > gpt-4-1-nano
+MODEL_ORDER = ["gpt-5", "gpt-4-1", "gpt-4-1-mini", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
 
 
 def format_price(price: float) -> str:
