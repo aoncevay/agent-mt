@@ -1049,9 +1049,9 @@ def save_outputs(
                     bleu_scores.append(last_eval["bleu_score"])
                 if last_eval.get("term_success_rate", -1.0) >= 0:
                     term_success_rates.append(last_eval["term_success_rate"])
-            
+        
             # Only append successful samples
-            report["samples"].append(sample_data)
+        report["samples"].append(sample_data)
         # Failed samples are not added to the report (they will be re-run on resume)
     
     # Update report statistics (only successful samples are in the report)
@@ -1523,7 +1523,7 @@ def main():
                     # Check if already complete
                     if successful_samples >= expected_total:
                         print(f"  ✓ All {expected_total} samples already processed successfully. Skipping {lang_pair}...")
-                        continue
+                continue
             
             # Process samples with incremental saving
             print("\nProcessing samples...")
