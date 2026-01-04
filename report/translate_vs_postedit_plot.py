@@ -555,8 +555,18 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
     ax.set_ylabel('chrF++', fontsize=10)
     ax.set_title(dataset_name, fontsize=11, fontweight='bold')
     
-    # Auto-scale y-axis
+    # Auto-scale y-axis, then adjust ticks to use steps of at least 5
     ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    # Round to nearest 5 for cleaner ticks
+    y_min_rounded = 5 * (int(y_min) // 5)
+    y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+    # Generate tick locations with step of at least 5
+    step = max(5, (y_max_rounded - y_min_rounded) // 10)  # Aim for ~10 ticks, min step 5
+    step = 5 * ((step + 4) // 5)  # Round step up to nearest 5
+    y_ticks = list(range(y_min_rounded, y_max_rounded + step, step))
+    ax.set_yticks(y_ticks)
+    ax.set_ylim(y_min_rounded, y_max_rounded)
     
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)

@@ -180,8 +180,28 @@ def parse_report(report_path: Path) -> Optional[Dict]:
             return None  # Incomplete experiment
         
         summary = data.get("summary", {})
-        avg_chrf = summary.get("avg_chrf_score")
-        avg_term_acc = summary.get("avg_term_success_rate")
+        model = data.get("model", "")
+        
+        # For gpt-oss-* models or combinations ending with +gpt-oss-*, prefer reviewed_* scores if available
+        # (these have reasoning blocks removed from the final agent output)
+        # Check if model is gpt-oss-* or ends with +gpt-oss-* (e.g., "gpt-4-1+gpt-oss-120b")
+        use_reviewed_scores = False
+        if model.startswith("gpt-oss-"):
+            use_reviewed_scores = True
+        elif "+" in model:
+            # Check if the part after "+" (postedit model) starts with "gpt-oss-"
+            parts = model.rsplit("+", 1)  # Split from right to get last part
+            if len(parts) == 2 and parts[1].startswith("gpt-oss-"):
+                # Combination where the final/postedit model is gpt-oss-*
+                use_reviewed_scores = True
+        
+        if use_reviewed_scores:
+            avg_chrf = summary.get("reviewed_avg_chrf_score") or summary.get("avg_chrf_score")
+            avg_term_acc = summary.get("reviewed_avg_term_success_rate") or summary.get("avg_term_success_rate")
+        else:
+            avg_chrf = summary.get("avg_chrf_score")
+            avg_term_acc = summary.get("avg_term_success_rate")
+        
         total_tokens_input = summary.get("total_tokens_input", 0)
         total_tokens_output = summary.get("total_tokens_output", 0)
         total_tokens = total_tokens_input + total_tokens_output
