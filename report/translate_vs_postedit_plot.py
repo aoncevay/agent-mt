@@ -514,12 +514,12 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         # Draw lines if we have at least 2 points (skip if experiment is still running)
         for line_num, valid_points in enumerate([valid_points_line1, valid_points_line2], 1):
             if len(valid_points) >= 2:
-                try:
+            try:
                     costs = [p[1]["cost"] for p in valid_points]
                     chrfs = [p[1]["chrf"] for p in valid_points]
                     ax.plot(costs, chrfs, color=color, linestyle=':', linewidth=1.0, 
-                            alpha=0.6, zorder=1)
-                except (KeyError, TypeError) as e:
+                        alpha=0.6, zorder=1)
+            except (KeyError, TypeError) as e:
                     print(f"DEBUG: Error plotting line {line_num} for {workflow}: {e}")
         
         # Collect all unique points to plot markers (only plot points that exist)

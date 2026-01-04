@@ -18,6 +18,7 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from collections import defaultdict
 
 # Add src to path
 import sys
@@ -122,14 +123,21 @@ def load_texts_from_dataset(
         if dataset == "dolfin":
             # DOLFIN: Load from dolfin_test_{lang_pair}.jsonl
             data_dir = BASE_DATA_DIR / "dolfin"
+            if not data_dir.exists():
+                print(f"  Warning: Data directory does not exist: {data_dir}")
+                return None, None, None
+            
             loader = DOLFINDataLoader(data_dir, lang_pair)
             samples = loader.load_samples()
             
             # Match by sample_idx (DOLFIN samples are ordered by index)
-            if sample_idx < len(samples):
+            if sample_idx is not None and sample_idx < len(samples):
                 sample = samples[sample_idx]
                 source_text, reference_text, terminology = loader.extract_texts(sample, source_lang, target_lang)
                 return source_text, reference_text, terminology
+            else:
+                print(f"  Warning: sample_idx {sample_idx} out of range (max: {len(samples)-1})")
+                return None, None, None
         
         elif dataset == "wmt25":
             # WMT25: Load from wmt25-terminology-track2/full_data_{year}.jsonl
@@ -151,7 +159,7 @@ def load_texts_from_dataset(
                     break
             
             # If no match by ID, try by index (WMT25 samples might be ordered)
-            if matched_sample is None and sample_idx < len(samples):
+            if matched_sample is None and sample_idx is not None and sample_idx < len(samples):
                 matched_sample = samples[sample_idx]
             
             if matched_sample:
@@ -217,7 +225,7 @@ def recompute_metrics_for_sample(
     return chrf_score, term_success_rate
 
 
-def process_report(report_path: Path) -> bool:
+def process_report(report_path: Path) -> Tuple[bool, Optional[str], int, int]:
     """
     Process a single report.json file and update it with reviewed scores.
     
@@ -225,7 +233,11 @@ def process_report(report_path: Path) -> bool:
         report_path: Path to report.json file
     
     Returns:
-        True if successfully processed, False otherwise
+        Tuple of (success, model_name, total_samples, empty_count)
+        - success: True if successfully processed, False otherwise
+        - model_name: Model name (e.g., "gpt-oss-120b") or None
+        - total_samples: Number of samples processed
+        - empty_count: Number of samples that were empty after cleaning
     """
     output_dir = report_path.parent
     
@@ -235,7 +247,7 @@ def process_report(report_path: Path) -> bool:
             report = json.load(f)
     except Exception as e:
         print(f"Error loading {report_path}: {e}")
-        return False
+        return False, None, 0, 0
     
     model = report.get("model", "")
     dataset_field = report.get("dataset", "")
@@ -282,14 +294,14 @@ def process_report(report_path: Path) -> bool:
                 should_process = True
     
     if not should_process:
-        return False
+        return False, None, 0, 0
     
     print(f"Processing: {dataset} / {lang_pair} / {workflow} / {model}")
     
     samples = report.get("samples", [])
     if not samples:
         print("  No samples in report")
-        return False
+        return False, model, 0, 0
     
     # Collect reviewed scores (all samples, including empty ones)
     reviewed_chrf_scores = []
@@ -298,6 +310,7 @@ def process_report(report_path: Path) -> bool:
     reviewed_noempty_chrf_scores = []
     reviewed_noempty_term_success_rates = []
     processed_count = 0
+    empty_count = 0  # Count of samples that were empty after cleaning
     skipped_count = 0
     skipped_no_source_ref = 0
     skipped_no_file = 0
@@ -345,9 +358,11 @@ def process_report(report_path: Path) -> bool:
             reviewed_chrf_scores.append(chrf_score)
             processed_count += 1
             
-            # Only add to noempty scores if output was not empty (chrf_score > 0 indicates non-empty)
-            # Empty outputs after cleaning will have chrf_score = 0 (or very close to 0)
-            if chrf_score > 0.01:  # Small threshold to account for floating point precision
+            # Track empty samples (content failures)
+            if chrf_score <= 0.01:  # Empty or near-empty output after cleaning
+                empty_count += 1
+            else:
+                # Only add to noempty scores if output was not empty
                 reviewed_noempty_chrf_scores.append(chrf_score)
         
         if term_success_rate is not None:
@@ -388,7 +403,6 @@ def process_report(report_path: Path) -> bool:
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
-        empty_count = len(reviewed_chrf_scores) - len(reviewed_noempty_chrf_scores)
         print(f"  ✓ Processed {processed_count} samples, skipped {skipped_count}")
         if skipped_count > 0:
             print(f"    Skipped: {skipped_error} with errors, {skipped_no_source_ref} missing source/ref, {skipped_no_file} missing output files")
@@ -402,10 +416,10 @@ def process_report(report_path: Path) -> bool:
             print(f"    Reviewed avg term acc: {summary['reviewed_avg_term_success_rate']:.4f} (all {len(reviewed_term_success_rates)} samples)")
             if reviewed_noempty_term_success_rates:
                 print(f"    Reviewed avg term acc (noempty): {summary['reviewed_noempty_avg_term_success_rate']:.4f} ({len(reviewed_noempty_term_success_rates)} non-empty samples)")
-        return True
+        return True, model, processed_count, empty_count
     except Exception as e:
         print(f"  Error saving report: {e}")
-        return False
+        return False, model, processed_count, empty_count
 
 
 def find_reports(outputs_dirs: List[Path]) -> List[Path]:
@@ -462,10 +476,16 @@ def main():
     
     processed = 0
     failed = 0
+    # Statistics by model: model_name -> (total_samples, empty_count)
+    model_stats = defaultdict(lambda: {"total": 0, "empty": 0})
     
     for report_path in reports:
-        if process_report(report_path):
+        success, model_name, total_samples, empty_count = process_report(report_path)
+        if success:
             processed += 1
+            if model_name:
+                model_stats[model_name]["total"] += total_samples
+                model_stats[model_name]["empty"] += empty_count
         else:
             failed += 1
         print()
@@ -473,6 +493,26 @@ def main():
     print(f"Processed: {processed}")
     if failed > 0:
         print(f"Failed: {failed}")
+    print()
+    
+    # Print content fail statistics by model
+    if model_stats:
+        print("=" * 80)
+        print("Content Fail Statistics by Model")
+        print("=" * 80)
+        print("Content fail = output was pure reasoning (empty after removing reasoning blocks)")
+        print()
+        print(f"{'Model':<25} {'Total Samples':<15} {'Content Fails':<15} {'Fail Ratio':<15}")
+        print("-" * 80)
+        
+        # Sort by model name for consistent output
+        for model_name in sorted(model_stats.keys()):
+            stats = model_stats[model_name]
+            total = stats["total"]
+            empty = stats["empty"]
+            fail_ratio = (empty / total * 100) if total > 0 else 0.0
+            print(f"{model_name:<25} {total:<15} {empty:<15} {fail_ratio:>6.2f}%")
+        print()
     
     return 0
 

@@ -95,7 +95,6 @@ WORKFLOW_DISPLAY_NAMES = {
 MODEL_MARKERS = {
     "qwen3-32b": "o",           # circle
     "qwen3-235b": "s",          # square
-    "gpt-oss-20b": "^",         # triangle up
     "gpt-oss-120b": "v",        # triangle down
     "gpt-4-1": "P",             # plus (filled)
     "gpt-4-1-nano": "D"         # diamond
@@ -105,10 +104,9 @@ MODEL_MARKERS = {
 MODEL_DISPLAY_NAMES = {
     "qwen3-32b": "Qwen 3 32B",
     "qwen3-235b": "Qwen 3 235B",
-    "gpt-oss-20b": "GPT-OSS 20B",
     "gpt-oss-120b": "GPT-OSS 120B",
     "gpt-4-1": "GPT-4.1",
-    "gpt-4-1-nano": "GPT-4.1 Nano"
+    "gpt-4-1-nano": "GPT-4.1 nano"
 }
 
 # Default marker if model not in dict
@@ -123,7 +121,6 @@ MODEL_PRICING_STANDARD = {
     "qwen3-235b": {"input": 0.00022, "output": 0.00088},
     
     # OpenAI models (Bedrock) - per 1k tokens
-    "gpt-oss-20b": {"input": 0.00007, "output": 0.0003},
     "gpt-oss-120b": {"input": 0.00015, "output": 0.0006},
     
     # Anthropic models (Bedrock) - per 1k tokens
@@ -142,7 +139,6 @@ MODEL_PRICING_BATCH = {
     "qwen3-235b": {"input": 0.00011, "output": 0.00044},
     
     # OpenAI models (Bedrock) - per 1k tokens
-    "gpt-oss-20b": {"input": 0.000035, "output": 0.00015},
     "gpt-oss-120b": {"input": 0.000075, "output": 0.0003},
     
     # Anthropic models (Bedrock) - per 1k tokens

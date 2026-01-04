@@ -41,9 +41,9 @@ compute_pareto_ranks = plot_module.compute_pareto_ranks
 MODEL_DISPLAY_NAMES = {
     "qwen3-32b": "Qwen 3 32B",
     "qwen3-235b": "Qwen 3 235B",
-    "gpt-oss-20b": "GPT-OSS 20B",
     "gpt-oss-120b": "GPT-OSS 120B",
-    "gpt-4-1": "GPT-4.1"
+    "gpt-4-1": "GPT-4.1",
+    "gpt-4-1-nano": "GPT-4.1 nano"
 }
 
 # Workflow order and display names
@@ -59,7 +59,7 @@ WORKFLOW_DISPLAY_NAMES = {
 }
 
 # Model order (from larger to smaller) - will be sorted by cost in tables
-MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-oss-20b"]
+MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-4-1-nano"]
 
 def get_models_sorted_by_cost() -> List[str]:
     """Get models sorted by base API cost (most expensive first)."""
