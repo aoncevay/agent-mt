@@ -10,7 +10,7 @@ This script:
 5. Updates report.json with reviewed_* scores in the summary
 
 Usage:
-    python run/review_gpt_oss_outputs.py --outputs_dir outputs zhijin/agent-mt-main/outputs
+    python run/review_gpt_oss_outputs.py --outputs_dirs outputs zhijin/agent-mt-main/outputs
 """
 
 import argparse
@@ -25,7 +25,10 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from evaluation import compute_chrf, compute_term_success_rate
+from data_loaders import DOLFINDataLoader, WMT25DataLoader
 
+# Base data directory
+BASE_DATA_DIR = (Path(__file__).parent.parent / "data" / "raw").resolve()
 
 REASONING_PATTERN = re.compile(r'<reasoning>.*?</reasoning>', re.DOTALL)
 
@@ -93,6 +96,74 @@ def get_last_agent_output_file(output_dir: Path, sample_id: str, sample_idx: int
     return None
 
 
+def load_texts_from_dataset(
+    dataset: str,
+    lang_pair: str,
+    sample_idx: int,
+    sample_id: str,
+    source_lang: str,
+    target_lang: str
+) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, List[str]]]]:
+    """
+    Load source_text, reference_text, and terminology from dataset files.
+    
+    Args:
+        dataset: Dataset name (e.g., "dolfin", "wmt25")
+        lang_pair: Language pair (e.g., "en_de", "en-zht")
+        sample_idx: Sample index
+        sample_id: Sample ID
+        source_lang: Source language code
+        target_lang: Target language code
+    
+    Returns:
+        Tuple of (source_text, reference_text, terminology) or (None, None, None) if not found
+    """
+    try:
+        if dataset == "dolfin":
+            # DOLFIN: Load from dolfin_test_{lang_pair}.jsonl
+            data_dir = BASE_DATA_DIR / "dolfin"
+            loader = DOLFINDataLoader(data_dir, lang_pair)
+            samples = loader.load_samples()
+            
+            # Match by sample_idx (DOLFIN samples are ordered by index)
+            if sample_idx < len(samples):
+                sample = samples[sample_idx]
+                source_text, reference_text, terminology = loader.extract_texts(sample, source_lang, target_lang)
+                return source_text, reference_text, terminology
+        
+        elif dataset == "wmt25":
+            # WMT25: Load from wmt25-terminology-track2/full_data_{year}.jsonl
+            # Need to match by sample_id (which may contain year info) or sample_idx
+            data_dir = BASE_DATA_DIR / "wmt25-terminology-track2"
+            loader = WMT25DataLoader(data_dir)
+            samples = loader.load_samples()
+            
+            # Try to match by sample_id first, then by sample_idx
+            matched_sample = None
+            sample_id_str = str(sample_id)
+            sample_idx_str = str(sample_idx)
+            
+            for sample in samples:
+                # Check if sample has matching id or index
+                sample_key = sample.get("id") or sample.get("_id") or ""
+                if str(sample_key) == sample_id_str or str(sample_key) == sample_idx_str:
+                    matched_sample = sample
+                    break
+            
+            # If no match by ID, try by index (WMT25 samples might be ordered)
+            if matched_sample is None and sample_idx < len(samples):
+                matched_sample = samples[sample_idx]
+            
+            if matched_sample:
+                source_text, reference_text, terminology = loader.extract_texts(matched_sample, source_lang, target_lang)
+                return source_text, reference_text, terminology
+    
+    except Exception as e:
+        print(f"  Warning: Error loading texts from dataset: {e}")
+    
+    return None, None, None
+
+
 def recompute_metrics_for_sample(
     output_file: Path,
     source_text: str,
@@ -106,7 +177,6 @@ def recompute_metrics_for_sample(
         output_file: Path to the output file
         source_text: Source text
         reference_text: Reference text
-        target_lang: Target language code
         terminology: Optional terminology dictionary (for WMT25)
     
     Returns:
@@ -164,8 +234,30 @@ def process_report(report_path: Path) -> bool:
         return False
     
     model = report.get("model", "")
-    dataset = report.get("dataset", "")
+    dataset_field = report.get("dataset", "")
     workflow = report.get("workflow", "")
+    lang_pair = report.get("lang_pair", "")
+    
+    # Parse dataset name and lang_pair from dataset field
+    # Format: "dolfin_en_it" or "wmt25" or "wmt25_en-zht"
+    if dataset_field.startswith("dolfin_"):
+        # Extract lang_pair from dataset field (e.g., "dolfin_en_it" -> "en_it")
+        parts = dataset_field.split("_", 1)
+        if len(parts) == 2:
+            dataset = "dolfin"
+            if not lang_pair:
+                lang_pair = parts[1]
+        else:
+            dataset = "dolfin"
+    elif dataset_field.startswith("wmt25"):
+        dataset = "wmt25"
+        # Extract lang_pair if in dataset field (e.g., "wmt25_en-zht" -> "en-zht")
+        if "_" in dataset_field and not lang_pair:
+            parts = dataset_field.split("_", 1)
+            if len(parts) == 2:
+                lang_pair = parts[1]
+    else:
+        dataset = dataset_field
     
     # Process models where the final/postedit agent is a gpt-oss-* model
     # This includes:
@@ -188,7 +280,7 @@ def process_report(report_path: Path) -> bool:
     if not should_process:
         return False
     
-    print(f"Processing: {dataset} / {workflow} / {model}")
+    print(f"Processing: {dataset} / {lang_pair} / {workflow} / {model}")
     
     samples = report.get("samples", [])
     if not samples:
@@ -200,31 +292,42 @@ def process_report(report_path: Path) -> bool:
     reviewed_term_success_rates = []
     processed_count = 0
     skipped_count = 0
+    skipped_no_source_ref = 0
+    skipped_no_file = 0
+    skipped_error = 0
     
     for sample in samples:
         if sample.get("error"):
             # Skip samples with errors
+            skipped_error += 1
             continue
         
         sample_idx = sample.get("sample_idx")
         sample_id = sample.get("sample_id", str(sample_idx))
-        source_text = sample.get("source_text")
-        reference_text = sample.get("reference_text")
+        source_lang = sample.get("source_lang")
         target_lang = sample.get("target_lang")
         
-        if not source_text or not reference_text or target_lang is None:
+        if target_lang is None:
+            skipped_no_source_ref += 1
+            skipped_count += 1
+            continue
+        
+        # Load source_text and reference_text from dataset files
+        source_text, reference_text, terminology = load_texts_from_dataset(
+            dataset, lang_pair, sample_idx, sample_id, source_lang, target_lang
+        )
+        
+        if not source_text or not reference_text:
+            skipped_no_source_ref += 1
             skipped_count += 1
             continue
         
         # Get last agent output file
         output_file = get_last_agent_output_file(output_dir, sample_id, sample_idx)
         if not output_file:
+            skipped_no_file += 1
             skipped_count += 1
             continue
-        
-        # Terminology is not stored in report.json, so we skip term accuracy computation
-        # (To compute term accuracy, we would need to load terminology from original data files)
-        terminology = None
         
         # Recompute metrics
         chrf_score, term_success_rate = recompute_metrics_for_sample(
@@ -260,6 +363,8 @@ def process_report(report_path: Path) -> bool:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
         print(f"  ✓ Processed {processed_count} samples, skipped {skipped_count}")
+        if skipped_count > 0:
+            print(f"    Skipped: {skipped_error} with errors, {skipped_no_source_ref} missing source/ref, {skipped_no_file} missing output files")
         if reviewed_chrf_scores:
             print(f"    Reviewed avg chrF++: {summary['reviewed_avg_chrf_score']:.2f}")
         if reviewed_term_success_rates:
@@ -290,7 +395,7 @@ def find_reports(outputs_dirs: List[Path]) -> List[Path]:
                             match = re.search(r'"model"\s*:\s*"([^"]+)"', line)
                             if match:
                                 model = match.group(1)
-                                if model.startswith("gpt-oss-"):
+                                if model.startswith("gpt-oss-") or ("+gpt-oss-" in model):
                                     reports.append(report_path)
                                     break
                             break
@@ -341,4 +446,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
