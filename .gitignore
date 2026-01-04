@@ -42,6 +42,9 @@ config.env
 outputs/
 data/benchmark_results/
 
+# Zhijin's agent-mt-main outputs (pulled from AWS)
+zhijin/agent-mt-main/outputs/
+
 # Exclude specific files/directories
 papers/
 other_repos/
