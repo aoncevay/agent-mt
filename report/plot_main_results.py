@@ -841,8 +841,9 @@ def plot_dataset_lang_pair_term_acc(
     if not data_points:
         return
     
-    # Create figure - single column width for ACL paper (about 3.5 inches), 3:2 ratio
-    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    # Create figure - single column width for ACL paper (about 3.5 inches)
+    # For Terminology Accuracy plots, use (3.5, 2) size
+    _fig, ax = plt.subplots(figsize=(3.5, 2))
     
     # First pass: collect all workflow points and draw lines (behind markers)
     workflow_points_dict = {}
@@ -892,7 +893,7 @@ def plot_dataset_lang_pair_term_acc(
     
     # Labels
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
-    ax.set_ylabel('Terminology Accuracy', fontsize=10)
+    ax.set_ylabel('Term. Accuracy', fontsize=10)
     
     # Set y-axis limits for TermAcc
     # Auto-scale y-axis, then adjust ticks to use non-decimal steps
@@ -993,7 +994,9 @@ def plot_dataset_avg_price(
         return
     
     # Create figure
-    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    # For Terminology Accuracy plots, use (3.5, 2) size, otherwise (3.5, 2.5)
+    figsize = (3.5, 2) if metric == "termacc" else (3.5, 2.5)
+    _fig, ax = plt.subplots(figsize=figsize)
     
     # First pass: collect all workflow points and draw lines (behind markers)
     workflow_points_dict = {}
@@ -1046,7 +1049,7 @@ def plot_dataset_avg_price(
     if metric == "chrf":
         ax.set_ylabel('chrF++', fontsize=10)
     elif metric == "termacc":
-        ax.set_ylabel('Terminology Accuracy', fontsize=10)
+        ax.set_ylabel('Term. Accuracy', fontsize=10)
     
     # Auto-scale y-axis, then adjust ticks to use non-decimal steps
     ax.set_ylim(auto=True)
@@ -1205,22 +1208,43 @@ def plot_dataset_avg_price_pareto(
     models = set()
     data_points = []
     
-    for (workflow, model), data in aggregated_data.items():
-        if not data["values"] or not data["costs"]:
-            continue
-        
-        avg_value = sum(data["values"]) / len(data["values"])
-        total_cost = sum(data["costs"])  # Total cost across all lang pairs
-        
-        workflows.add(workflow)
-        models.add(model)
-        
-        data_points.append({
-            "workflow": workflow,
-            "model": model,
-            "value": avg_value,
-            "cost": total_cost
-        })
+    # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
+    # Tables iterate through WORKFLOW_ORDER × MODEL_ORDER when computing pareto ranks
+    # Use same order for consistency to ensure the same set of points is included
+    # This ensures the 75th percentile threshold and pareto ranking are identical
+    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1-mini", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    
+    for workflow in WORKFLOW_ORDER:
+        for model in MODEL_ORDER_FOR_PARETO:
+            # Filter by MODEL_MARKERS (same as tables)
+            if model not in MODEL_MARKERS:
+                continue
+            
+            key = (workflow, model)
+            if key not in aggregated_data:
+                continue
+            
+            data = aggregated_data[key]
+            
+            # GPT-5 and GPT-4.1 mini are zero-shot baselines only (same as tables)
+            if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+                continue
+            
+            if not data["values"] or not data["costs"]:
+                continue
+            
+            avg_value = sum(data["values"]) / len(data["values"])
+            total_cost = sum(data["costs"])  # Total cost across all lang pairs
+            
+            workflows.add(workflow)
+            models.add(model)
+            
+            data_points.append({
+                "workflow": workflow,
+                "model": model,
+                "value": avg_value,
+                "cost": total_cost
+            })
     
     if not data_points:
         return
@@ -1234,7 +1258,9 @@ def plot_dataset_avg_price_pareto(
     pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
     
     # Create figure
-    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    # For Terminology Accuracy plots, use (3.5, 2) size, otherwise (3.5, 2.5)
+    figsize = (3.5, 2) if metric == "termacc" else (3.5, 2.5)
+    _fig, ax = plt.subplots(figsize=figsize)
     
     # Set axis limits first (needed for visibility checking)
     ax.set_xscale('log')
@@ -1330,7 +1356,7 @@ def plot_dataset_avg_price_pareto(
     if metric == "chrf":
         ax.set_ylabel('chrF++', fontsize=10)
     elif metric == "termacc":
-        ax.set_ylabel('Terminology Accuracy', fontsize=10)
+        ax.set_ylabel('Term. Accuracy', fontsize=10)
     
     # Auto-scale y-axis, then adjust ticks to use non-decimal steps
     ax.set_ylim(auto=True)
