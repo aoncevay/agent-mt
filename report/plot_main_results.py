@@ -1408,7 +1408,7 @@ def main():
         "--outputs_dirs",
         type=str,
         nargs='+',
-        default=["zhijin/agent-mt-main/outputs", "outputs"],
+        default=["outputs_qwen3", "outputs"],
         help="Paths to outputs directories containing report.json files (can specify multiple)"
     )
     parser.add_argument(
