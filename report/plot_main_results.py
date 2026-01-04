@@ -97,7 +97,8 @@ MODEL_MARKERS = {
     "qwen3-235b": "s",          # square
     "gpt-oss-20b": "^",         # triangle up
     "gpt-oss-120b": "v",        # triangle down
-    "gpt-4-1": "P"             # plus (filled)
+    "gpt-4-1": "P",             # plus (filled)
+    "gpt-4-1-nano": "D"         # diamond
 }
 
 # Model display names (for legends and tables)
@@ -106,7 +107,8 @@ MODEL_DISPLAY_NAMES = {
     "qwen3-235b": "Qwen 3 235B",
     "gpt-oss-20b": "GPT-OSS 20B",
     "gpt-oss-120b": "GPT-OSS 120B",
-    "gpt-4-1": "GPT-4.1"
+    "gpt-4-1": "GPT-4.1",
+    "gpt-4-1-nano": "GPT-4.1 Nano"
 }
 
 # Default marker if model not in dict
@@ -130,6 +132,7 @@ MODEL_PRICING_STANDARD = {
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
     # https://platform.openai.com/docs/pricing?latest-pricing=standard
     "gpt-4-1": {"input": 0.002, "output": 0.008},  # $2.00/1M = $0.002/1k, $8.00/1M = $0.008/1k
+    "gpt-4-1-nano": {"input": 0.0001, "output": 0.0004},  # $0.10/1M = $0.0001/1k, $0.40/1M = $0.0004/1k
 }
 
 # Pricing dictionary - prices per 1,000 tokens (batch tier)
@@ -147,7 +150,8 @@ MODEL_PRICING_BATCH = {
     
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
     # https://platform.openai.com/docs/pricing?latest-pricing=batch
-    "gpt-4-1": {"input": 0.001, "output": 0.004},  
+    "gpt-4-1": {"input": 0.001, "output": 0.004},
+    "gpt-4-1-nano": {"input": 0.00005, "output": 0.0002},  # Same as standard (batch pricing not available)  
 }
 
 

@@ -193,9 +193,13 @@ def recompute_metrics_for_sample(
     # Remove reasoning blocks
     cleaned_output = remove_reasoning_blocks(output_text)
     
-    if not cleaned_output:
+    is_empty = not cleaned_output
+    if is_empty:
         print(f"  Warning: Output is empty after removing reasoning blocks for {output_file.name}")
-        return None, None
+        # Return 0.0 for empty outputs (to show impact on averages)
+        chrf_score = 0.0
+        term_success_rate = 0.0 if terminology else None
+        return chrf_score, term_success_rate
     
     # Compute chrF++
     chrf_result = compute_chrf(cleaned_output, reference_text)
@@ -287,9 +291,12 @@ def process_report(report_path: Path) -> bool:
         print("  No samples in report")
         return False
     
-    # Collect reviewed scores
+    # Collect reviewed scores (all samples, including empty ones)
     reviewed_chrf_scores = []
     reviewed_term_success_rates = []
+    # Collect reviewed scores for non-empty samples only
+    reviewed_noempty_chrf_scores = []
+    reviewed_noempty_term_success_rates = []
     processed_count = 0
     skipped_count = 0
     skipped_no_source_ref = 0
@@ -337,9 +344,17 @@ def process_report(report_path: Path) -> bool:
         if chrf_score is not None:
             reviewed_chrf_scores.append(chrf_score)
             processed_count += 1
+            
+            # Only add to noempty scores if output was not empty (chrf_score > 0 indicates non-empty)
+            # Empty outputs after cleaning will have chrf_score = 0 (or very close to 0)
+            if chrf_score > 0.01:  # Small threshold to account for floating point precision
+                reviewed_noempty_chrf_scores.append(chrf_score)
         
         if term_success_rate is not None:
             reviewed_term_success_rates.append(term_success_rate)
+            # Only add to noempty scores if output was not empty (chrf_score indicates non-empty)
+            if chrf_score is not None and chrf_score > 0.01:
+                reviewed_noempty_term_success_rates.append(term_success_rate)
     
     # Update report summary with reviewed scores
     if "summary" not in report:
@@ -357,18 +372,36 @@ def process_report(report_path: Path) -> bool:
         summary["reviewed_min_term_success_rate"] = min(reviewed_term_success_rates)
         summary["reviewed_max_term_success_rate"] = max(reviewed_term_success_rates)
     
+    # Add noempty scores (excluding empty outputs)
+    if reviewed_noempty_chrf_scores:
+        summary["reviewed_noempty_avg_chrf_score"] = sum(reviewed_noempty_chrf_scores) / len(reviewed_noempty_chrf_scores)
+        summary["reviewed_noempty_min_chrf_score"] = min(reviewed_noempty_chrf_scores)
+        summary["reviewed_noempty_max_chrf_score"] = max(reviewed_noempty_chrf_scores)
+    
+    if reviewed_noempty_term_success_rates:
+        summary["reviewed_noempty_avg_term_success_rate"] = sum(reviewed_noempty_term_success_rates) / len(reviewed_noempty_term_success_rates)
+        summary["reviewed_noempty_min_term_success_rate"] = min(reviewed_noempty_term_success_rates)
+        summary["reviewed_noempty_max_term_success_rate"] = max(reviewed_noempty_term_success_rates)
+    
     # Save updated report
     try:
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
+        empty_count = len(reviewed_chrf_scores) - len(reviewed_noempty_chrf_scores)
         print(f"  ✓ Processed {processed_count} samples, skipped {skipped_count}")
         if skipped_count > 0:
             print(f"    Skipped: {skipped_error} with errors, {skipped_no_source_ref} missing source/ref, {skipped_no_file} missing output files")
+        if empty_count > 0:
+            print(f"    Empty after cleaning: {empty_count} samples")
         if reviewed_chrf_scores:
-            print(f"    Reviewed avg chrF++: {summary['reviewed_avg_chrf_score']:.2f}")
+            print(f"    Reviewed avg chrF++: {summary['reviewed_avg_chrf_score']:.2f} (all {len(reviewed_chrf_scores)} samples)")
+            if reviewed_noempty_chrf_scores:
+                print(f"    Reviewed avg chrF++ (noempty): {summary['reviewed_noempty_avg_chrf_score']:.2f} ({len(reviewed_noempty_chrf_scores)} non-empty samples)")
         if reviewed_term_success_rates:
-            print(f"    Reviewed avg term acc: {summary['reviewed_avg_term_success_rate']:.4f}")
+            print(f"    Reviewed avg term acc: {summary['reviewed_avg_term_success_rate']:.4f} (all {len(reviewed_term_success_rates)} samples)")
+            if reviewed_noempty_term_success_rates:
+                print(f"    Reviewed avg term acc (noempty): {summary['reviewed_noempty_avg_term_success_rate']:.4f} ({len(reviewed_noempty_term_success_rates)} non-empty samples)")
         return True
     except Exception as e:
         print(f"  Error saving report: {e}")

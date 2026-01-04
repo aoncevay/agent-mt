@@ -6,7 +6,7 @@ Creates a figure with two subplots (DOLFIN and WMT25-Term) showing chrF++ vs Cos
 for experiments using different base models for translation and post-editing.
 
 Focuses on 3 workflows: IRB_refine, MaMT_translate_postedit_proofread, MAATS_multi_agents
-with model combinations: gpt-4-1, gpt-oss-120b, and their combinations.
+with model combinations: gpt-4-1, gpt-4-1-nano, and their combinations.
 
 Usage:
     python report/translate_vs_postedit_plot.py --outputs_dirs zhijin/agent-mt-main/outputs outputs
@@ -46,7 +46,7 @@ TARGET_WORKFLOWS = {
 }
 
 # Base models
-BASE_MODELS = ["gpt-4-1", "gpt-oss-120b"]
+BASE_MODELS = ["gpt-4-1", "gpt-4-1-nano"]
 
 # Model combinations mapping
 # Format: model_name -> (base_model, postedit_model)
@@ -64,10 +64,10 @@ def parse_model_combination(model_name: str) -> Optional[Tuple[str, str]]:
 # Marker styles for different model configurations
 # Base models use existing markers, combinations use new ones
 MODEL_MARKERS = {
-    "gpt-4-1": "P",              # Plus (filled) - existing
-    "gpt-oss-120b": "v",         # Triangle down - existing
-    "gpt-oss-120b+gpt-4-1": "p", # Pentagon - new
-    "gpt-4-1+gpt-oss-120b": "X", # Filled cross X - new
+    "gpt-4-1": "P",                      # Plus (filled) - existing
+    "gpt-4-1-nano": "D",                 # Diamond - existing
+    "gpt-4-1-nano+gpt-4-1": "h",         # Hexagon - new
+    "gpt-4-1+gpt-4-1-nano": "X",         # Filled cross X - new
 }
 
 # Model display names for combinations
@@ -214,7 +214,7 @@ def collect_translate_postedit_reports(outputs_dirs: List[Path]) -> Dict[str, Di
                             continue
                         
                         # Check if it's a combination or single model
-                        # We want: gpt-4-1, gpt-oss-120b, gpt-oss-120b+gpt-4-1, gpt-4-1+gpt-oss-120b
+                        # We want: gpt-4-1, gpt-4-1-nano, gpt-4-1-nano+gpt-4-1, gpt-4-1+gpt-4-1-nano
                         if postedit_model is not None and postedit_model not in BASE_MODELS:
                             print(f"DEBUG: Skipping {model} - postedit_model {postedit_model} not in BASE_MODELS")
                             continue
@@ -470,10 +470,10 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
     
     # Organize data by workflow
     workflow_data = defaultdict(lambda: {
-        "gpt-4-1": None,  # Single model
-        "gpt-oss-120b": None,  # Single model
-        "gpt-oss-120b+gpt-4-1": None,  # Combination
-        "gpt-4-1+gpt-oss-120b": None,  # Combination
+        "gpt-4-1": None,                      # Single model
+        "gpt-4-1-nano": None,                 # Single model
+        "gpt-4-1-nano+gpt-4-1": None,         # Combination
+        "gpt-4-1+gpt-4-1-nano": None,         # Combination
     })
     
     for (workflow, model_name), point_data in data.items():
@@ -493,17 +493,17 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         color = WORKFLOW_COLORS.get(workflow, "#000000")
         wf_data = workflow_data[workflow]
         
-        # Define two lines:
-        # Line 1: gpt-oss-120b -> gpt-oss-120b+gpt-4-1 -> gpt-4-1
-        # Line 2: gpt-oss-120b -> gpt-4-1+gpt-oss-120b -> gpt-4-1
+        # Define lines for different model combinations:
+        # Line 1: gpt-4-1-nano -> gpt-4-1-nano+gpt-4-1 -> gpt-4-1
+        # Line 2: gpt-4-1-nano -> gpt-4-1+gpt-4-1-nano -> gpt-4-1
         line1_order = [
-            ("gpt-oss-120b", wf_data["gpt-oss-120b"]),
-            ("gpt-oss-120b+gpt-4-1", wf_data["gpt-oss-120b+gpt-4-1"]),
+            ("gpt-4-1-nano", wf_data["gpt-4-1-nano"]),
+            ("gpt-4-1-nano+gpt-4-1", wf_data["gpt-4-1-nano+gpt-4-1"]),
             ("gpt-4-1", wf_data["gpt-4-1"]),
         ]
         line2_order = [
-            ("gpt-oss-120b", wf_data["gpt-oss-120b"]),
-            ("gpt-4-1+gpt-oss-120b", wf_data["gpt-4-1+gpt-oss-120b"]),
+            ("gpt-4-1-nano", wf_data["gpt-4-1-nano"]),
+            ("gpt-4-1+gpt-4-1-nano", wf_data["gpt-4-1+gpt-4-1-nano"]),
             ("gpt-4-1", wf_data["gpt-4-1"]),
         ]
         
@@ -511,25 +511,16 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         valid_points_line1 = [(name, data) for name, data in line1_order if data is not None]
         valid_points_line2 = [(name, data) for name, data in line2_order if data is not None]
         
-        # Draw line 1 if we have at least 2 points (skip if experiment is still running)
-        if len(valid_points_line1) >= 2:
-            try:
-                costs_line1 = [p[1]["cost"] for p in valid_points_line1]
-                chrfs_line1 = [p[1]["chrf"] for p in valid_points_line1]
-                ax.plot(costs_line1, chrfs_line1, color=color, linestyle=':', linewidth=1.0, 
-                        alpha=0.6, zorder=1)
-            except (KeyError, TypeError) as e:
-                print(f"DEBUG: Error plotting line 1 for {workflow}: {e}")
-        
-        # Draw line 2 if we have at least 2 points (skip if experiment is still running)
-        if len(valid_points_line2) >= 2:
-            try:
-                costs_line2 = [p[1]["cost"] for p in valid_points_line2]
-                chrfs_line2 = [p[1]["chrf"] for p in valid_points_line2]
-                ax.plot(costs_line2, chrfs_line2, color=color, linestyle=':', linewidth=1.0, 
-                        alpha=0.6, zorder=1)
-            except (KeyError, TypeError) as e:
-                print(f"DEBUG: Error plotting line 2 for {workflow}: {e}")
+        # Draw lines if we have at least 2 points (skip if experiment is still running)
+        for line_num, valid_points in enumerate([valid_points_line1, valid_points_line2], 1):
+            if len(valid_points) >= 2:
+                try:
+                    costs = [p[1]["cost"] for p in valid_points]
+                    chrfs = [p[1]["chrf"] for p in valid_points]
+                    ax.plot(costs, chrfs, color=color, linestyle=':', linewidth=1.0, 
+                            alpha=0.6, zorder=1)
+                except (KeyError, TypeError) as e:
+                    print(f"DEBUG: Error plotting line {line_num} for {workflow}: {e}")
         
         # Collect all unique points to plot markers (only plot points that exist)
         all_points = {}
@@ -605,9 +596,9 @@ def create_legend_above(fig, dolfin_data: Dict, wmt25_data: Dict):
     model_elements = []
     model_order = [
         "gpt-4-1",
-        "gpt-oss-120b",
-        "gpt-oss-120b+gpt-4-1",
-        "gpt-4-1+gpt-oss-120b"
+        "gpt-4-1-nano",
+        "gpt-4-1-nano+gpt-4-1",
+        "gpt-4-1+gpt-4-1-nano"
     ]
     
     for model_name in model_order:
