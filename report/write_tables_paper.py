@@ -43,7 +43,9 @@ MODEL_DISPLAY_NAMES = {
     "qwen3-235b": "Qwen 3 235B",
     "gpt-oss-120b": "GPT-OSS 120B",
     "gpt-4-1": "GPT-4.1",
-    "gpt-4-1-nano": "GPT-4.1 nano"
+    "gpt-4-1-nano": "GPT-4.1 nano",
+    "gpt-5": "GPT-5",
+    "gpt-4-1-mini": "GPT-4.1 mini"
 }
 
 # Workflow order and display names
@@ -59,7 +61,8 @@ WORKFLOW_DISPLAY_NAMES = {
 }
 
 # Model order (from larger to smaller) - will be sorted by cost in tables
-MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-4-1-nano"]
+# Note: GPT-5 and GPT-4.1 mini are zero-shot baselines only
+MODEL_ORDER = ["gpt-5", "gpt-4-1-mini", "gpt-4-1", "qwen3-235b", "gpt-oss-120b", "qwen3-32b", "gpt-4-1-nano"]
 
 def get_models_sorted_by_cost() -> List[str]:
     """Get models sorted by base API cost (most expensive first)."""
@@ -194,6 +197,10 @@ def collect_data_by_workflow_model(
             if workflow not in WORKFLOW_ORDER or model not in MODEL_MARKERS:
                 continue
             
+            # GPT-5 and GPT-4.1 mini are zero-shot baselines only
+            if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+                continue
+            
             data[workflow][model]["dolfin"][lang_pair]["chrf"] = report.get("chrf")
             # Calculate cost for this lang pair
             tokens_input = report.get("tokens_input", 0)
@@ -215,6 +222,10 @@ def collect_data_by_workflow_model(
             model = report["model"]
             
             if workflow not in WORKFLOW_ORDER or model not in MODEL_MARKERS:
+                continue
+            
+            # GPT-5 and GPT-4.1 mini are zero-shot baselines only
+            if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
                 continue
             
             # Store both chrF and TermAcc for term workflows
@@ -364,6 +375,10 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     # Get models sorted by cost (most expensive first)
     sorted_models = get_models_sorted_by_cost()
     
+    # Zero-shot baseline models (only for zero-shot workflow)
+    zero_shot_baselines = ["gpt-5", "gpt-4-1-mini"]
+    regular_models = [m for m in sorted_models if m not in zero_shot_baselines]
+    
     for workflow in WORKFLOW_ORDER:
         workflow_display = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
         
@@ -371,17 +386,34 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
+        # For zero-shot, include baselines first, then regular models
+        # For other workflows, only include regular models
+        if workflow == "ZS":
+            models_to_show = zero_shot_baselines + regular_models
+        else:
+            models_to_show = regular_models
+        
         # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
-        for i, model in enumerate(sorted_models):
+        for i, model in enumerate(models_to_show):
             model_display = MODEL_DISPLAY_NAMES.get(model, model)
             
             row_parts = []
             
             # First column: workflow name (multirow)
             if i == 0:
-                row_parts.append(f"\\multirow{{{len(sorted_models)}}}{{*}}{{{workflow_display}}}")
+                row_parts.append(f"\\multirow{{{len(models_to_show)}}}{{*}}{{{workflow_display}}}")
             else:
                 row_parts.append("")
+            
+            # For zero-shot: add dashed line separator after baseline models
+            if workflow == "ZS" and i == len(zero_shot_baselines):
+                # Insert a dashed line separator row before first regular model
+                # DOLFIN table: 2 system cols + 11 data cols = 13 total, separator spans cols 3-13 (11 cols)
+                separator_parts = ["", ""] + ["\\multicolumn{11}{c}{\\hdashline}"]
+                separator_row = " & ".join(separator_parts) + " \\\\"
+                lines.append(separator_row)
+                # Re-add the workflow name for the first regular model
+                row_parts[0] = f"\\multirow{{{len(regular_models)}}}{{*}}{{{workflow_display}}}"
             
             # Second column: model name
             row_parts.append(model_display)
@@ -547,6 +579,10 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     # Get models sorted by cost (most expensive first)
     sorted_models = get_models_sorted_by_cost()
     
+    # Zero-shot baseline models (only for zero-shot workflow)
+    zero_shot_baselines = ["gpt-5", "gpt-4-1-mini"]
+    regular_models = [m for m in sorted_models if m not in zero_shot_baselines]
+    
     for workflow in WORKFLOW_ORDER:
         workflow_display = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
         
@@ -554,17 +590,34 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
+        # For zero-shot, include baselines first, then regular models
+        # For other workflows, only include regular models
+        if workflow == "ZS":
+            models_to_show = zero_shot_baselines + regular_models
+        else:
+            models_to_show = regular_models
+        
         # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
-        for i, model in enumerate(sorted_models):
+        for i, model in enumerate(models_to_show):
             model_display = MODEL_DISPLAY_NAMES.get(model, model)
             
             row_parts = []
             
             # First column: workflow name (multirow)
             if i == 0:
-                row_parts.append(f"\\multirow{{{len(sorted_models)}}}{{*}}{{{workflow_display}}}")
+                row_parts.append(f"\\multirow{{{len(models_to_show)}}}{{*}}{{{workflow_display}}}")
             else:
                 row_parts.append("")
+            
+            # For zero-shot: add dashed line separator after baseline models
+            if workflow == "ZS" and i == len(zero_shot_baselines):
+                # Insert a dashed line separator row before first regular model
+                # WMT25 table: 2 system cols + 10 data cols = 12 total, separator spans cols 3-12 (10 cols)
+                separator_parts = ["", ""] + ["\\multicolumn{10}{c}{\\hdashline}"]
+                separator_row = " & ".join(separator_parts) + " \\\\"
+                lines.append(separator_row)
+                # Re-add the workflow name for the first regular model
+                row_parts[0] = f"\\multirow{{{len(regular_models)}}}{{*}}{{{workflow_display}}}"
             
             # Second column: model name
             row_parts.append(model_display)

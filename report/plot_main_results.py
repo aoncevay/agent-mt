@@ -97,7 +97,9 @@ MODEL_MARKERS = {
     "qwen3-235b": "s",          # square
     "gpt-oss-120b": "v",        # triangle down
     "gpt-4-1": "P",             # plus (filled)
-    "gpt-4-1-nano": "D"         # diamond
+    "gpt-4-1-nano": "D",        # diamond
+    "gpt-5": "H",               # hexagon (filled) - for zero-shot baseline
+    "gpt-4-1-mini": "8"         # octagon - for zero-shot baseline
 }
 
 # Model display names (for legends and tables)
@@ -106,7 +108,9 @@ MODEL_DISPLAY_NAMES = {
     "qwen3-235b": "Qwen 3 235B",
     "gpt-oss-120b": "GPT-OSS 120B",
     "gpt-4-1": "GPT-4.1",
-    "gpt-4-1-nano": "GPT-4.1 nano"
+    "gpt-4-1-nano": "GPT-4.1 nano",
+    "gpt-5": "GPT-5",
+    "gpt-4-1-mini": "GPT-4.1 mini"
 }
 
 # Default marker if model not in dict
@@ -128,7 +132,9 @@ MODEL_PRICING_STANDARD = {
     
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
     # https://platform.openai.com/docs/pricing?latest-pricing=standard
+    "gpt-5": {"input": 0.00125, "output": 0.01},  # $1.25/1M = $0.00125/1k, $10.00/1M = $0.01/1k
     "gpt-4-1": {"input": 0.002, "output": 0.008},  # $2.00/1M = $0.002/1k, $8.00/1M = $0.008/1k
+    "gpt-4-1-mini": {"input": 0.0004, "output": 0.0016},  # $0.40/1M = $0.0004/1k, $1.60/1M = $0.0016/1k
     "gpt-4-1-nano": {"input": 0.0001, "output": 0.0004},  # $0.10/1M = $0.0001/1k, $0.40/1M = $0.0004/1k
 }
 
@@ -146,8 +152,10 @@ MODEL_PRICING_BATCH = {
     
     # OpenAI models (OpenAI API) - per 1M tokens, converted to per 1k
     # https://platform.openai.com/docs/pricing?latest-pricing=batch
+    "gpt-5": {"input": 0.000625, "output": 0.005},  # $0.625/1M = $0.000625/1k, $5.00/1M = $0.005/1k
     "gpt-4-1": {"input": 0.001, "output": 0.004},
-    "gpt-4-1-nano": {"input": 0.00005, "output": 0.0002},  # Same as standard (batch pricing not available)  
+    "gpt-4-1-mini": {"input": 0.0002, "output": 0.0008},  # $0.20/1M = $0.0002/1k, $0.80/1M = $0.0008/1k
+    "gpt-4-1-nano": {"input": 0.00005, "output": 0.0002},   
 }
 
 
@@ -290,6 +298,10 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                     
                     if report_data is None:
                         incomplete_settings.add(setting_key)
+                        continue
+                    
+                    # GPT-5 and GPT-4.1 mini are zero-shot baselines only
+                    if model in ["gpt-5", "gpt-4-1-mini"] and workflow_acronym != "ZS":
                         continue
                     
                     # Mark as seen and add to reports
@@ -565,6 +577,11 @@ def plot_dataset_lang_pair(
         workflow_name = report.get("workflow", "")
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
+        
+        # GPT-5 and GPT-4.1 mini are zero-shot baselines only
+        if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+            continue
+        
         workflows.add(workflow)
         models.add(model)
         
@@ -662,6 +679,11 @@ def plot_dataset_lang_pair_price(
         workflow_name = report.get("workflow", "")
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
+        
+        # GPT-5 and GPT-4.1 mini are zero-shot baselines only
+        if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+            continue
+        
         workflows.add(workflow)
         models.add(model)
         

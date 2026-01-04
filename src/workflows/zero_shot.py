@@ -41,11 +41,17 @@ def run_workflow(
     """
     import time
     
+    # Special case: GPT-5 requires temperature=1.0 (default) or we get an error
+    # Check if this is GPT-5 by checking if model_id contains "gpt-5"
+    temperature = 0.0  # Default for reproducibility
+    if "gpt-5" in model_id.lower():
+        temperature = 1.0  # GPT-5 requires temperature=1.0
+    
     # Create LLM (supports both Bedrock and OpenAI via cdao)
     if model_type:
-        llm = create_llm(model_id, region, model_provider=model_provider, model_type=model_type)
+        llm = create_llm(model_id, region, temperature=temperature, model_provider=model_provider, model_type=model_type)
     else:
-        llm = create_bedrock_llm(model_id, region, model_provider=model_provider)
+        llm = create_bedrock_llm(model_id, region, temperature=temperature, model_provider=model_provider)
     
     # Create prompt (with terminology if requested)
     # Filter terminology to only include terms that appear in source text

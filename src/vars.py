@@ -7,6 +7,7 @@ model_name2bedrock_id = {
 }
 
 model_name2openai_id = {
+    "gpt-5": "gpt-5-2025-08-07",
     "gpt-4-1-mini": "gpt-4.1-mini-2025-04-14",
     "gpt-4-1": "gpt-4.1-2025-04-14",
     "gpt-4-1-nano": "gpt-4.1-nano-2025-04-14",
