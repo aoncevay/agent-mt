@@ -97,8 +97,8 @@ MODEL_MARKERS = {
     "qwen3-235b": "s",          # square
     "gpt-4-1": "P",             # plus (filled)
     "gpt-4-1-nano": "D",        # diamond
-    "gpt-5": "H",               # hexagon (filled) - for zero-shot baseline
-    "gpt-4-1-mini": "8"         # octagon - for zero-shot baseline
+    "gpt-5": "^",              # triangle - for zero-shot baseline
+    "gpt-4-1-mini": "v"        # inverted triangle - for zero-shot baseline
 }
 
 # Model display names (for legends and tables)
@@ -632,11 +632,13 @@ def plot_dataset_lang_pair(
     ax.set_xlabel('Total Tokens (log scale)', fontsize=10)
     ax.set_ylabel('chrF++', fontsize=10)
     
-    # Set y-axis limits based on language pair
-    if lang_pair == "en-zht":
-        ax.set_ylim(25, 50)
-    else:
-        ax.set_ylim(55, 80)
+    # Auto-scale y-axis, then adjust ticks to use steps of at least 5 (non-decimal)
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    # Round to nearest 5 for cleaner ticks
+    y_min_rounded = 5 * (int(y_min) // 5)
+    y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+    ax.set_ylim(y_min_rounded, y_max_rounded)
     
     # Note: No title as per user request (captions will be in paper)
     
@@ -759,11 +761,13 @@ def plot_dataset_lang_pair_price(
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
     ax.set_ylabel('chrF++', fontsize=10)
     
-    # Set y-axis limits based on language pair
-    if lang_pair == "en-zht":
-        ax.set_ylim(25, 50)
-    else:
-        ax.set_ylim(55, 80)
+    # Auto-scale y-axis, then adjust ticks to use steps of at least 5 (non-decimal)
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    # Round to nearest 5 for cleaner ticks
+    y_min_rounded = 5 * (int(y_min) // 5)
+    y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+    ax.set_ylim(y_min_rounded, y_max_rounded)
     
     # Note: No title as per user request (captions will be in paper)
     
@@ -891,7 +895,13 @@ def plot_dataset_lang_pair_term_acc(
     ax.set_ylabel('Terminology Accuracy', fontsize=10)
     
     # Set y-axis limits for TermAcc
-    ax.set_ylim(0.5, 0.8)
+    # Auto-scale y-axis, then adjust ticks to use non-decimal steps
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    # For TermAcc (0-1 range), use steps of 0.05 (but ensure non-decimal major ticks)
+    y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+    y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)  # Round up
+    ax.set_ylim(y_min_rounded, y_max_rounded)
     
     # Grid (behind everything)
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
@@ -1035,14 +1045,22 @@ def plot_dataset_avg_price(
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
     if metric == "chrf":
         ax.set_ylabel('chrF++', fontsize=10)
-        # Set y-axis limits based on dataset
-        if dataset == "dolfin":
-            ax.set_ylim(57.5, 77.5)
-        else:  # wmt25
-            ax.set_ylim(42.5, 62.5)
     elif metric == "termacc":
         ax.set_ylabel('Terminology Accuracy', fontsize=10)
-        ax.set_ylim(0.5, 0.7)
+    
+    # Auto-scale y-axis, then adjust ticks to use non-decimal steps
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    if metric == "termacc":
+        # For TermAcc (0-1 range), use steps of 0.05 (but ensure non-decimal major ticks)
+        # Round to nearest 0.05
+        y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+        y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)  # Round up
+    else:
+        # For chrF++ and other metrics, use steps of 5
+        y_min_rounded = 5 * (int(y_min) // 5)
+        y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+    ax.set_ylim(y_min_rounded, y_max_rounded)
     
     # Grid (behind everything)
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
@@ -1311,19 +1329,25 @@ def plot_dataset_avg_price_pareto(
     ax.set_xlabel('Cost ($, log scale)', fontsize=10)
     if metric == "chrf":
         ax.set_ylabel('chrF++', fontsize=10)
-        if dataset == "dolfin":
-            ax.set_ylim(57.5, 77.5)
-            y_offset_abs = 1.5
-            y_min, y_max = 57.5, 77.5
-        else:  # wmt25
-            ax.set_ylim(42.5, 62.5)
-            y_offset_abs = 1.2
-            y_min, y_max = 42.5, 62.5
     elif metric == "termacc":
         ax.set_ylabel('Terminology Accuracy', fontsize=10)
-        ax.set_ylim(0.5, 0.7)
-        y_offset_abs = 0.02
-        y_min, y_max = 0.5, 0.7
+    
+    # Auto-scale y-axis, then adjust ticks to use non-decimal steps
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    if metric == "termacc":
+        # For TermAcc (0-1 range), use steps of 0.05 (but ensure non-decimal major ticks)
+        y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+        y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)  # Round up
+        y_min, y_max = y_min_rounded, y_max_rounded
+        y_offset_abs = (y_max - y_min) * 0.02  # 2% of range
+    else:
+        # For chrF++ and other metrics, use steps of 5
+        y_min_rounded = 5 * (int(y_min) // 5)
+        y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+        y_min, y_max = y_min_rounded, y_max_rounded
+        y_offset_abs = (y_max - y_min) * 0.02  # 2% of range
+    ax.set_ylim(y_min, y_max)
     
     # Get x-axis limits (will be auto-set, but we can check bounds)
     ax.set_xlim(auto=True)

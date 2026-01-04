@@ -81,12 +81,26 @@ WMT25_LANG_PAIRS = ["en-zht", "zht-en"]
 
 # LaTeX color commands (using xcolor package)
 def get_color_for_value(value: float, min_val: float, max_val: float, metric_type: str = "chrf") -> str:
-    """Get LaTeX color command for a value (green for high, red for low)."""
+    """Get LaTeX color command for a value (green for high, red for low).
+    
+    Uses logarithmic normalization to better distinguish top systems when there are bottom outliers.
+    """
     if value is None or min_val == max_val:
         return ""
     
-    # Normalize value to 0-1 range
-    normalized = (value - min_val) / (max_val - min_val)
+    # Use logarithmic normalization for better distribution across wide ranges
+    # Add small offset to avoid log(0) for metrics that might have values near 0
+    offset = 0.01 if metric_type == "termacc" else 0.0
+    
+    # Check if log scale is applicable (min_val + offset > 0)
+    if min_val + offset > 0:
+        log_value = math.log(value + offset)
+        log_min = math.log(min_val + offset)
+        log_max = math.log(max_val + offset)
+        normalized = (log_value - log_min) / (log_max - log_min)
+    else:
+        # Fall back to linear normalization if log scale not applicable
+        normalized = (value - min_val) / (max_val - min_val)
     
     # Use different color schemes for different metrics
     if metric_type == "termacc":
