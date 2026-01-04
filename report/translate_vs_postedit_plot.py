@@ -527,7 +527,7 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
                 marker = MODEL_MARKERS.get(model_name, "o")
                 # Single models are more transparent (just for comparison)
                 if model_name in ["gpt-4-1", "gpt-4-1-nano"]:
-                    alpha = 0.5  # More transparent
+                    alpha = 0.7  # More transparent
                 else:
                     alpha = 1.0  # Full opacity for combinations
                 
@@ -535,7 +535,7 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
                 if model_name == "gpt-4-1-nano":
                     marker_size = 75  # Smaller than other markers
                 else:
-                    marker_size = 95
+                    marker_size = 100
                 
                 ax.scatter(point_data["cost"], point_data["chrf"], 
                           c=color, marker=marker, s=marker_size,
