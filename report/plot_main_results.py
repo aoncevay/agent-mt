@@ -1399,11 +1399,11 @@ def plot_dataset_avg_price_pareto(
                 if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
                     # Gold star for rank 1
                     ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
-                              edgecolors='none', linewidths=0, alpha=0.9, zorder=6)
+                              edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
                 elif 2 in pareto_ranks and point_idx in pareto_ranks[2]:
                     # Silver star for rank 2
                     ax.scatter(star_x, star_y, marker='*', s=90, c='silver', 
-                              edgecolors='none', linewidths=0, alpha=0.9, zorder=6)
+                              edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
     
     # Tight layout
     plt.tight_layout()

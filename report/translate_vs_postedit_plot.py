@@ -494,22 +494,42 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         wf_data = workflow_data[workflow]
         
         # Define lines for different model combinations:
-        # Line 1: gpt-4-1-nano -> gpt-4-1-nano+gpt-4-1 -> gpt-4-1
-        # Line 2: gpt-4-1-nano -> gpt-4-1+gpt-4-1-nano -> gpt-4-1
+        # Only connect the two base+model combinations (not the single models)
+        # Line 1: gpt-4-1-nano+gpt-4-1 (if both endpoints exist, connect them)
+        # Line 2: gpt-4-1+gpt-4-1-nano (if both endpoints exist, connect them)
         line1_order = [
-            ("gpt-4-1-nano", wf_data["gpt-4-1-nano"]),
             ("gpt-4-1-nano+gpt-4-1", wf_data["gpt-4-1-nano+gpt-4-1"]),
-            ("gpt-4-1", wf_data["gpt-4-1"]),
         ]
         line2_order = [
-            ("gpt-4-1-nano", wf_data["gpt-4-1-nano"]),
             ("gpt-4-1+gpt-4-1-nano", wf_data["gpt-4-1+gpt-4-1-nano"]),
-            ("gpt-4-1", wf_data["gpt-4-1"]),
         ]
         
+        # For lines, we need to connect the combination to its base models
+        # Line 1: gpt-4-1-nano -> gpt-4-1-nano+gpt-4-1 -> gpt-4-1
+        # Line 2: gpt-4-1-nano -> gpt-4-1+gpt-4-1-nano -> gpt-4-1
+        # But only if the combination exists
+        line1_with_base = []
+        line2_with_base = []
+        
+        if wf_data["gpt-4-1-nano+gpt-4-1"] is not None:
+            # Connect through the combination
+            if wf_data["gpt-4-1-nano"] is not None:
+                line1_with_base.append(("gpt-4-1-nano", wf_data["gpt-4-1-nano"]))
+            line1_with_base.append(("gpt-4-1-nano+gpt-4-1", wf_data["gpt-4-1-nano+gpt-4-1"]))
+            if wf_data["gpt-4-1"] is not None:
+                line1_with_base.append(("gpt-4-1", wf_data["gpt-4-1"]))
+        
+        if wf_data["gpt-4-1+gpt-4-1-nano"] is not None:
+            # Connect through the combination
+            if wf_data["gpt-4-1-nano"] is not None:
+                line2_with_base.append(("gpt-4-1-nano", wf_data["gpt-4-1-nano"]))
+            line2_with_base.append(("gpt-4-1+gpt-4-1-nano", wf_data["gpt-4-1+gpt-4-1-nano"]))
+            if wf_data["gpt-4-1"] is not None:
+                line2_with_base.append(("gpt-4-1", wf_data["gpt-4-1"]))
+        
         # Filter out None points for each line (handles missing experiments gracefully)
-        valid_points_line1 = [(name, data) for name, data in line1_order if data is not None]
-        valid_points_line2 = [(name, data) for name, data in line2_order if data is not None]
+        valid_points_line1 = [(name, data) for name, data in line1_with_base if data is not None]
+        valid_points_line2 = [(name, data) for name, data in line2_with_base if data is not None]
         
         # Draw lines if we have at least 2 points (skip if experiment is still running)
         for line_num, valid_points in enumerate([valid_points_line1, valid_points_line2], 1):
@@ -524,17 +544,24 @@ def plot_dataset_subplot(ax, data: Dict[Tuple[str, str], Dict], dataset_name: st
         
         # Collect all unique points to plot markers (only plot points that exist)
         all_points = {}
-        for name, data in valid_points_line1 + valid_points_line2:
+        for name, data in line1_with_base + line2_with_base:
             if name not in all_points and data is not None:
                 all_points[name] = data
         
         # Plot markers for all points (skip missing experiments)
+        # Single models (gpt-4-1, gpt-4-1-nano) are more transparent for comparison
         for model_name, point_data in all_points.items():
             try:
                 marker = MODEL_MARKERS.get(model_name, "o")
+                # Single models are more transparent (just for comparison)
+                if model_name in ["gpt-4-1", "gpt-4-1-nano"]:
+                    alpha = 0.5  # More transparent
+                else:
+                    alpha = 1.0  # Full opacity for combinations
+                
                 ax.scatter(point_data["cost"], point_data["chrf"], 
-                          c=color, marker=marker, s=95,  # Increased from 63 (1.5x)
-                          edgecolors='black', linewidths=0.5, alpha=1.0, zorder=5)  # Non-transparent
+                          c=color, marker=marker, s=95,
+                          edgecolors='black', linewidths=0.5, alpha=alpha, zorder=5)
             except (KeyError, TypeError) as e:
                 print(f"DEBUG: Error plotting marker for {workflow}/{model_name}: {e}")
     
