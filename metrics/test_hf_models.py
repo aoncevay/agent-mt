@@ -57,32 +57,61 @@ def test_labse_model() -> Tuple[bool, str]:
         return False, f"LaBSE model not found in any of the expected paths:\n  " + "\n  ".join(str(p) for p in possible_paths)
     
     _log_with_time(f"Found LaBSE at: {labse_path}")
+    _log_with_time(f"Absolute path: {labse_path.resolve()}")
+    
+    # Check if it's a symlink
+    if labse_path.is_symlink():
+        _log_with_time(f"  ⚠ Path is a symlink, pointing to: {labse_path.readlink()}")
     
     # Check directory structure
-    _log_with_time("Checking directory structure...")
+    _log_with_time("\nChecking directory structure...")
     required_files = ["config.json", "modules.json"]
     model_files = ["model.safetensors", "pytorch_model.bin"]
     
     found_files = []
     missing_files = []
     for file in required_files:
-        if (labse_path / file).exists():
+        file_path = labse_path / file
+        if file_path.exists():
             found_files.append(file)
+            _log_with_time(f"  ✓ Found {file}")
+            # Check if it's a symlink
+            if file_path.is_symlink():
+                _log_with_time(f"    → Symlink to: {file_path.readlink()}")
         else:
             missing_files.append(file)
+            _log_with_time(f"  ✗ Missing {file}")
     
     model_file_found = False
+    model_file_path = None
     for file in model_files:
-        if (labse_path / file).exists():
+        file_path = labse_path / file
+        if file_path.exists():
             found_files.append(file)
             model_file_found = True
+            model_file_path = file_path
             _log_with_time(f"  ✓ Found {file}")
             # Check file size
-            size_mb = (labse_path / file).stat().st_size / (1024*1024)
-            _log_with_time(f"    Size: {size_mb:.1f} MB")
-            # Check readability
-            readable = os.access(labse_path / file, os.R_OK)
-            _log_with_time(f"    Readable: {readable}")
+            try:
+                stat = file_path.stat()
+                size_mb = stat.st_size / (1024*1024)
+                _log_with_time(f"    Size: {size_mb:.1f} MB")
+                _log_with_time(f"    Permissions: {oct(stat.st_mode)}")
+                # Check readability
+                readable = os.access(file_path, os.R_OK)
+                _log_with_time(f"    Readable: {readable}")
+                # Check if it's a symlink
+                if file_path.is_symlink():
+                    _log_with_time(f"    → Symlink to: {file_path.readlink()}")
+                # Try reading first few bytes
+                try:
+                    with open(file_path, 'rb') as f:
+                        header = f.read(16)
+                        _log_with_time(f"    Header (hex): {header.hex()[:32]}...")
+                except Exception as e:
+                    _log_with_time(f"    ⚠ Could not read file: {e}")
+            except Exception as e:
+                _log_with_time(f"    ⚠ Could not stat file: {e}")
     
     if not model_file_found:
         return False, f"No model weight files found ({', '.join(model_files)})"
@@ -90,39 +119,118 @@ def test_labse_model() -> Tuple[bool, str]:
     if missing_files:
         _log_with_time(f"  ⚠ Missing files: {', '.join(missing_files)}")
     
+    # Check modules.json structure
+    modules_json = labse_path / "modules.json"
+    if modules_json.exists():
+        _log_with_time("\nChecking modules.json structure...")
+        try:
+            import json
+            with open(modules_json, 'r', encoding='utf-8') as f:
+                modules_data = json.load(f)
+            _log_with_time(f"  Found {len(modules_data)} modules")
+            for i, module in enumerate(modules_data):
+                module_path = module.get('path', '')
+                module_type = module.get('type', '')
+                _log_with_time(f"    Module {i}: path='{module_path}', type={module_type}")
+                # Check if module expects files in subdirectory
+                if module_path:
+                    subdir = labse_path / module_path
+                    if subdir.exists():
+                        subdir_files = list(subdir.glob("*"))
+                        _log_with_time(f"      → Subdirectory exists with {len(subdir_files)} files")
+        except Exception as e:
+            _log_with_time(f"  ⚠ Could not read modules.json: {e}")
+    
+    # Check for subdirectories that might contain model files
+    _log_with_time("\nChecking for subdirectories...")
+    subdirs = [d for d in labse_path.iterdir() if d.is_dir()]
+    for subdir in subdirs:
+        subdir_files = list(subdir.glob("*.safetensors")) + list(subdir.glob("*.bin"))
+        if subdir_files:
+            _log_with_time(f"  ⚠ Found model files in subdirectory '{subdir.name}':")
+            for f in subdir_files:
+                _log_with_time(f"    - {f.name}")
+    
     # Try loading with SentenceTransformer
     _log_with_time("\nAttempting to load with SentenceTransformer...")
     try:
         from sentence_transformers import SentenceTransformer
+        import sentence_transformers
         
-        # Try with local_files_only=True
-        _log_with_time("  Attempt 1: local_files_only=True")
-        try:
-            model = SentenceTransformer(str(labse_path), local_files_only=True)
-            _log_with_time("  ✓ Successfully loaded with local_files_only=True")
-            return True, "LaBSE loaded successfully"
-        except Exception as e1:
-            _log_with_time(f"  ✗ Failed: {type(e1).__name__}: {e1}")
+        _log_with_time(f"  sentence-transformers version: {sentence_transformers.__version__}")
+        
+        # Try different path formats
+        path_variants = [
+            (str(labse_path), "Absolute path (string)"),
+            (str(labse_path.resolve()), "Absolute resolved path (string)"),
+            (labse_path, "Path object"),
+            (labse_path.resolve(), "Resolved Path object"),
+        ]
+        
+        all_errors = []
+        
+        for path_var, description in path_variants:
+            _log_with_time(f"\n  Attempt with {description}: {path_var}")
             
-            # Try without local_files_only
-            _log_with_time("  Attempt 2: local_files_only=False (with offline env vars)")
+            # Try with local_files_only=True
             try:
-                model = SentenceTransformer(str(labse_path), local_files_only=False)
-                _log_with_time("  ✓ Successfully loaded with local_files_only=False")
-                return True, "LaBSE loaded successfully (without local_files_only)"
-            except Exception as e2:
-                _log_with_time(f"  ✗ Failed: {type(e2).__name__}: {e2}")
+                model = SentenceTransformer(path_var, local_files_only=True)
+                _log_with_time(f"  ✓ Successfully loaded with {description} (local_files_only=True)")
+                return True, f"LaBSE loaded successfully with {description}"
+            except Exception as e1:
+                error_msg = f"{type(e1).__name__}: {str(e1)[:200]}"
+                _log_with_time(f"  ✗ Failed (local_files_only=True): {error_msg}")
+                all_errors.append(f"{description} (local_files_only=True): {error_msg}")
                 
-                # Try by model name
-                _log_with_time("  Attempt 3: Loading by model name 'sentence-transformers/LaBSE'")
+                # Try without local_files_only
                 try:
-                    model = SentenceTransformer('sentence-transformers/LaBSE', local_files_only=True)
-                    _log_with_time("  ✓ Successfully loaded by model name")
-                    return True, "LaBSE loaded successfully (by model name)"
-                except Exception as e3:
-                    _log_with_time(f"  ✗ Failed: {type(e3).__name__}: {e3}")
-                    
-                    return False, f"All loading attempts failed:\n  Attempt 1: {e1}\n  Attempt 2: {e2}\n  Attempt 3: {e3}"
+                    model = SentenceTransformer(path_var, local_files_only=False)
+                    _log_with_time(f"  ✓ Successfully loaded with {description} (local_files_only=False)")
+                    return True, f"LaBSE loaded successfully with {description} (without local_files_only)"
+                except Exception as e2:
+                    error_msg = f"{type(e2).__name__}: {str(e2)[:200]}"
+                    _log_with_time(f"  ✗ Failed (local_files_only=False): {error_msg}")
+                    all_errors.append(f"{description} (local_files_only=False): {error_msg}")
+        
+        # Try loading underlying transformers model directly
+        _log_with_time("\n  Attempting to load underlying transformers model directly...")
+        try:
+            from transformers import AutoModel, AutoTokenizer
+            _log_with_time("    Loading AutoModel...")
+            # Try to find the actual model directory (might be in a subdirectory)
+            # Check if there's a "0" subdirectory (module 0)
+            module_0_dir = labse_path / "0"
+            if module_0_dir.exists():
+                _log_with_time(f"    Found '0' subdirectory, trying to load from there...")
+                try:
+                    model = AutoModel.from_pretrained(str(module_0_dir), local_files_only=True)
+                    _log_with_time("    ✓ Successfully loaded from '0' subdirectory")
+                    return True, "LaBSE loaded successfully from '0' subdirectory"
+                except Exception as e:
+                    _log_with_time(f"    ✗ Failed to load from '0' subdirectory: {e}")
+            
+            # Try loading from root
+            try:
+                model = AutoModel.from_pretrained(str(labse_path), local_files_only=True)
+                _log_with_time("    ✓ Successfully loaded with AutoModel.from_pretrained")
+                return True, "LaBSE loaded successfully with AutoModel"
+            except Exception as e:
+                _log_with_time(f"    ✗ Failed with AutoModel: {e}")
+                all_errors.append(f"AutoModel: {e}")
+        except ImportError as e:
+            _log_with_time(f"    ✗ Could not import transformers: {e}")
+        
+        # Try by model name (will fail offline, but shows what it expects)
+        _log_with_time("\n  Attempting to load by model name (will fail offline)...")
+        try:
+            model = SentenceTransformer('sentence-transformers/LaBSE', local_files_only=True)
+            _log_with_time("  ✓ Successfully loaded by model name")
+            return True, "LaBSE loaded successfully (by model name)"
+        except Exception as e3:
+            _log_with_time(f"  ✗ Failed: {type(e3).__name__}: {e3}")
+            all_errors.append(f"Model name: {e3}")
+        
+        return False, f"All loading attempts failed:\n  " + "\n  ".join(all_errors)
     
     except ImportError as e:
         return False, f"Could not import sentence_transformers: {e}"
