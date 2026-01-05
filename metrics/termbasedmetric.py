@@ -116,8 +116,8 @@ class TermBasedMetric():
                 # Fallback: try HF (will fail if offline, but user should have model locally)
                 print(f"  ⚠ Warning: awesome-align model not found at {awesome_align_path}")
                 print(f"  Attempting to load from HuggingFace (will fail if offline)...")
-                self.aligner_model = AutoModel.from_pretrained("aneuraz/awesome-align-with-co")
-                self.aligner_tokenizer = AutoTokenizer.from_pretrained("aneuraz/awesome-align-with-co")
+            self.aligner_model = AutoModel.from_pretrained("aneuraz/awesome-align-with-co")
+            self.aligner_tokenizer = AutoTokenizer.from_pretrained("aneuraz/awesome-align-with-co")
         #self.pseudoreference_mode = pseudoreference_mode
         #self.statistical_metric = statistical_metric
 

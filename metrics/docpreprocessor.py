@@ -85,8 +85,56 @@ class DocPreprocessor:
                 f"  - /mnt/custom-file-systems/efs/HF_models/LaBSE"
             )
         
-        # Initialize LaBSE embeddings from local path (no HF connection)
+        # Debug: Check files in directory
         _log_with_time(f"  Loading LaBSE from local path: {labse_model_path}")
+        _log_with_time(f"  Debug: Checking directory contents...")
+        
+        try:
+            files_in_dir = list(labse_model_path.iterdir())
+            _log_with_time(f"  Found {len(files_in_dir)} items in directory")
+            
+            # Check for required files
+            model_safetensors = labse_model_path / "model.safetensors"
+            model_bin = labse_model_path / "pytorch_model.bin"
+            config_json = labse_model_path / "config.json"
+            
+            _log_with_time(f"  Checking model.safetensors: exists={model_safetensors.exists()}, readable={os.access(model_safetensors, os.R_OK) if model_safetensors.exists() else False}")
+            _log_with_time(f"  Checking pytorch_model.bin: exists={model_bin.exists()}, readable={os.access(model_bin, os.R_OK) if model_bin.exists() else False}")
+            _log_with_time(f"  Checking config.json: exists={config_json.exists()}, readable={os.access(config_json, os.R_OK) if config_json.exists() else False}")
+            
+            # List all files for debugging
+            _log_with_time(f"  Directory contents:")
+            for item in sorted(files_in_dir):
+                if item.is_file():
+                    size = item.stat().st_size / (1024*1024)  # Size in MB
+                    readable = os.access(item, os.R_OK)
+                    _log_with_time(f"    - {item.name} ({size:.1f} MB, readable={readable})")
+                elif item.is_dir():
+                    _log_with_time(f"    - {item.name}/ (directory)")
+            
+            # Check if files are actually readable
+            if model_safetensors.exists() and not os.access(model_safetensors, os.R_OK):
+                _log_with_time(f"  ⚠ WARNING: model.safetensors exists but is not readable!")
+                _log_with_time(f"  Trying to fix permissions...")
+                try:
+                    os.chmod(model_safetensors, 0o644)
+                    _log_with_time(f"  ✓ Changed permissions on model.safetensors")
+                except Exception as e:
+                    _log_with_time(f"  ✗ Could not change permissions: {e}")
+            
+            if model_bin.exists() and not os.access(model_bin, os.R_OK):
+                _log_with_time(f"  ⚠ WARNING: pytorch_model.bin exists but is not readable!")
+                _log_with_time(f"  Trying to fix permissions...")
+                try:
+                    os.chmod(model_bin, 0o644)
+                    _log_with_time(f"  ✓ Changed permissions on pytorch_model.bin")
+                except Exception as e:
+                    _log_with_time(f"  ✗ Could not change permissions: {e}")
+            
+        except Exception as e:
+            _log_with_time(f"  ⚠ Warning: Could not debug directory: {e}")
+        
+        # Initialize LaBSE embeddings from local path (no HF connection)
         try:
             # Set environment variables to prevent HF connections (set at module level too)
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -95,6 +143,10 @@ class DocPreprocessor:
             # Load SentenceTransformer from local path with local_files_only=True
             # This prevents any HuggingFace connection attempts
             _log_with_time("  Initializing SentenceTransformer...")
+            _log_with_time(f"  Using path: {labse_model_path}")
+            _log_with_time(f"  Path exists: {labse_model_path.exists()}")
+            _log_with_time(f"  Path is directory: {labse_model_path.is_dir()}")
+            
             labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
             _log_with_time("  ✓ SentenceTransformer loaded")
             
