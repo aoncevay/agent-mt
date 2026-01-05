@@ -1599,7 +1599,7 @@ def plot_per_model(
     if not data_by_model_workflow:
         return
     
-    # Create figure with 2x2 subplots
+    # Create figure with 2x2 subplots (shared axes)
     # Max width: 5 inches, aspect ratio per subplot: 3:2
     # For 2x2 grid: width = 5, height = 5 * (2/3) * 2 = 6.67, but we want to keep it reasonable
     # Let's use: width = 5, height per subplot = 5 * (2/3) / 2 = 1.67, total height = 3.33
@@ -1608,8 +1608,34 @@ def plot_per_model(
     subplot_height = fig_width / 2.0 / subplot_aspect
     fig_height = subplot_height * 2.0
     
-    _fig, axes = plt.subplots(2, 2, figsize=(fig_width, fig_height))
+    _fig, axes = plt.subplots(2, 2, figsize=(fig_width, fig_height), sharex=True, sharey=True)
     axes = axes.flatten()
+    
+    # First pass: collect all values to determine global y-axis limits
+    all_values = []
+    for model in models_to_plot:
+        if model not in data_by_model_workflow:
+            continue
+        model_data = data_by_model_workflow[model]
+        for workflow in WORKFLOW_ORDER:
+            if workflow in model_data and workflow in WORKFLOW_SHAPES:
+                all_values.append(model_data[workflow]["value"])
+    
+    # Determine global y-axis limits
+    if all_values:
+        y_min_global = min(all_values)
+        y_max_global = max(all_values)
+        if metric == "termacc":
+            # For TermAcc (0-1 range), use steps of 0.05
+            y_min_rounded = 0.05 * (int(y_min_global * 20) // 1)
+            y_max_rounded = 0.05 * ((int(y_max_global * 20) + 1) // 1)
+        else:
+            # For chrF++, use steps of 5
+            y_min_rounded = 5 * (int(y_min_global) // 5)
+            y_max_rounded = 5 * ((int(y_max_global) + 4) // 5)
+    else:
+        y_min_rounded = 0
+        y_max_rounded = 100
     
     # Plot each model in a subplot
     for idx, model in enumerate(models_to_plot):
@@ -1636,8 +1662,9 @@ def plot_per_model(
         # Set log scale for x-axis
         ax.set_xscale('log')
         
-        # Labels
-        ax.set_xlabel('Cost ($, log scale)', fontsize=9)
+        # Labels (only on outer edges)
+        if idx >= 2:  # Bottom row
+            ax.set_xlabel('Cost ($, log scale)', fontsize=9)
         if idx == 0 or idx == 2:  # Left column
             if metric == "chrf":
                 ax.set_ylabel('chrF++', fontsize=9)
@@ -1648,17 +1675,7 @@ def plot_per_model(
         model_display = MODEL_DISPLAY_NAMES.get(model, model)
         ax.set_title(model_display, fontsize=10, fontweight='bold')
         
-        # Auto-scale y-axis, then adjust ticks
-        ax.set_ylim(auto=True)
-        y_min, y_max = ax.get_ylim()
-        if metric == "termacc":
-            # For TermAcc (0-1 range), use steps of 0.05
-            y_min_rounded = 0.05 * (int(y_min * 20) // 1)
-            y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)
-        else:
-            # For chrF++, use steps of 5
-            y_min_rounded = 5 * (int(y_min) // 5)
-            y_max_rounded = 5 * ((int(y_max) + 4) // 5)
+        # Set shared y-axis limits
         ax.set_ylim(y_min_rounded, y_max_rounded)
         
         # Grid
