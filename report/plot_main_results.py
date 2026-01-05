@@ -1611,8 +1611,9 @@ def plot_per_model(
     _fig, axes = plt.subplots(2, 2, figsize=(fig_width, fig_height), sharex=True, sharey=True)
     axes = axes.flatten()
     
-    # First pass: collect all values to determine global y-axis limits
+    # First pass: collect all values and costs to determine global axis limits
     all_values = []
+    all_costs = []
     for model in models_to_plot:
         if model not in data_by_model_workflow:
             continue
@@ -1620,22 +1621,43 @@ def plot_per_model(
         for workflow in WORKFLOW_ORDER:
             if workflow in model_data and workflow in WORKFLOW_SHAPES:
                 all_values.append(model_data[workflow]["value"])
+                all_costs.append(model_data[workflow]["cost"])
     
-    # Determine global y-axis limits
+    # Determine global y-axis limits with padding
     if all_values:
         y_min_global = min(all_values)
         y_max_global = max(all_values)
+        y_range = y_max_global - y_min_global
+        # Add 10% padding on each side
+        y_min_padded = y_min_global - 0.1 * y_range
+        y_max_padded = y_max_global + 0.1 * y_range
+        
         if metric == "termacc":
-            # For TermAcc (0-1 range), use steps of 0.05
-            y_min_rounded = 0.05 * (int(y_min_global * 20) // 1)
-            y_max_rounded = 0.05 * ((int(y_max_global * 20) + 1) // 1)
+            # For TermAcc (0-1 range), use steps of 0.05, but ensure padding is included
+            y_min_rounded = 0.05 * (int(y_min_padded * 20) // 1)
+            y_max_rounded = 0.05 * ((int(y_max_padded * 20) + 1) // 1)
+            # Ensure we don't go below 0 or above 1
+            y_min_rounded = max(0, y_min_rounded)
+            y_max_rounded = min(1, y_max_rounded)
         else:
-            # For chrF++, use steps of 5
-            y_min_rounded = 5 * (int(y_min_global) // 5)
-            y_max_rounded = 5 * ((int(y_max_global) + 4) // 5)
+            # For chrF++, use steps of 5, but ensure padding is included
+            y_min_rounded = 5 * (int(y_min_padded) // 5)
+            y_max_rounded = 5 * ((int(y_max_padded) + 4) // 5)
     else:
         y_min_rounded = 0
         y_max_rounded = 100
+    
+    # Determine global x-axis limits with padding (for log scale)
+    if all_costs:
+        x_min_global = min(all_costs)
+        x_max_global = max(all_costs)
+        # For log scale, add padding by multiplying/dividing by a factor
+        # Use 1.5x factor to add ~50% padding on each side in log space
+        x_min_padded = x_min_global / 1.5
+        x_max_padded = x_max_global * 1.5
+    else:
+        x_min_padded = 0.01
+        x_max_padded = 100
     
     # Plot each model in a subplot
     for idx, model in enumerate(models_to_plot):
@@ -1662,6 +1684,10 @@ def plot_per_model(
         # Set log scale for x-axis
         ax.set_xscale('log')
         
+        # Set shared axis limits with padding
+        ax.set_xlim(x_min_padded, x_max_padded)
+        ax.set_ylim(y_min_rounded, y_max_rounded)
+        
         # Labels (only on outer edges)
         if idx >= 2:  # Bottom row
             ax.set_xlabel('Cost ($, log scale)', fontsize=9)
@@ -1674,9 +1700,6 @@ def plot_per_model(
         # Title: model name
         model_display = MODEL_DISPLAY_NAMES.get(model, model)
         ax.set_title(model_display, fontsize=10, fontweight='bold')
-        
-        # Set shared y-axis limits
-        ax.set_ylim(y_min_rounded, y_max_rounded)
         
         # Grid
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
