@@ -7,6 +7,8 @@ Adapted from WMT25-Term term-consistency approach to work with our data format.
 import pandas as pd
 import json
 import re
+import os
+from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 from sentence_transformers import SentenceTransformer
 from polyfuzz import PolyFuzz
@@ -16,6 +18,10 @@ from flair.embeddings import SentenceTransformerDocumentEmbeddings
 import stanza
 from nltk.tokenize import word_tokenize
 
+# Set environment variables to prevent HuggingFace connections
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 
 class DocPreprocessor:
     """
@@ -24,21 +30,61 @@ class DocPreprocessor:
     Adapted to work with our data format (accepts documents directly, not from files).
     """
 
-    def __init__(self, src_lang: str, tgt_lang: str):
+    def __init__(self, src_lang: str, tgt_lang: str, labse_model_path: Optional[Path] = None):
         """
         Initialize the document preprocessor.
         
         Args:
             src_lang: Source language code (e.g., 'en', 'zht')
             tgt_lang: Target language code (e.g., 'zht', 'es')
+            labse_model_path: Optional path to local LaBSE model (default: ~/user-default-efs/HF_models/LaBSE)
         """
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         
-        # Initialize LaBSE embeddings for alignment
-        self.embeddings = SentenceTransformerDocumentEmbeddings('LaBSE')
-        self.LaBSE = Embeddings(self.embeddings, min_similarity=0, model_id="LaBSE")
-        self.model = PolyFuzz([self.LaBSE])
+        # Find LaBSE model path
+        if labse_model_path is None:
+            # Default path from user's configuration
+            labse_model_path = Path.home() / "user-default-efs" / "HF_models" / "LaBSE"
+        
+        # Check if local model exists
+        if not labse_model_path.exists():
+            raise FileNotFoundError(
+                f"LaBSE model not found at {labse_model_path}\n"
+                f"Please ensure the model is downloaded and available locally.\n"
+                f"The model should be at: ~/user-default-efs/HF_models/LaBSE"
+            )
+        
+        # Initialize LaBSE embeddings from local path (no HF connection)
+        print(f"  Loading LaBSE from local path: {labse_model_path}")
+        try:
+            # Set environment variables to prevent HF connections (set at module level too)
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            
+            # Load SentenceTransformer from local path with local_files_only=True
+            # This prevents any HuggingFace connection attempts
+            labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+            
+            # Create embeddings wrapper for PolyFuzz
+            # Try passing the SentenceTransformer instance directly if supported,
+            # otherwise use the path (but ensure offline mode is set)
+            try:
+                # Some versions of flair support passing the model directly
+                self.embeddings = SentenceTransformerDocumentEmbeddings(labse_model)
+            except (TypeError, ValueError):
+                # Fallback: use path string, but ensure offline mode
+                # Note: This might still try to connect, but with offline env vars it should fail gracefully
+                self.embeddings = SentenceTransformerDocumentEmbeddings(str(labse_model_path))
+            
+            self.LaBSE = Embeddings(self.embeddings, min_similarity=0, model_id="LaBSE")
+            self.model = PolyFuzz([self.LaBSE])
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not load LaBSE model from {labse_model_path}: {e}\n"
+                f"Please ensure the model is properly downloaded and the path is correct.\n"
+                f"Expected path: ~/user-default-efs/HF_models/LaBSE"
+            )
         
         # Initialize stanza for English normalization (if needed)
         if src_lang == 'en':

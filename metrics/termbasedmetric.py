@@ -1,5 +1,7 @@
 import pandas as pd
 import json
+import os
+from pathlib import Path
 from nltk.tokenize import word_tokenize
 # OpenAI removed - using CDAO instead
 import ast
@@ -21,6 +23,10 @@ from sklearn.metrics import confusion_matrix
 from collections import defaultdict
 import pymorphy3
 import jieba
+
+# Set environment variables to prevent HuggingFace connections
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
 
 
 class TermBasedMetric():
@@ -70,8 +76,23 @@ class TermBasedMetric():
             # Use CDAO instead of OpenAI
             openai_model_id = model_name2openai_id.get('gpt-4-1-mini', 'gpt-4.1-mini-2025-04-14')
             self.llm = create_openai_llm(openai_model_id, temperature=0.0)
-            self.aligner_model = AutoModel.from_pretrained("aneuraz/awesome-align-with-co")
-            self.aligner_tokenizer = AutoTokenizer.from_pretrained("aneuraz/awesome-align-with-co")
+            
+            # Load awesome-align model from local path (if available) to avoid HF connection
+            # Default: try to use local model, fallback to HF if not found
+            import os
+            awesome_align_path = Path.home() / "user-default-efs" / "HF_models" / "awesome-align-with-co"
+            if awesome_align_path.exists():
+                # Use local model
+                os.environ["TRANSFORMERS_OFFLINE"] = "1"
+                os.environ["HF_HUB_OFFLINE"] = "1"
+                self.aligner_model = AutoModel.from_pretrained(str(awesome_align_path), local_files_only=True)
+                self.aligner_tokenizer = AutoTokenizer.from_pretrained(str(awesome_align_path), local_files_only=True)
+            else:
+                # Fallback: try HF (will fail if offline, but user should have model locally)
+                print(f"  ⚠ Warning: awesome-align model not found at {awesome_align_path}")
+                print(f"  Attempting to load from HuggingFace (will fail if offline)...")
+                self.aligner_model = AutoModel.from_pretrained("aneuraz/awesome-align-with-co")
+                self.aligner_tokenizer = AutoTokenizer.from_pretrained("aneuraz/awesome-align-with-co")
         #self.pseudoreference_mode = pseudoreference_mode
         #self.statistical_metric = statistical_metric
 

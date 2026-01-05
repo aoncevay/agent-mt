@@ -43,14 +43,18 @@ METRICS_OUTPUT_DIR = PROJECT_ROOT / "metrics" / "results"
 def find_experiments(
     dataset: str,
     target_language: Optional[str] = None,
+    workflow: Optional[str] = None,
+    model: Optional[str] = None,
     outputs_dirs: List[Path] = None
 ) -> List[Tuple[Path, Dict[str, Any]]]:
     """
-    Find all experiments matching the dataset and target_language filter.
+    Find all experiments matching the dataset and filters.
     
     Args:
         dataset: Dataset name ("wmt25" or "dolfin")
         target_language: Optional target language filter (e.g., "zht", "es")
+        workflow: Optional workflow filter (e.g., "IRB", "IRB.term")
+        model: Optional model filter (e.g., "gpt-4-1", "qwen3-32b")
         outputs_dirs: List of output directories to scan
     
     Returns:
@@ -81,11 +85,26 @@ def find_experiments(
                 if dataset_name != dataset:
                     continue
                 
+                # Extract workflow_dir and model
+                workflow_dir = parts[outputs_idx + 3]
+                model_name = parts[outputs_idx + 4] if len(parts) > outputs_idx + 4 else None
+                
                 # For WMT25, only process .term experiments (terminology experiments)
                 if dataset == "wmt25":
-                    workflow_dir = parts[outputs_idx + 3]
                     if not workflow_dir.endswith('.term'):
                         continue  # Skip non-terminology experiments for WMT25
+                
+                # Filter by workflow if specified
+                if workflow:
+                    # workflow can be "IRB" or "IRB.term" - check both
+                    workflow_base = workflow_dir.replace('.term', '')
+                    workflow_filter_base = workflow.replace('.term', '')
+                    if workflow_base != workflow_filter_base:
+                        continue
+                
+                # Filter by model if specified
+                if model and model_name != model:
+                    continue
                 
                 # Filter by target_language if specified
                 if target_language:
@@ -434,46 +453,69 @@ def process_experiment(
 
 def save_metrics_results(
     results: Dict[str, Any],
-    dataset: str,
-    lang_pair: str,
-    metrics_dir: Path
+    output_dir: Path,
+    metrics_base_dir: Path
 ) -> None:
     """
-    Save metrics results incrementally to JSON file.
+    Save metrics results to a file matching the output directory structure.
+    
+    Structure: metrics/results/{dataset}/{lang_pair}/{workflow_dir}/{model}/metrics.json
     
     Args:
         results: Results dictionary for one experiment
-        dataset: Dataset name
-        lang_pair: Language pair
-        metrics_dir: Directory to save metrics files
+        output_dir: Original output directory (e.g., outputs/wmt25/en-zht/IRB.term/gpt-4-1)
+        metrics_base_dir: Base directory for metrics results (e.g., metrics/results)
     """
-    metrics_dir.mkdir(parents=True, exist_ok=True)
+    # Parse the output directory structure: {base}/{dataset}/{lang_pair}/{workflow_dir}/{model}
+    parts = output_dir.parts
     
-    # File name: {dataset}_{lang_pair}_metrics.json
-    output_file = metrics_dir / f"{dataset}_{lang_pair}_metrics.json"
+    # Find the base outputs directory name (outputs or outputs_qwen3)
+    base_name = None
+    for part in parts:
+        if part in ['outputs', 'outputs_qwen3']:
+            base_name = part
+            break
     
-    # Load existing results if file exists
-    existing_results = {}
-    if output_file.exists():
-        try:
-            with open(output_file, 'r', encoding='utf-8') as f:
-                existing_results = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            existing_results = {}
+    if not base_name:
+        raise ValueError(f"Could not determine base directory from path: {output_dir}")
     
-    # Update with new results
-    system_name = results['system_name']
-    existing_results[system_name] = {
+    base_idx = parts.index(base_name)
+    
+    # Extract: dataset, lang_pair, workflow_dir, model
+    if len(parts) < base_idx + 5:
+        raise ValueError(f"Invalid output directory structure: {output_dir}")
+    
+    dataset = parts[base_idx + 1]
+    lang_pair = parts[base_idx + 2]
+    workflow_dir = parts[base_idx + 3]  # e.g., "IRB.term" or "IRB"
+    model = parts[base_idx + 4]
+    
+    # Build metrics directory structure matching outputs
+    metrics_output_dir = metrics_base_dir / dataset / lang_pair / workflow_dir / model
+    metrics_output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save results to metrics.json
+    output_file = metrics_output_dir / "metrics.json"
+    
+    # Save results (overwrite - each experiment gets its own file)
+    metrics_data = {
+        'dataset': dataset,
+        'lang_pair': lang_pair,
+        'workflow': workflow_dir,
+        'model': model,
+        'system_name': results.get('system_name', f"{workflow_dir}+{model}"),
+        'num_samples': results.get('num_samples', 0),
+        'num_segments': results.get('num_segments', 0),
         'first': results.get('first', {}),
         'frequent': results.get('frequent', {}),
         'predefined': results.get('predefined', {}),
         'comet': results.get('comet', {})
     }
     
-    # Save (atomic write)
+    # Atomic write
     temp_file = output_file.with_suffix('.json.tmp')
     with open(temp_file, 'w', encoding='utf-8') as f:
-        json.dump(existing_results, f, indent=2, ensure_ascii=False)
+        json.dump(metrics_data, f, indent=2, ensure_ascii=False)
     temp_file.replace(output_file)
     
     print(f"  ✓ Saved results to {output_file}")
@@ -510,6 +552,20 @@ def main():
         default=None,
         help="Directory to save metrics results (default: metrics/results/)"
     )
+    parser.add_argument(
+        "--workflow",
+        type=str,
+        default=None,
+        help="Filter by workflow (e.g., 'IRB', 'MaMT', 'IRB.term'). "
+             "If not specified, processes all workflows."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Filter by model (e.g., 'gpt-4-1', 'qwen3-32b'). "
+             "If not specified, processes all models."
+    )
     
     args = parser.parse_args()
     
@@ -537,13 +593,23 @@ def main():
         print(f"Target language filter: all")
     print(f"Workflows to process: {workflows}")
     print(f"Models to process: {models}")
+    if args.workflow:
+        print(f"Workflow filter: {args.workflow}")
+    if args.model:
+        print(f"Model filter: {args.model}")
     print(f"Output directories: {[str(d) for d in outputs_dirs]}")
     print(f"Metrics output: {metrics_dir}")
     print("="*80)
     
     # Find experiments
     print("\nFinding experiments...")
-    experiments = find_experiments(args.dataset, args.target_language, outputs_dirs)
+    experiments = find_experiments(
+        args.dataset, 
+        args.target_language, 
+        args.workflow,
+        args.model,
+        outputs_dirs
+    )
     print(f"Found {len(experiments)} completed experiments")
     
     if not experiments:
@@ -578,8 +644,8 @@ def main():
                 )
                 
                 if results:
-                    # Save results incrementally
-                    save_metrics_results(results, args.dataset, lang_pair, metrics_dir)
+                    # Save results to file matching output directory structure
+                    save_metrics_results(results, output_dir, metrics_dir)
                     
             except Exception as e:
                 print(f"  ✗ Error processing experiment: {e}")
