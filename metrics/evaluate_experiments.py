@@ -399,32 +399,127 @@ def process_experiment(
         except Exception as e:
             print(f"    ⚠ Warning: Could not compute term-based metrics: {e}")
     
-    # 3. Run comet_evaluator (all datasets)
-    print(f"  Step 3: Computing COMET scores...")
+    # 3. Run comet_evaluator (all datasets) - per sample
+    print(f"  Step 3: Computing COMET scores per sample...")
     comet_results = {
         'avg_comet': None,
         'min_comet': None,
-        'max_comet': None
+        'max_comet': None,
+        'per_sample': []
     }
+    
+    # Track alignment statistics per sample
+    alignment_stats = []
     
     try:
         from metrics.comet_evaluator import compute_comet_scores
         
-        # Prepare segments: (source, translation, reference)
-        # For now, use document-level references (we'll align them to segments later)
-        segments = []
-        for idx, row in aligned_df.iterrows():
-            src = row[src_lang]
-            tgt = row[tgt_lang]
-            # Use first reference for now (document-level)
-            # TODO: Align references to segments properly
-            ref = references[0] if references else ""
-            segments.append((src, tgt, ref))
+        # Group segments by sample (paragraph column indicates document index)
+        for sample_idx in range(len(sample_data)):
+            sample_info = sample_data[sample_idx]
+            sample_segments_df = aligned_df[aligned_df['paragraph'] == sample_idx]
+            
+            if len(sample_segments_df) == 0:
+                # No aligned segments for this sample
+                alignment_stats.append({
+                    'sample_idx': sample_idx,
+                    'sample_id': sample_info['sample_id'],
+                    'under_translated_segments': 0,  # We'll compute this below
+                    'over_translated_segments': 0,
+                    'comet_scores': [],
+                    'avg_comet': None
+                })
+                continue
+            
+            # Prepare segments for this sample: (source, translation, reference)
+            segments = []
+            for idx, row in sample_segments_df.iterrows():
+                src = row[src_lang]
+                tgt = row[tgt_lang]
+                # Use reference for this specific sample
+                ref = sample_info['reference_text']
+                segments.append((src, tgt, ref))
+            
+            # Compute COMET scores for this sample's segments
+            sample_comet = compute_comet_scores(segments)
+            comet_scores = sample_comet.get('scores', [])
+            
+            # Count alignment statistics
+            # Get source and target paragraphs for this sample (same splitting as docpreprocessor)
+            src_text = sample_info['source_text']
+            tgt_text = sample_info['translation']
+            separator = '\n\n'
+            
+            src_paragraphs = [p.strip() for p in src_text.split(separator) if p.strip()]
+            tgt_paragraphs = [p.strip() for p in tgt_text.split(separator) if p.strip()]
+            
+            # Track which source and target segments have alignments
+            # We'll check if each paragraph has at least one aligned segment
+            aligned_src_paragraphs = set()
+            aligned_tgt_paragraphs = set()
+            
+            # For each aligned segment, find which source/target paragraph it belongs to
+            for _, row in sample_segments_df.iterrows():
+                src_seg = str(row[src_lang]).strip()
+                tgt_seg = str(row[tgt_lang]).strip()
+                
+                # Find which source paragraph contains this segment
+                for para_idx, src_para in enumerate(src_paragraphs):
+                    # Check if segment is part of this paragraph (substring match)
+                    if src_seg in src_para or (len(src_seg) > 20 and src_para in src_seg):
+                        aligned_src_paragraphs.add(para_idx)
+                        break
+                
+                # Find which target paragraph contains this segment
+                for para_idx, tgt_para in enumerate(tgt_paragraphs):
+                    # Check if segment is part of this paragraph (substring match)
+                    if tgt_seg in tgt_para or (len(tgt_seg) > 20 and tgt_para in tgt_seg):
+                        aligned_tgt_paragraphs.add(para_idx)
+                        break
+            
+            # Count unaligned segments
+            # Under-translated: source paragraphs without any aligned output
+            under_translated = len(src_paragraphs) - len(aligned_src_paragraphs)
+            # Over-translated: target paragraphs without any aligned source
+            over_translated = len(tgt_paragraphs) - len(aligned_tgt_paragraphs)
+            
+            alignment_stats.append({
+                'sample_idx': sample_idx,
+                'sample_id': sample_info['sample_id'],
+                'under_translated_segments': under_translated,
+                'over_translated_segments': over_translated,
+                'comet_scores': comet_scores,
+                'avg_comet': sample_comet.get('avg_comet')
+            })
         
-        comet_results = compute_comet_scores(segments)
+        # Aggregate COMET scores across all samples
+        all_comet_scores = []
+        for stat in alignment_stats:
+            all_comet_scores.extend(stat['comet_scores'])
+        
+        if all_comet_scores:
+            comet_results['avg_comet'] = sum(all_comet_scores) / len(all_comet_scores)
+            comet_results['min_comet'] = min(all_comet_scores)
+            comet_results['max_comet'] = max(all_comet_scores)
+        
+        # Aggregate alignment statistics
+        total_under = sum(s['under_translated_segments'] for s in alignment_stats)
+        total_over = sum(s['over_translated_segments'] for s in alignment_stats)
+        avg_under = total_under / len(alignment_stats) if alignment_stats else 0
+        avg_over = total_over / len(alignment_stats) if alignment_stats else 0
+        
+        comet_results['per_sample'] = alignment_stats
+        comet_results['alignment_stats'] = {
+            'total_under_translated_segments': total_under,
+            'total_over_translated_segments': total_over,
+            'avg_under_translated_segments': avg_under,
+            'avg_over_translated_segments': avg_over
+        }
+        
         print(f"    ✓ COMET: avg={comet_results['avg_comet']:.4f}, "
               f"min={comet_results['min_comet']:.4f}, "
               f"max={comet_results['max_comet']:.4f}")
+        print(f"    ✓ Alignment: avg_under={avg_under:.2f}, avg_over={avg_over:.2f}")
         
     except Exception as e:
         print(f"    ⚠ Warning: Could not compute COMET scores: {e}")
