@@ -207,23 +207,24 @@ class DocPreprocessor:
                         _log_with_time("    Constructing SentenceTransformer from modules...")
                         modules = []
                         
-                        # Module 0: Transformer
+                        # Module 0: Transformer - pass the model and tokenizer objects
                         modules.append(Transformer(transformer_model, tokenizer))
+                        _log_with_time("    ✓ Created Transformer module")
                         
-                        # Load other modules from subdirectories
+                        # Load other modules from subdirectories - pass paths as strings
                         pooling_dir = labse_model_path / "1_Pooling"
                         if pooling_dir.exists():
-                            modules.append(Pooling.load(pooling_dir))
+                            modules.append(Pooling.load(str(pooling_dir)))
                             _log_with_time("    ✓ Loaded Pooling module")
                         
                         dense_dir = labse_model_path / "2_Dense"
                         if dense_dir.exists():
-                            modules.append(Dense.load(dense_dir))
+                            modules.append(Dense.load(str(dense_dir)))
                             _log_with_time("    ✓ Loaded Dense module")
                         
                         normalize_dir = labse_model_path / "3_Normalize"
                         if normalize_dir.exists():
-                            modules.append(Normalize.load(normalize_dir))
+                            modules.append(Normalize.load(str(normalize_dir)))
                             _log_with_time("    ✓ Loaded Normalize module")
                         
                         # Create SentenceTransformer with modules
