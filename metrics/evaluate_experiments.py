@@ -264,7 +264,8 @@ def process_experiment(
     dataset: str,
     lang_pair: str,
     workflows: List[str],
-    models: List[str]
+    models: List[str],
+    labse_model=None  # Optional pre-loaded model
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single experiment and compute metrics.

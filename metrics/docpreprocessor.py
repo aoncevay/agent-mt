@@ -82,88 +82,43 @@ def load_labse_model_once(
     except:
         _log_with_time("  ⚠ Could not determine sentence-transformers version")
     
-    # Strategy: Use AutoModel to load, then construct SentenceTransformer
-    _log_with_time("  Loading with AutoModel (known to work)...")
+    # Load SentenceTransformer from local path
+    _log_with_time("  Loading SentenceTransformer...")
     try:
-        from transformers import AutoModel, AutoTokenizer
-        from sentence_transformers.models import Transformer, Pooling, Dense, Normalize
-        import torch
-        
-        # Load transformer model ONCE
-        transformer_model = AutoModel.from_pretrained(str(labse_model_path), local_files_only=True)
-        tokenizer = AutoTokenizer.from_pretrained(str(labse_model_path), local_files_only=True)
-        _log_with_time("  ✓ AutoModel loaded")
-        
-        # Move to GPU if available and requested
-        if use_gpu and torch.cuda.is_available():
-            _log_with_time(f"  Moving to GPU: {torch.cuda.get_device_name(0)}")
-            transformer_model = transformer_model.to('cuda')
-        else:
-            _log_with_time("  Using CPU")
-        
-        # Construct modules
-        modules = []
-        
-        # Module 0: Transformer
-        modules.append(Transformer(transformer_model, tokenizer))
-        _log_with_time("  ✓ Transformer module created")
-        
-        # Module 1: Pooling
-        pooling_dir = labse_model_path / "1_Pooling"
-        if pooling_dir.exists() and (pooling_dir / "config.json").exists():
-            with open(pooling_dir / "config.json", 'r', encoding='utf-8') as f:
-                pooling_config = json.load(f)
-            modules.append(Pooling(**pooling_config))
-        else:
-            modules.append(Pooling())  # Default pooling
-        _log_with_time("  ✓ Pooling module created")
-        
-        # Module 2: Dense
-        dense_dir = labse_model_path / "2_Dense"
-        if dense_dir.exists() and (dense_dir / "config.json").exists():
-            with open(dense_dir / "config.json", 'r', encoding='utf-8') as f:
-                dense_config = json.load(f)
-            if 'in_features' not in dense_config:
-                dense_config['in_features'] = transformer_model.config.hidden_size
-            modules.append(Dense(**dense_config))
-        else:
-            # Default Dense with transformer's hidden size
-            in_features = transformer_model.config.hidden_size
-            modules.append(Dense(in_features=in_features))
-        _log_with_time("  ✓ Dense module created")
-        
-        # Module 3: Normalize
-        modules.append(Normalize())
-        _log_with_time("  ✓ Normalize module created")
-        
-        # Create SentenceTransformer
-        labse_model = SentenceTransformer(modules=modules)
-        _log_with_time("  ✓ SentenceTransformer created from AutoModel")
-        
-        # Cache it
-        _loaded_models_cache[cache_key] = labse_model
-        _log_with_time("  ✓ Model cached for reuse")
-        
-        return labse_model
-        
-    except Exception as e:
-        _log_with_time(f"  ✗ AutoModel workaround failed: {e}")
-        # Fallback: try SentenceTransformer directly (might work in some cases)
-        _log_with_time("  Trying SentenceTransformer directly as fallback...")
+        # Try with local_files_only=False first (offline env vars should prevent downloads)
+        labse_model = SentenceTransformer(str(labse_model_path), local_files_only=False)
+        _log_with_time("  ✓ SentenceTransformer loaded successfully")
+    except Exception as e1:
+        _log_with_time(f"  First attempt failed: {type(e1).__name__}: {e1}")
+        # Try with local_files_only=True as fallback
         try:
-            labse_model = SentenceTransformer(str(labse_model_path), local_files_only=False)
-            if use_gpu:
-                import torch
-                if torch.cuda.is_available():
-                    labse_model = labse_model.to('cuda')
-            _loaded_models_cache[cache_key] = labse_model
-            return labse_model
+            labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+            _log_with_time("  ✓ SentenceTransformer loaded successfully (with local_files_only=True)")
         except Exception as e2:
+            _log_with_time(f"  Second attempt also failed: {type(e2).__name__}: {e2}")
             raise RuntimeError(
-                f"Could not load LaBSE model from {labse_model_path}\n"
-                f"AutoModel approach: {e}\n"
-                f"SentenceTransformer fallback: {e2}"
+                f"Could not load SentenceTransformer from {labse_model_path}\n"
+                f"First error ({type(e1).__name__}): {e1}\n"
+                f"Second error ({type(e2).__name__}): {e2}"
             ) from e2
+    
+    # Move to GPU if available and requested
+    if use_gpu:
+        import torch
+        if torch.cuda.is_available():
+            _log_with_time(f"  Moving to GPU: {torch.cuda.get_device_name(0)}")
+            labse_model = labse_model.to('cuda')
+            _log_with_time("  ✓ LaBSE on GPU")
+        else:
+            _log_with_time("  Using CPU (GPU not available)")
+    else:
+        _log_with_time("  Using CPU")
+    
+    # Cache it
+    _loaded_models_cache[cache_key] = labse_model
+    _log_with_time("  ✓ Model cached for reuse")
+    
+    return labse_model
 
 
 class DocPreprocessor:
@@ -202,20 +157,18 @@ class DocPreprocessor:
             # Load once using the centralized loader (cached, reused across instances)
             self.labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
-        # Create embeddings wrapper for PolyFuzz using the loaded model
-        # Try passing the SentenceTransformer instance directly
+        # Create embeddings wrapper for PolyFuzz
+        _log_with_time("  Creating embeddings wrapper for PolyFuzz...")
         try:
-            _log_with_time("  Creating embeddings wrapper for PolyFuzz...")
-            # Pass the SentenceTransformer instance directly
+            # Try passing the SentenceTransformer instance directly
             self.embeddings = SentenceTransformerDocumentEmbeddings(self.labse_model)
             _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from model instance")
         except (TypeError, ValueError) as e:
             _log_with_time(f"  ⚠ Could not pass model instance: {e}")
             _log_with_time("  Trying with model path as fallback...")
             # Fallback: try with path (but this might reload, which we want to avoid)
-            # Get the path from the model if possible
+            # Get the path from the cache if possible
             try:
-                # Try to get path from cache key
                 model_path = None
                 for key, model in _loaded_models_cache.items():
                     if model is self.labse_model:
@@ -226,18 +179,14 @@ class DocPreprocessor:
                     self.embeddings = SentenceTransformerDocumentEmbeddings(str(model_path))
                     _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from path")
                 else:
-                    # Last resort: try to use the model's encode method directly
-                    # We'll need to wrap it for PolyFuzz compatibility
-                    _log_with_time("  ⚠ Could not determine model path, using direct encoding")
-                    raise ValueError("Could not create embeddings wrapper - need model path")
+                    raise ValueError("Could not determine model path for fallback")
             except Exception as e2:
                 _log_with_time(f"  ✗ Fallback also failed: {e2}")
                 raise RuntimeError(
                     f"Could not create embeddings wrapper. "
                     f"Model loaded successfully but cannot create PolyFuzz embeddings.\n"
                     f"Original error: {e}\n"
-                    f"Fallback error: {e2}\n"
-                    f"Consider using the model's encode() method directly."
+                    f"Fallback error: {e2}"
                 ) from e2
         
         self.LaBSE = Embeddings(self.embeddings, min_similarity=0, model_id="LaBSE")
@@ -288,163 +237,194 @@ class DocPreprocessor:
             src_paragraphs, tgt_paragraphs = self._paragraph_aligner(
                 src_text, tgt_text, separator=separator
             )
+            
             _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs")
             
             # Align paragraphs
-            if len(src_paragraphs) == len(tgt_paragraphs):
-                # Naive alignment (1-to-1)
-                _log_with_time(f"      Using naive 1-to-1 alignment ({len(src_paragraphs)} pairs)")
-                alignment = 'naive'
-                for sent_idx, (src, tgt) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
-                    score = self._one_one_aligner(src, tgt)
-                    df_data.append([doc_idx, sent_idx, alignment, src, tgt, score])
-                _log_with_time(f"      ✓ Document {doc_idx+1} aligned ({len(src_paragraphs)} segments) in {time.time() - doc_start:.2f}s")
-            else:
-                # LaBSE-based alignment (many-to-many)
-                _log_with_time(f"      Using LaBSE alignment (src: {len(src_paragraphs)}, tgt: {len(tgt_paragraphs)})")
-                alignment = 'labse'
-                aligned_count = 0
-                for sent_idx, (src, tgt) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
-                    score = self._one_one_aligner(src, tgt)
-                    if score < similarity_threshold:
-                        # Need many-to-many alignment
-                        _log_with_time(f"      Low similarity at {sent_idx}, switching to many-to-many alignment...")
-                        src_left, tgt_left = src_paragraphs[sent_idx:], tgt_paragraphs[sent_idx:]
-                        break
-                    else:
-                        df_data.append([doc_idx, sent_idx, 'naive', src, tgt, score])
-                        aligned_count += 1
-                        src_left, tgt_left = None, None
+            for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
+                # Split into sentences
+                src_sentences = self._split_sentences(src_para, self.src_lang)
+                tgt_sentences = self._split_sentences(tgt_para, self.tgt_lang)
                 
-                if src_left is not None and tgt_left is not None:
-                    _log_with_time(f"      Running many-to-many alignment ({len(src_left)} src, {len(tgt_left)} tgt)...")
-                    many_to_many_start = time.time()
-                    aligned_triplets = self._many_to_many_aligner(src_left, tgt_left)
-                    _log_with_time(f"      ✓ Many-to-many alignment completed ({len(aligned_triplets)} pairs) in {time.time() - many_to_many_start:.2f}s")
-                    for s, t, score in aligned_triplets:
-                        df_data.append([doc_idx, -1, alignment, s, t, score])
-                    aligned_count += len(aligned_triplets)
+                if not src_sentences or not tgt_sentences:
+                    continue
                 
-                _log_with_time(f"      ✓ Document {doc_idx+1} aligned ({aligned_count} segments) in {time.time() - doc_start:.2f}s")
-        
-        # Create DataFrame
-        _log_with_time(f"  Creating DataFrame from {len(df_data)} aligned segments...")
-        self.df = pd.DataFrame(
-            df_data,
-            columns=['paragraph', 'sentence', 'alignment', self.src_lang, self.tgt_lang, 'score']
-        )
-        
-        # Add terminology if provided
-        if terminology:
-            _log_with_time("  Assigning terminology to segments...")
-            self.df['terms'] = self._assign_terms_to_segments(terminology)
-        else:
-            self.df['terms'] = [{}] * len(self.df)
+                # Align sentences using LaBSE
+                alignment = self._align_sentences(src_sentences, tgt_sentences, similarity_threshold)
+                
+                # Extract terms if terminology is provided
+                terms = None
+                if terminology:
+                    terms = self._extract_terms(src_para, tgt_para, terminology)
+                
+                # Store aligned segments
+                for align_idx, (src_seg, tgt_seg, score) in enumerate(alignment):
+                    df_data.append({
+                        'paragraph': para_idx,
+                        'sentence': align_idx,
+                        'alignment': 'labse',
+                        'src_segment': src_seg,
+                        'tgt_segment': tgt_seg,
+                        'score': score,
+                        'terms': terms
+                    })
+            
+            doc_time = time.time() - doc_start
+            _log_with_time(f"    Document {doc_idx+1} processed in {doc_time:.2f}s")
         
         total_time = time.time() - start_time
-        _log_with_time(f"  ✓ Document processing complete: {len(self.df)} segments in {total_time:.2f}s ({total_time/len(documents):.2f}s per document)")
+        _log_with_time(f"  Processed {len(documents)} document(s) in {total_time:.2f}s")
         
+        # Create DataFrame
+        self.df = pd.DataFrame(df_data)
         return self.df
-
-    def _paragraph_aligner(
-        self,
-        src_text: str,
-        tgt_text: str,
-        separator: str = '\n\n'
-    ) -> Tuple[List[str], List[str]]:
-        """
-        Split source and target texts into paragraphs.
-        
-        Args:
-            src_text: Source text
-            tgt_text: Target text
-            separator: Paragraph separator
-        
-        Returns:
-            (src_paragraphs, tgt_paragraphs) - Lists of paragraph strings
-        """
+    
+    def _paragraph_aligner(self, src_text: str, tgt_text: str, separator: str = '\n\n') -> Tuple[List[str], List[str]]:
+        """Align paragraphs between source and target using LaBSE embeddings."""
         src_paragraphs = [p.strip() for p in src_text.split(separator) if p.strip()]
         tgt_paragraphs = [p.strip() for p in tgt_text.split(separator) if p.strip()]
         
-        return src_paragraphs, tgt_paragraphs
-
-    def _many_to_many_aligner(
-        self,
-        src_paragraphs: List[str],
-        tgt_paragraphs: List[str]
-    ) -> List[Tuple[str, str, float]]:
-        """
-        Align multiple source paragraphs to multiple target paragraphs using LaBSE.
+        if len(src_paragraphs) == len(tgt_paragraphs):
+            # Simple 1-to-1 alignment
+            return src_paragraphs, tgt_paragraphs
         
-        Args:
-            src_paragraphs: List of source paragraphs
-            tgt_paragraphs: List of target paragraphs
+        # LaBSE-based alignment (many-to-many)
+        _log_with_time(f"      Using LaBSE alignment (src: {len(src_paragraphs)}, tgt: {len(tgt_paragraphs)})")
+        alignment = 'labse'
         
-        Returns:
-            List of (src, tgt, score) tuples
-        """
-        output = self.model.match(src_paragraphs, tgt_paragraphs)
-        dfx = self.model.get_matches()
-        return dfx.values.tolist()
-
-    def _one_one_aligner(self, src_sent: str, tgt_sent: str) -> float:
-        """
-        Compute similarity score between two sentences using LaBSE.
-        
-        Args:
-            src_sent: Source sentence
-            tgt_sent: Target sentence
-        
-        Returns:
-            Similarity score (0.0 to 1.0)
-        """
-        output = self.model.match([src_sent], [tgt_sent])
-        score = output.matches['LaBSE']['Similarity'][0]
-        return score
-
-    def _assign_terms_to_segments(
-        self,
-        terminology: Dict[str, list]
-    ) -> List[Dict[str, list]]:
-        """
-        Assign terminology to segments based on term occurrence in source text.
-        
-        Args:
-            terminology: Global terminology dictionary {term: [translations]}
-        
-        Returns:
-            List of term dictionaries (one per segment)
-        """
-        term_assignments = []
-        
-        for _, row in self.df.iterrows():
-            src_segment = row[self.src_lang]
-            segment_terms = {}
+        # Use PolyFuzz to align paragraphs
+        try:
+            matches = self.model.match(src_paragraphs, tgt_paragraphs)
             
-            # Find terms that occur in this segment
-            for term, translations in terminology.items():
-                # Simple substring matching (case-insensitive)
-                if term.lower() in src_segment.lower():
-                    segment_terms[term] = translations
+            # Extract aligned pairs
+            aligned_src = []
+            aligned_tgt = []
             
-            term_assignments.append(segment_terms)
+            # Simple greedy alignment based on similarity scores
+            used_tgt_indices = set()
+            for src_idx, src_para in enumerate(src_paragraphs):
+                best_tgt_idx = None
+                best_score = 0.0
+                
+                for tgt_idx, tgt_para in enumerate(tgt_paragraphs):
+                    if tgt_idx in used_tgt_indices:
+                        continue
+                    
+                    # Get similarity score
+                    score = matches['Similarity'].iloc[src_idx * len(tgt_paragraphs) + tgt_idx] if hasattr(matches, 'iloc') else 0.0
+                    
+                    if score > best_score and score >= 0.4:  # similarity_threshold
+                        best_score = score
+                        best_tgt_idx = tgt_idx
+                
+                if best_tgt_idx is not None:
+                    aligned_src.append(src_para)
+                    aligned_tgt.append(tgt_paragraphs[best_tgt_idx])
+                    used_tgt_indices.add(best_tgt_idx)
+                else:
+                    # Unaligned source paragraph
+                    aligned_src.append(src_para)
+                    aligned_tgt.append("")  # Empty target
+            
+            # Add unaligned target paragraphs
+            for tgt_idx, tgt_para in enumerate(tgt_paragraphs):
+                if tgt_idx not in used_tgt_indices:
+                    aligned_src.append("")  # Empty source
+                    aligned_tgt.append(tgt_para)
+            
+            return aligned_src, aligned_tgt
+            
+        except Exception as e:
+            _log_with_time(f"      ⚠ LaBSE alignment failed: {e}, using simple 1-to-1")
+            # Fallback: simple 1-to-1 alignment
+            min_len = min(len(src_paragraphs), len(tgt_paragraphs))
+            return src_paragraphs[:min_len], tgt_paragraphs[:min_len]
+    
+    def _split_sentences(self, text: str, lang: str) -> List[str]:
+        """Split text into sentences."""
+        if not text.strip():
+            return []
         
-        return term_assignments
-
-    def _normalize_en_paragraph(self, paragraph: str) -> str:
-        """
-        Normalize an English paragraph using stanza.
+        # Use pysbd for sentence splitting
+        try:
+            import pysbd
+            seg = pysbd.Segmenter(language=lang, clean=False)
+            sentences = seg.segment(text)
+            return [s.strip() for s in sentences if s.strip()]
+        except:
+            # Fallback: simple splitting
+            sentences = re.split(r'[.!?]\s+', text)
+            return [s.strip() for s in sentences if s.strip()]
+    
+    def _align_sentences(self, src_sentences: List[str], tgt_sentences: List[str], similarity_threshold: float = 0.4) -> List[Tuple[str, str, float]]:
+        """Align sentences using LaBSE embeddings."""
+        if not src_sentences or not tgt_sentences:
+            return []
         
-        Args:
-            paragraph: English paragraph text
+        # Use PolyFuzz to align sentences
+        try:
+            matches = self.model.match(src_sentences, tgt_sentences)
+            
+            # Extract aligned pairs with scores
+            alignment = []
+            used_tgt_indices = set()
+            
+            for src_idx, src_sent in enumerate(src_sentences):
+                best_tgt_idx = None
+                best_score = 0.0
+                
+                for tgt_idx, tgt_sent in enumerate(tgt_sentences):
+                    if tgt_idx in used_tgt_indices:
+                        continue
+                    
+                    # Get similarity score (simplified - PolyFuzz returns DataFrame)
+                    # For now, use a simple approach
+                    try:
+                        score = float(matches['Similarity'].iloc[src_idx * len(tgt_sentences) + tgt_idx]) if hasattr(matches, 'iloc') else 0.0
+                    except:
+                        score = 0.0
+                    
+                    if score > best_score and score >= similarity_threshold:
+                        best_score = score
+                        best_tgt_idx = tgt_idx
+                
+                if best_tgt_idx is not None:
+                    alignment.append((src_sent, tgt_sentences[best_tgt_idx], best_score))
+                    used_tgt_indices.add(best_tgt_idx)
+                else:
+                    # Unaligned source sentence
+                    alignment.append((src_sent, "", 0.0))
+            
+            # Add unaligned target sentences
+            for tgt_idx, tgt_sent in enumerate(tgt_sentences):
+                if tgt_idx not in used_tgt_indices:
+                    alignment.append(("", tgt_sent, 0.0))
+            
+            return alignment
+            
+        except Exception as e:
+            _log_with_time(f"      ⚠ Sentence alignment failed: {e}")
+            # Fallback: simple 1-to-1 alignment
+            min_len = min(len(src_sentences), len(tgt_sentences))
+            return [(src_sentences[i], tgt_sentences[i] if i < len(tgt_sentences) else "", 1.0) for i in range(min_len)]
+    
+    def _extract_terms(self, src_text: str, tgt_text: str, terminology: Dict[str, list]) -> Optional[Dict[str, list]]:
+        """Extract terminology terms from source and target text."""
+        if not terminology:
+            return None
         
-        Returns:
-            Normalized paragraph (lemmatized, lowercase)
-        """
-        if not self.stanza_en:
-            return paragraph.lower()
+        found_terms = {}
+        for term_type, term_list in terminology.items():
+            found = []
+            for term in term_list:
+                src_term = term.get('source', '')
+                tgt_term = term.get('target', '')
+                
+                # Case-insensitive search
+                if src_term.lower() in src_text.lower() and tgt_term.lower() in tgt_text.lower():
+                    found.append(term)
+            
+            if found:
+                found_terms[term_type] = found
         
-        doc = self.stanza_en(paragraph)
-        lemmas = [word.lemma.lower() for sent in doc.sentences for word in sent.words]
-        return ' '.join(lemmas)
-
+        return found_terms if found_terms else None
