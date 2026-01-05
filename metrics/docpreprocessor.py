@@ -23,6 +23,20 @@ from nltk.tokenize import word_tokenize
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
+# Set STANZA_RESOURCES_DIR if not already set (for offline use)
+# Users can set this to point to a local directory with downloaded Stanza models
+if "STANZA_RESOURCES_DIR" not in os.environ:
+    # Try common locations for SageMaker EFS
+    possible_paths = [
+        Path.home() / "user-default-efs" / "stanza_resources",
+        Path("/mnt/custom-file-systems/efs") / "stanza_resources",
+        Path.home() / "stanza_resources",
+    ]
+    for path in possible_paths:
+        if path.exists():
+            os.environ["STANZA_RESOURCES_DIR"] = str(path)
+            break
+
 # Global cache for loaded models and embeddings (loaded once, reused everywhere)
 _loaded_models_cache = {}
 _loaded_embeddings_cache = {}
