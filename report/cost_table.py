@@ -65,6 +65,9 @@ def print_latex_table():
     
     sorted_models = get_models_sorted_by_cost(use_batch=False)
     
+    # Filter out gpt-4-1-mini
+    sorted_models = [m for m in sorted_models if m != "gpt-4-1-mini"]
+    
     for model in sorted_models:
         if model not in MODEL_PRICING_STANDARD:
             continue

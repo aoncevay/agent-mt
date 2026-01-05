@@ -58,7 +58,7 @@ WORKFLOW_ACRONYMS = {
     "MAATS_multi_agents": "MAATS_multi",
     "MAATS_single_agent": "MAATS_single",
     "IRB_refine": "IRB",
-    "DeLTA_multi_agents": "DeLTA",
+    "DeLTA_multi_agents": "DelTA",
     "ADT_multi_agents": "ADT"
 }
 
@@ -75,8 +75,18 @@ WORKFLOW_COLORS = {
     "SbS": "#bcbd22",           # olive
 }
 
+# Workflow shape markers for per-model plots (all black, no colors)
+WORKFLOW_SHAPES = {
+    "ZS": "o",              # circle
+    "IRB": "^",             # triangle
+    "MaMT": "v",            # inverted triangle
+    "SbS_chat": "s",         # square
+    "MAATS_multi": "d",      # thin diamond
+    "DeLTA": "P",           # plus (filled)
+}
+
 # Workflow order (matching table order)
-WORKFLOW_ORDER = ["ZS", "IRB", "MaMT", "SbS_chat", "MAATS_multi", "ADT", "DeLTA"]
+WORKFLOW_ORDER = ["ZS", "IRB", "MaMT", "SbS_chat", "MAATS_multi", "DeLTA"]
 
 # Workflow display names for legend
 WORKFLOW_DISPLAY_NAMES = {
@@ -85,7 +95,7 @@ WORKFLOW_DISPLAY_NAMES = {
     "SbS_chat": "Step-by-step",
     "MAATS_multi": "MAATS",
     "IRB": "IRB",
-    "DeLTA": "DeLTA",
+    "DeLTA": "DelTA",
     "ADT": "ADT",
     "MAATS_single": "MAATS (single)",
     "SbS": "SbS",
@@ -301,7 +311,7 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                     # GPT-5 and GPT-4.1 mini are zero-shot baselines only
                     # Check if workflow is zero-shot (either "ZS" or "ZS.term")
                     is_zero_shot = workflow_acronym == "ZS" or workflow_acronym.startswith("ZS.")
-                    if model in ["gpt-5", "gpt-4-1-mini"] and not is_zero_shot:
+                    if model == "gpt-5" and not is_zero_shot:
                         continue
                     
                     # Mark as seen and add to reports
@@ -578,8 +588,8 @@ def plot_dataset_lang_pair(
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
         
-        # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-        if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+        # GPT-5 is zero-shot baseline only
+        if model == "gpt-5" and workflow != "ZS":
             continue
         
         workflows.add(workflow)
@@ -682,8 +692,8 @@ def plot_dataset_lang_pair_price(
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
         
-        # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-        if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+        # GPT-5 is zero-shot baseline only
+        if model == "gpt-5" and workflow != "ZS":
             continue
         
         workflows.add(workflow)
@@ -1233,7 +1243,7 @@ def plot_dataset_avg_price_pareto(
     # Tables iterate through WORKFLOW_ORDER × MODEL_ORDER when computing pareto ranks
     # Use same order for consistency to ensure the same set of points is included
     # This ensures the 75th percentile threshold and pareto ranking are identical
-    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1-mini", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER_FOR_PARETO:
@@ -1247,8 +1257,8 @@ def plot_dataset_avg_price_pareto(
             
             data = aggregated_data[key]
             
-            # GPT-5 and GPT-4.1 mini are zero-shot baselines only (same as tables)
-            if model in ["gpt-5", "gpt-4-1-mini"] and workflow != "ZS":
+            # GPT-5 is zero-shot baseline only (same as tables)
+            if model == "gpt-5" and workflow != "ZS":
                 continue
             
             if not data["values"] or not data["costs"]:
@@ -1471,6 +1481,208 @@ def plot_dataset_avg_price_pareto(
     print(f"Created Pareto plot: {output_path}")
 
 
+def create_workflow_shape_legend(output_path: Path):
+    """Create a flat legend with workflow shapes (for per-model plots)."""
+    _fig, ax = plt.subplots(figsize=(8, 1))
+    ax.axis('off')
+    
+    # Create legend entries for workflows in WORKFLOW_ORDER
+    workflow_elements = []
+    
+    for workflow in WORKFLOW_ORDER:
+        if workflow not in WORKFLOW_SHAPES:
+            continue
+        
+        shape = WORKFLOW_SHAPES[workflow]
+        display_name = WORKFLOW_DISPLAY_NAMES.get(workflow, workflow)
+        
+        workflow_elements.append(
+            plt.Line2D([0], [0], marker=shape, color='black', linestyle='None',
+                      markersize=10, label=display_name, markerfacecolor='black',
+                      markeredgecolor='black')
+        )
+    
+    if workflow_elements:
+        legend = ax.legend(handles=workflow_elements, loc='center', 
+                          frameon=True, fontsize=9, title='System',
+                          borderpad=0.2, columnspacing=0.8, handletextpad=0.3,
+                          handlelength=1.0, ncol=len(workflow_elements))
+        legend.get_title().set_fontweight('bold')
+        legend.get_title().set_fontsize(9)
+    
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0)
+    plt.close()
+
+
+def plot_per_model(
+    dataset: str,
+    reports_by_lang_pair: Dict[str, List[Dict]],
+    output_dir: Path,
+    metric: str = "chrf",  # "chrf" or "termacc"
+    use_batch: bool = False,
+    is_term: bool = False
+):
+    """
+    Create per-model plot with 4 subplots (2x2), one per model.
+    Each subplot shows workflows as different shapes (all black).
+    """
+    if not reports_by_lang_pair:
+        return
+    
+    # Models to plot (in order for subplots)
+    models_to_plot = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    
+    # Aggregate data: for each workflow+model, compute average metric and total cost
+    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    
+    for lang_pair, reports in reports_by_lang_pair.items():
+        for report in reports:
+            workflow_name = report.get("workflow", "")
+            workflow = get_workflow_acronym(workflow_name)
+            model = report["model"]
+            key = (workflow, model)
+            
+            # Only include models we're plotting
+            if model not in models_to_plot:
+                continue
+            
+            # GPT-5 is zero-shot baseline only
+            if model == "gpt-5" and workflow != "ZS":
+                continue
+            
+            # Only include workflows with shapes defined
+            if workflow not in WORKFLOW_SHAPES:
+                continue
+            
+            # Get metric value
+            if metric == "chrf":
+                value = report.get("chrf")
+            elif metric == "termacc":
+                value = report.get("term_acc")
+            else:
+                continue
+            
+            if value is None:
+                continue
+            
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
+            
+            if cost is None:
+                continue
+            
+            aggregated_data[key]["values"].append(value)
+            aggregated_data[key]["costs"].append(cost)
+    
+    if not aggregated_data:
+        return
+    
+    # Prepare data points: average metric, total cost per workflow+model
+    data_by_model_workflow = defaultdict(dict)
+    
+    for (workflow, model), data in aggregated_data.items():
+        if not data["values"] or not data["costs"]:
+            continue
+        
+        avg_value = sum(data["values"]) / len(data["values"])
+        total_cost = sum(data["costs"])  # Total cost across all lang pairs
+        
+        data_by_model_workflow[model][workflow] = {
+            "value": avg_value,
+            "cost": total_cost
+        }
+    
+    if not data_by_model_workflow:
+        return
+    
+    # Create figure with 2x2 subplots
+    # Max width: 5 inches, aspect ratio per subplot: 3:2
+    # For 2x2 grid: width = 5, height = 5 * (2/3) * 2 = 6.67, but we want to keep it reasonable
+    # Let's use: width = 5, height per subplot = 5 * (2/3) / 2 = 1.67, total height = 3.33
+    fig_width = 5.0
+    subplot_aspect = 3.0 / 2.0
+    subplot_height = fig_width / 2.0 / subplot_aspect
+    fig_height = subplot_height * 2.0
+    
+    _fig, axes = plt.subplots(2, 2, figsize=(fig_width, fig_height))
+    axes = axes.flatten()
+    
+    # Plot each model in a subplot
+    for idx, model in enumerate(models_to_plot):
+        ax = axes[idx]
+        
+        if model not in data_by_model_workflow:
+            ax.axis('off')
+            continue
+        
+        model_data = data_by_model_workflow[model]
+        
+        # Plot each workflow
+        for workflow in WORKFLOW_ORDER:
+            if workflow not in model_data or workflow not in WORKFLOW_SHAPES:
+                continue
+            
+            point = model_data[workflow]
+            shape = WORKFLOW_SHAPES[workflow]
+            
+            ax.scatter(point["cost"], point["value"], 
+                      marker=shape, s=63, c='black',
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+        
+        # Set log scale for x-axis
+        ax.set_xscale('log')
+        
+        # Labels
+        ax.set_xlabel('Cost ($, log scale)', fontsize=9)
+        if idx == 0 or idx == 2:  # Left column
+            if metric == "chrf":
+                ax.set_ylabel('chrF++', fontsize=9)
+            elif metric == "termacc":
+                ax.set_ylabel('Term. Accuracy', fontsize=9)
+        
+        # Title: model name
+        model_display = MODEL_DISPLAY_NAMES.get(model, model)
+        ax.set_title(model_display, fontsize=10, fontweight='bold')
+        
+        # Auto-scale y-axis, then adjust ticks
+        ax.set_ylim(auto=True)
+        y_min, y_max = ax.get_ylim()
+        if metric == "termacc":
+            # For TermAcc (0-1 range), use steps of 0.05
+            y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+            y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)
+        else:
+            # For chrF++, use steps of 5
+            y_min_rounded = 5 * (int(y_min) // 5)
+            y_max_rounded = 5 * ((int(y_max) + 4) // 5)
+        ax.set_ylim(y_min_rounded, y_max_rounded)
+        
+        # Grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    safe_dataset = dataset.replace("/", "_")
+    if is_term:
+        if metric == "chrf":
+            output_path = output_dir / f"{safe_dataset}+T_chrF_x_price_per_model.pdf"
+        else:  # termacc
+            output_path = output_dir / f"{safe_dataset}+T_TAcc_x_price_per_model.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_chrF_x_price_per_model.pdf"
+    
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    print(f"Created per-model plot: {output_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Plot cost-performance trade-off for agentic MT workflows"
@@ -1502,6 +1714,11 @@ def main():
         "--connect-points",
         action="store_true",
         help="Draw dotted lines connecting points of the same workflow (default: False)"
+    )
+    parser.add_argument(
+        "--per-model",
+        action="store_true",
+        help="Create per-model plots (2x2 subplots, one per model, workflows as shapes)"
     )
     
     args = parser.parse_args()
@@ -1608,6 +1825,26 @@ def main():
     # DOLFIN AVG Pareto plot
     if dolfin_reports:
         plot_dataset_avg_price_pareto("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False, connect_points=args.connect_points)
+    
+    # Create per-model plots if requested
+    if args.per_model:
+        print("\nCreating per-model plots...")
+        per_model_dir = output_dir / "per_model"
+        per_model_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create workflow shape legend
+        workflow_shape_legend_path = per_model_dir / "legend_workflow_shapes.pdf"
+        create_workflow_shape_legend(workflow_shape_legend_path)
+        print(f"Created workflow shape legend: {workflow_shape_legend_path}")
+        
+        # DOLFIN per-model plot (chrF++)
+        if dolfin_reports:
+            plot_per_model("dolfin", dolfin_reports, per_model_dir, metric="chrf", use_batch=False, is_term=False)
+        
+        # WMT25+Term per-model plots (chrF++ and Term Acc)
+        if wmt25_term_reports:
+            plot_per_model("wmt25", wmt25_term_reports, per_model_dir, metric="chrf", use_batch=False, is_term=True)
+            plot_per_model("wmt25", wmt25_term_reports, per_model_dir, metric="termacc", use_batch=False, is_term=True)
     
     # Print incomplete settings
     if incomplete_settings:
