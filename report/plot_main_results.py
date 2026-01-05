@@ -1636,8 +1636,17 @@ def plot_dataset_avg_price_pareto_simplified(
     figsize = (3.5, 2) if metric == "termacc" else (3.5, 2.5)
     _fig, ax = plt.subplots(figsize=figsize)
     
-    # Set log scale for x-axis
+    # Set axis limits first (same as original Pareto plot)
     ax.set_xscale('log')
+    if metric == "chrf":
+        if dataset == "dolfin":
+            y_min, y_max = 57.5, 77.5
+        else:  # wmt25
+            y_min, y_max = 42.5, 62.5
+    elif metric == "termacc":
+        y_min, y_max = 0.5, 0.7
+    
+    ax.set_ylim(y_min, y_max)
     
     # First pass: collect all workflow points and draw lines (if requested)
     workflow_points_dict = {}
@@ -1701,21 +1710,10 @@ def plot_dataset_avg_price_pareto_simplified(
     elif metric == "termacc":
         ax.set_ylabel('Term. Accuracy', fontsize=10)
     
-    # Auto-scale y-axis, then adjust ticks
-    ax.set_ylim(auto=True)
-    y_min, y_max = ax.get_ylim()
-    if metric == "termacc":
-        y_min_rounded = 0.05 * (int(y_min * 20) // 1)
-        y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)
-    else:
-        y_min_rounded = 5 * (int(y_min) // 5)
-        y_max_rounded = 5 * ((int(y_max) + 4) // 5)
-    ax.set_ylim(y_min_rounded, y_max_rounded)
-    
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
-    # Add model name labels for points with Pareto stars
+    # Add model name labels for points with Pareto Rank 1 only
     for workflow in sorted(workflows):
         if workflow not in workflow_points_dict:
             continue
@@ -1735,11 +1733,10 @@ def plot_dataset_avg_price_pareto_simplified(
             if point_idx is None:
                 continue
             
-            # Check if it's rank 1 or 2
+            # Only label Rank 1 points
             is_rank1 = (1 in pareto_ranks and point_idx in pareto_ranks[1])
-            is_rank2 = (2 in pareto_ranks and point_idx in pareto_ranks[2])
             
-            if is_rank1 or is_rank2:
+            if is_rank1:
                 # Get model display name
                 model_display = MODEL_DISPLAY_NAMES.get(model, model)
                 
@@ -1749,13 +1746,13 @@ def plot_dataset_avg_price_pareto_simplified(
                 label_x = cost * x_offset_factor
                 
                 # For y-axis: slight offset upward
-                y_range = y_max_rounded - y_min_rounded
+                y_range = y_max - y_min
                 y_offset = y_range * 0.02  # 2% of range
                 label_y = value + y_offset
                 
-                # Add text label with workflow color
-                ax.text(label_x, label_y, model_display, fontsize=8, color=color,
-                       weight='bold', ha='left', va='bottom', zorder=7)
+                # Add text label with workflow color, smaller, not bold, rotated 45 degrees
+                ax.text(label_x, label_y, model_display, fontsize=7, color=color,
+                       weight='normal', ha='left', va='bottom', rotation=45, zorder=7)
     
     # Tight layout
     plt.tight_layout()
