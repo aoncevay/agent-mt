@@ -104,6 +104,14 @@ class TermBasedMetric():
                 os.environ["HF_HUB_OFFLINE"] = "1"
                 self.aligner_model = AutoModel.from_pretrained(str(awesome_align_path), local_files_only=True)
                 self.aligner_tokenizer = AutoTokenizer.from_pretrained(str(awesome_align_path), local_files_only=True)
+                
+                # Move model to GPU if available
+                import torch
+                if torch.cuda.is_available():
+                    print(f"  Using GPU for awesome-align model")
+                    self.aligner_model = self.aligner_model.to('cuda')
+                else:
+                    print(f"  Using CPU for awesome-align model")
             else:
                 # Fallback: try HF (will fail if offline, but user should have model locally)
                 print(f"  ⚠ Warning: awesome-align model not found at {awesome_align_path}")

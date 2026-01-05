@@ -145,6 +145,14 @@ def compute_comet_scores(
     try:
         # Try to load from local path
         model = load_from_checkpoint(str(comet_model_path))
+        
+        # Check GPU availability and inform user
+        import torch
+        if torch.cuda.is_available():
+            print(f"  GPU available: {torch.cuda.get_device_name(0)}")
+            print(f"  COMET will use GPU (gpus=1 in predict call)")
+        else:
+            print(f"  No GPU available, using CPU")
     except Exception as e:
         # Fallback: try to download (shouldn't happen if model is local)
         print(f"  ⚠ Warning: Could not load from {comet_model_path}: {e}")
@@ -164,13 +172,20 @@ def compute_comet_scores(
     references = [seg[2] for seg in segments]
     
     # Compute scores
+    import time
     print(f"  Computing COMET scores for {len(segments)} segments...")
+    _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+    
+    _log_with_time("  Preparing data for COMET...")
     data = [
         {"src": src, "mt": mt, "ref": ref}
         for src, mt, ref in zip(sources, translations, references)
     ]
     
+    _log_with_time(f"  Running COMET prediction (batch_size=8, gpus=1)...")
+    predict_start = time.time()
     scores, _ = model.predict(data, batch_size=8, gpus=1)
+    _log_with_time(f"  ✓ COMET prediction completed in {time.time() - predict_start:.2f}s")
     
     # Convert to list if needed (COMET may return numpy array)
     if hasattr(scores, 'tolist'):

@@ -8,6 +8,7 @@ import pandas as pd
 import json
 import re
 import os
+import time
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 from sentence_transformers import SentenceTransformer
@@ -21,6 +22,12 @@ from nltk.tokenize import word_tokenize
 # Set environment variables to prevent HuggingFace connections
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
+
+
+def _log_with_time(message: str):
+    """Log message with timestamp."""
+    timestamp = time.strftime("%H:%M:%S")
+    print(f"[{timestamp}] {message}")
 
 
 class DocPreprocessor:
@@ -79,7 +86,7 @@ class DocPreprocessor:
             )
         
         # Initialize LaBSE embeddings from local path (no HF connection)
-        print(f"  Loading LaBSE from local path: {labse_model_path}")
+        _log_with_time(f"  Loading LaBSE from local path: {labse_model_path}")
         try:
             # Set environment variables to prevent HF connections (set at module level too)
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -87,7 +94,18 @@ class DocPreprocessor:
             
             # Load SentenceTransformer from local path with local_files_only=True
             # This prevents any HuggingFace connection attempts
+            _log_with_time("  Initializing SentenceTransformer...")
             labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+            _log_with_time("  ✓ SentenceTransformer loaded")
+            
+            # Move model to GPU if available
+            import torch
+            if torch.cuda.is_available():
+                _log_with_time(f"  Moving LaBSE to GPU: {torch.cuda.get_device_name(0)}")
+                labse_model = labse_model.to('cuda')
+                _log_with_time("  ✓ LaBSE on GPU")
+            else:
+                _log_with_time("  Using CPU for LaBSE embeddings")
             
             # Create embeddings wrapper for PolyFuzz
             # Try passing the SentenceTransformer instance directly if supported,
@@ -136,38 +154,64 @@ class DocPreprocessor:
         """
         df_data = []
         
-        for doc_idx, (src_text, tgt_text) in enumerate(documents):
+        _log_with_time(f"  Processing {len(documents)} document(s)...")
+        start_time = time.time()
+        
+        # Add progress bar for document processing
+        try:
+            from tqdm import tqdm
+            doc_iterator = tqdm(enumerate(documents), total=len(documents), desc="  Aligning documents")
+        except ImportError:
+            doc_iterator = enumerate(documents)
+        
+        for doc_idx, (src_text, tgt_text) in doc_iterator:
+            doc_start = time.time()
             # Split into paragraphs
+            _log_with_time(f"    Document {doc_idx+1}/{len(documents)}: Splitting paragraphs...")
             src_paragraphs, tgt_paragraphs = self._paragraph_aligner(
                 src_text, tgt_text, separator=separator
             )
+            _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs")
             
             # Align paragraphs
             if len(src_paragraphs) == len(tgt_paragraphs):
                 # Naive alignment (1-to-1)
+                _log_with_time(f"      Using naive 1-to-1 alignment ({len(src_paragraphs)} pairs)")
                 alignment = 'naive'
                 for sent_idx, (src, tgt) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
                     score = self._one_one_aligner(src, tgt)
                     df_data.append([doc_idx, sent_idx, alignment, src, tgt, score])
+                _log_with_time(f"      ✓ Document {doc_idx+1} aligned ({len(src_paragraphs)} segments) in {time.time() - doc_start:.2f}s")
             else:
                 # LaBSE-based alignment (many-to-many)
+                _log_with_time(f"      Using LaBSE alignment (src: {len(src_paragraphs)}, tgt: {len(tgt_paragraphs)})")
                 alignment = 'labse'
+                aligned_count = 0
                 for sent_idx, (src, tgt) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
                     score = self._one_one_aligner(src, tgt)
                     if score < similarity_threshold:
                         # Need many-to-many alignment
+                        _log_with_time(f"      Low similarity at {sent_idx}, switching to many-to-many alignment...")
                         src_left, tgt_left = src_paragraphs[sent_idx:], tgt_paragraphs[sent_idx:]
                         break
                     else:
                         df_data.append([doc_idx, sent_idx, 'naive', src, tgt, score])
+                        aligned_count += 1
                         src_left, tgt_left = None, None
                 
                 if src_left is not None and tgt_left is not None:
+                    _log_with_time(f"      Running many-to-many alignment ({len(src_left)} src, {len(tgt_left)} tgt)...")
+                    many_to_many_start = time.time()
                     aligned_triplets = self._many_to_many_aligner(src_left, tgt_left)
+                    _log_with_time(f"      ✓ Many-to-many alignment completed ({len(aligned_triplets)} pairs) in {time.time() - many_to_many_start:.2f}s")
                     for s, t, score in aligned_triplets:
                         df_data.append([doc_idx, -1, alignment, s, t, score])
+                    aligned_count += len(aligned_triplets)
+                
+                _log_with_time(f"      ✓ Document {doc_idx+1} aligned ({aligned_count} segments) in {time.time() - doc_start:.2f}s")
         
         # Create DataFrame
+        _log_with_time(f"  Creating DataFrame from {len(df_data)} aligned segments...")
         self.df = pd.DataFrame(
             df_data,
             columns=['paragraph', 'sentence', 'alignment', self.src_lang, self.tgt_lang, 'score']
@@ -175,9 +219,13 @@ class DocPreprocessor:
         
         # Add terminology if provided
         if terminology:
+            _log_with_time("  Assigning terminology to segments...")
             self.df['terms'] = self._assign_terms_to_segments(terminology)
         else:
             self.df['terms'] = [{}] * len(self.df)
+        
+        total_time = time.time() - start_time
+        _log_with_time(f"  ✓ Document processing complete: {len(self.df)} segments in {total_time:.2f}s ({total_time/len(documents):.2f}s per document)")
         
         return self.df
 

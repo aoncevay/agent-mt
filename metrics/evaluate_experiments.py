@@ -277,14 +277,22 @@ def process_experiment(
     if not should_process_experiment(report_data, workflows, models):
         return None
     
+    import time
+    
+    def _log_with_time(msg):
+        timestamp = time.strftime("%H:%M:%S")
+        print(f"[{timestamp}] {msg}")
+    
     workflow_name = report_data.get('workflow', '')
     model_name = report_data.get('model', '')
     use_terminology = '.term' in str(output_dir)
     
+    experiment_start = time.time()
     print(f"\n{'='*80}")
     print(f"Processing: {workflow_name} + {model_name}")
     print(f"  Dataset: {dataset}, Lang pair: {lang_pair}")
     print(f"  Output dir: {output_dir}")
+    _log_with_time("  Starting experiment processing...")
     print(f"{'='*80}")
     
     # Get system name (workflow+model)
@@ -400,7 +408,10 @@ def process_experiment(
             print(f"    ⚠ Warning: Could not compute term-based metrics: {e}")
     
     # 3. Run comet_evaluator (all datasets) - per sample
+    import time
     print(f"  Step 3: Computing COMET scores per sample...")
+    step3_start = time.time()
+    
     comet_results = {
         'avg_comet': None,
         'min_comet': None,
@@ -413,9 +424,17 @@ def process_experiment(
     
     try:
         from metrics.comet_evaluator import compute_comet_scores
+        _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+        _log_with_time("  Loading COMET evaluator...")
         
         # Group segments by sample (paragraph column indicates document index)
-        for sample_idx in range(len(sample_data)):
+        try:
+            from tqdm import tqdm
+            sample_iterator = tqdm(range(len(sample_data)), desc="  Computing COMET per sample")
+        except ImportError:
+            sample_iterator = range(len(sample_data))
+        
+        for sample_idx in sample_iterator:
             sample_info = sample_data[sample_idx]
             sample_segments_df = aligned_df[aligned_df['paragraph'] == sample_idx]
             
@@ -441,8 +460,11 @@ def process_experiment(
                 segments.append((src, tgt, ref))
             
             # Compute COMET scores for this sample's segments
+            _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing COMET for {len(segments)} segments...")
+            sample_comet_start = time.time()
             sample_comet = compute_comet_scores(segments)
             comet_scores = sample_comet.get('scores', [])
+            _log_with_time(f"      ✓ COMET computed in {time.time() - sample_comet_start:.2f}s (avg: {sample_comet.get('avg_comet', 0):.4f})")
             
             # Count alignment statistics
             # Get source and target paragraphs for this sample (same splitting as docpreprocessor)
@@ -516,6 +538,8 @@ def process_experiment(
             'avg_over_translated_segments': avg_over
         }
         
+        step3_time = time.time() - step3_start
+        _log_with_time(f"  ✓ Step 3 complete in {step3_time:.2f}s")
         print(f"    ✓ COMET: avg={comet_results['avg_comet']:.4f}, "
               f"min={comet_results['min_comet']:.4f}, "
               f"max={comet_results['max_comet']:.4f}")
@@ -527,6 +551,14 @@ def process_experiment(
         traceback.print_exc()
     
     # Build results
+    # Note: experiment_start is defined at the beginning of process_experiment
+    # If it's not defined, we'll skip the timing
+    try:
+        experiment_time = time.time() - experiment_start
+        _log_with_time(f"  ✓ Experiment processing complete in {experiment_time:.2f}s")
+    except (NameError, UnboundLocalError):
+        pass  # experiment_start not defined, skip timing
+    
     results = {
         'system_name': system_name,
         'workflow': workflow_name,
