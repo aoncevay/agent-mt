@@ -282,7 +282,8 @@ def process_experiment(
     Returns:
         Dictionary with metrics results, or None if experiment should be skipped
     """
-    # Check if we should process this experiment
+    # Note: Filtering by workflows/models is now done in main() before calling process_experiment()
+    # This check is kept as a safety guard, but should always pass now
     if not should_process_experiment(report_data, workflows, models):
         return None
     
@@ -614,20 +615,19 @@ def process_experiment(
     return results
 
 
-def save_metrics_results(
-    results: Dict[str, Any],
+def get_metrics_file_path(
     output_dir: Path,
     metrics_base_dir: Path
-) -> None:
+) -> Path:
     """
-    Save metrics results to a file matching the output directory structure.
-    
-    Structure: metrics/results/{dataset}/{lang_pair}/{workflow_dir}/{model}/metrics.json
+    Get the path to the metrics.json file for an experiment.
     
     Args:
-        results: Results dictionary for one experiment
         output_dir: Original output directory (e.g., outputs/wmt25/en-zht/IRB.term/gpt-4-1)
         metrics_base_dir: Base directory for metrics results (e.g., metrics/results)
+    
+    Returns:
+        Path to metrics.json file
     """
     # Parse the output directory structure: {base}/{dataset}/{lang_pair}/{workflow_dir}/{model}
     parts = output_dir.parts
@@ -655,10 +655,103 @@ def save_metrics_results(
     
     # Build metrics directory structure matching outputs
     metrics_output_dir = metrics_base_dir / dataset / lang_pair / workflow_dir / model
-    metrics_output_dir.mkdir(parents=True, exist_ok=True)
+    return metrics_output_dir / "metrics.json"
+
+
+def has_complete_metrics(
+    metrics_file: Path,
+    dataset: str
+) -> bool:
+    """
+    Check if a metrics.json file exists and contains all required metrics.
     
-    # Save results to metrics.json
-    output_file = metrics_output_dir / "metrics.json"
+    For WMT25: requires 'first', 'frequent', 'predefined' (TBM) and 'comet'
+    For DOLFIN: requires 'comet' only
+    
+    Args:
+        metrics_file: Path to metrics.json file
+        dataset: Dataset name ('wmt25' or 'dolfin')
+    
+    Returns:
+        True if file exists and has all required metrics, False otherwise
+    """
+    if not metrics_file.exists():
+        return False
+    
+    try:
+        with open(metrics_file, 'r', encoding='utf-8') as f:
+            metrics_data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return False
+    
+    # Check for COMET (required for both datasets)
+    comet = metrics_data.get('comet', {})
+    if not comet or comet.get('avg_comet') is None:
+        return False
+    
+    # For WMT25, also check for TBM metrics
+    if dataset == "wmt25":
+        first = metrics_data.get('first', {})
+        frequent = metrics_data.get('frequent', {})
+        predefined = metrics_data.get('predefined', {})
+        
+        # Check if at least one TBM metric has been computed
+        # TBM metrics are dicts with 'micro' and 'macro' keys
+        # If they're None, TBM was not computed yet
+        has_tbm = False
+        for tbm_dict in [first, frequent, predefined]:
+            if tbm_dict and isinstance(tbm_dict, dict):
+                # Check if it has non-None values (meaning TBM was computed)
+                micro = tbm_dict.get('micro')
+                macro = tbm_dict.get('macro')
+                if micro is not None or macro is not None:
+                    has_tbm = True
+                    break
+        
+        if not has_tbm:
+            return False
+    
+    # All required metrics are present
+    return True
+
+
+def save_metrics_results(
+    results: Dict[str, Any],
+    output_dir: Path,
+    metrics_base_dir: Path
+) -> None:
+    """
+    Save metrics results to a file matching the output directory structure.
+    
+    Structure: metrics/results/{dataset}/{lang_pair}/{workflow_dir}/{model}/metrics.json
+    
+    Args:
+        results: Results dictionary for one experiment
+        output_dir: Original output directory (e.g., outputs/wmt25/en-zht/IRB.term/gpt-4-1)
+        metrics_base_dir: Base directory for metrics results (e.g., metrics/results)
+    """
+    # Get metrics file path using shared function
+    output_file = get_metrics_file_path(output_dir, metrics_base_dir)
+    
+    # Extract dataset and workflow_dir for metrics_data
+    parts = output_dir.parts
+    base_name = None
+    for part in parts:
+        if part in ['outputs', 'outputs_qwen3']:
+            base_name = part
+            break
+    
+    if not base_name:
+        raise ValueError(f"Could not determine base directory from path: {output_dir}")
+    
+    base_idx = parts.index(base_name)
+    dataset = parts[base_idx + 1]
+    lang_pair = parts[base_idx + 2]
+    workflow_dir = parts[base_idx + 3]  # e.g., "IRB.term" or "IRB"
+    model = parts[base_idx + 4]
+    
+    # Ensure directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     
     # Save results (overwrite - each experiment gets its own file)
     metrics_data = {
@@ -729,6 +822,13 @@ def main():
         help="Filter by model (e.g., 'gpt-4-1', 'qwen3-32b'). "
              "If not specified, processes all models."
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip experiments that already have complete metrics computed. "
+             "For WMT25: requires TBM (first/frequent/predefined) and COMET. "
+             "For DOLFIN: requires COMET only."
+    )
     
     args = parser.parse_args()
     
@@ -766,17 +866,43 @@ def main():
     
     # Find experiments
     print("\nFinding experiments...")
-    experiments = find_experiments(
+    all_experiments = find_experiments(
         args.dataset, 
         args.target_language, 
         args.workflow,
         args.model,
         outputs_dirs
     )
-    print(f"Found {len(experiments)} completed experiments")
+    print(f"Found {len(all_experiments)} completed experiments")
+    
+    # Filter by workflows and models (from write_tables_paper.py)
+    print(f"\nFiltering by workflows: {workflows}")
+    print(f"Filtering by models: {models}")
+    experiments = []
+    skipped_resume = 0
+    for output_dir, report_data in all_experiments:
+        if not should_process_experiment(report_data, workflows, models):
+            continue
+        
+        # Check if we should skip due to --resume
+        if args.resume:
+            try:
+                metrics_file = get_metrics_file_path(output_dir, metrics_dir)
+                if has_complete_metrics(metrics_file, args.dataset):
+                    skipped_resume += 1
+                    continue
+            except (ValueError, Exception):
+                # If we can't determine the path, process it anyway
+                pass
+        
+        experiments.append((output_dir, report_data))
+    
+    print(f"After filtering: {len(experiments)} experiments to process")
+    if args.resume and skipped_resume > 0:
+        print(f"Skipped {skipped_resume} experiments with complete metrics (--resume)")
     
     if not experiments:
-        print("No experiments found. Exiting.")
+        print("No experiments found matching the workflow/model filters. Exiting.")
         return 1
     
     # Group by lang_pair for processing
