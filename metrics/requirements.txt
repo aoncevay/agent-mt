@@ -12,7 +12,7 @@ jieba>=0.42.1
 
 # Embeddings and alignment
 sentence-transformers>=2.2.0
-polyfuzz>=0.5.0
+polyfuzz
 flair>=0.12.0
 
 # Machine learning and transformers
@@ -21,5 +21,10 @@ torch>=1.12.0
 scikit-learn>=1.0.0
 
 # Evaluation metrics
-unbabel-comet>=2.0.0
+# Note: unbabel-comet is not available via pip in SageMaker environment.
+# Instead, clone the COMET repository to:
+#   - other_repos/COMET (local development)
+#   - ~/user-default-efs/tools/COMET (SageMaker)
+# The code will automatically detect and use the cloned repository.
+# unbabel-comet>=2.0.0  # Not needed if using cloned repo
 

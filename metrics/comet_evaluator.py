@@ -2,16 +2,84 @@
 COMET evaluator for computing reference-based quality scores per segment.
 
 Uses COMET-DA model for reference-based evaluation.
+Works with cloned COMET repository (no pip install needed).
 """
 
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
-import json
+import sys
+
+
+def _find_comet_repo() -> Optional[Path]:
+    """
+    Find the cloned COMET repository.
+    Checks both local (other_repos/COMET) and SageMaker (~/user-default-efs/tools) paths.
+    
+    Returns:
+        Path to COMET repository, or None if not found
+    """
+    # Try local path first (for development)
+    local_path = Path(__file__).parent.parent.parent / "other_repos" / "COMET"
+    if local_path.exists():
+        return local_path
+    
+    # Try SageMaker path
+    sagemaker_path = Path.home() / "user-default-efs" / "tools" / "COMET"
+    if sagemaker_path.exists():
+        return sagemaker_path
+    
+    # Try alternative SageMaker path (if cloned with different name)
+    sagemaker_path_alt = Path.home() / "user-default-efs" / "tools" / "comet"
+    if sagemaker_path_alt.exists():
+        return sagemaker_path_alt
+    
+    return None
+
+
+def _load_comet_module():
+    """
+    Load COMET module from cloned repository.
+    Adds the repository to sys.path if needed.
+    
+    Returns:
+        Tuple of (load_from_checkpoint, download_model) functions
+    """
+    comet_repo = _find_comet_repo()
+    
+    if comet_repo is None:
+        raise ImportError(
+            "COMET repository not found. Please clone it to one of:\n"
+            "  - other_repos/COMET (local development)\n"
+            "  - ~/user-default-efs/tools/COMET (SageMaker)\n"
+            "Or install with: pip install unbabel-comet"
+        )
+    
+    # Add COMET repo to path if not already there
+    comet_repo_str = str(comet_repo.resolve())
+    if comet_repo_str not in sys.path:
+        sys.path.insert(0, comet_repo_str)
+    
+    try:
+        # Try the main import path (from comet/__init__.py)
+        from comet import load_from_checkpoint, download_model
+        return load_from_checkpoint, download_model
+    except ImportError:
+        # Try alternative import path (from comet.models)
+        try:
+            from comet.models import load_from_checkpoint, download_model
+            return load_from_checkpoint, download_model
+        except ImportError:
+            raise ImportError(
+                f"Could not import COMET from {comet_repo}. "
+                f"Please ensure the repository is properly cloned and dependencies are installed.\n"
+                f"Path checked: {comet_repo_str}"
+            )
 
 
 def compute_comet_scores(
     segments: List[Tuple[str, str, str]],
-    comet_model_path: Optional[Path] = None
+    comet_model_path: Optional[Path] = None,
+    comet_repo_path: Optional[Path] = None
 ) -> Dict[str, Any]:
     """
     Compute COMET scores for aligned segments.
@@ -19,6 +87,7 @@ def compute_comet_scores(
     Args:
         segments: List of (source, translation, reference) tuples
         comet_model_path: Path to COMET-DA model directory (default: ~/user-default-efs/HF_models/wmt22-comet-da)
+        comet_repo_path: Optional path to cloned COMET repository (auto-detected if not provided)
     
     Returns:
         Dictionary with:
@@ -37,23 +106,32 @@ def compute_comet_scores(
             f"Please ensure the model is downloaded and available."
         )
     
-    try:
-        from comet import download_model, load_from_checkpoint
-    except ImportError:
-        raise ImportError(
-            "COMET library not found. Please install with: pip install unbabel-comet"
-        )
+    # Load COMET module from cloned repo
+    if comet_repo_path:
+        # Temporarily add to path
+        comet_repo_str = str(Path(comet_repo_path).resolve())
+        if comet_repo_str not in sys.path:
+            sys.path.insert(0, comet_repo_str)
+    
+    load_from_checkpoint, download_model = _load_comet_module()
     
     # Load COMET model
     print(f"  Loading COMET-DA model from {comet_model_path}...")
     try:
         # Try to load from local path
         model = load_from_checkpoint(str(comet_model_path))
-    except Exception:
+    except Exception as e:
         # Fallback: try to download (shouldn't happen if model is local)
-        print(f"  ⚠ Warning: Could not load from {comet_model_path}, trying download...")
-        model_path = download_model("Unbabel/wmt22-comet-da")
-        model = load_from_checkpoint(model_path)
+        print(f"  ⚠ Warning: Could not load from {comet_model_path}: {e}")
+        print(f"  Trying to download model...")
+        try:
+            model_path = download_model("Unbabel/wmt22-comet-da")
+            model = load_from_checkpoint(model_path)
+        except Exception as e2:
+            raise RuntimeError(
+                f"Could not load COMET model: {e2}\n"
+                f"Please ensure the model is available at {comet_model_path}"
+            )
     
     # Prepare data for COMET
     sources = [seg[0] for seg in segments]
