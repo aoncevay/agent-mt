@@ -170,70 +170,78 @@ class DocPreprocessor:
                     _log_with_time(f"  ⚠ Model files found in '0/' subdirectory!")
                     _log_with_time(f"     This might be the issue - SentenceTransformer may expect files in root")
             
-            # Try loading with explicit device_map or trust_remote_code if needed
-            # Also try without local_files_only first to see if that's the issue
+            # Workaround: Since AutoModel can load the model, try SentenceTransformer with local_files_only=False
+            # The offline env vars should still prevent downloads, but this allows more flexible path resolution
+            _log_with_time("  Attempting to load SentenceTransformer...")
+            _log_with_time("  Note: AutoModel successfully loads this model, so files are accessible")
+            
             try:
-                _log_with_time("  Attempting to load SentenceTransformer (with local_files_only=True)...")
-                # Try with local_files_only=True first
-                labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
-                _log_with_time("  ✓ SentenceTransformer loaded successfully with local_files_only=True")
+                # Try without local_files_only first (since we know files are accessible via AutoModel)
+                # The TRANSFORMERS_OFFLINE and HF_HUB_OFFLINE env vars should prevent downloads
+                labse_model = SentenceTransformer(str(labse_model_path), local_files_only=False)
+                _log_with_time("  ✓ SentenceTransformer loaded successfully (without local_files_only)")
             except Exception as e1:
                 _log_with_time(f"  First attempt failed: {type(e1).__name__}: {e1}")
-                _log_with_time("  Trying without local_files_only (offline env vars should prevent downloads)...")
+                
+                # Try with local_files_only=True as fallback
+                _log_with_time("  Trying with local_files_only=True...")
                 try:
-                    # Try without local_files_only - the offline env vars should prevent downloads
-                    # But this might allow SentenceTransformer to find the files more flexibly
-                    labse_model = SentenceTransformer(str(labse_model_path), local_files_only=False)
-                    _log_with_time("  ✓ SentenceTransformer loaded successfully without local_files_only")
+                    labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+                    _log_with_time("  ✓ SentenceTransformer loaded successfully (with local_files_only=True)")
                 except Exception as e2:
                     _log_with_time(f"  Second attempt also failed: {type(e2).__name__}: {e2}")
                     
-                    # Try using the model name instead of path (if it's a known model)
-                    # This might help with path resolution
-                    _log_with_time("  Trying with model name 'sentence-transformers/LaBSE'...")
+                    # Workaround: Load with AutoModel and construct SentenceTransformer manually
+                    _log_with_time("  Using workaround: Loading with AutoModel and constructing SentenceTransformer...")
                     try:
-                        # Try loading by model name - this might work if the model is in cache
-                        # But we need to ensure offline mode
-                        labse_model = SentenceTransformer('sentence-transformers/LaBSE', local_files_only=True)
-                        _log_with_time("  ✓ SentenceTransformer loaded by model name")
+                        from transformers import AutoModel, AutoTokenizer
+                        from sentence_transformers.models import Transformer, Pooling, Dense, Normalize
+                        
+                        # Load the base transformer model (which we know works)
+                        _log_with_time("    Loading AutoModel...")
+                        transformer_model = AutoModel.from_pretrained(str(labse_model_path), local_files_only=True)
+                        tokenizer = AutoTokenizer.from_pretrained(str(labse_model_path), local_files_only=True)
+                        _log_with_time("    ✓ AutoModel loaded")
+                        
+                        # Construct SentenceTransformer from modules
+                        _log_with_time("    Constructing SentenceTransformer from modules...")
+                        modules = []
+                        
+                        # Module 0: Transformer
+                        modules.append(Transformer(transformer_model, tokenizer))
+                        
+                        # Load other modules from subdirectories
+                        pooling_dir = labse_model_path / "1_Pooling"
+                        if pooling_dir.exists():
+                            modules.append(Pooling.load(pooling_dir))
+                            _log_with_time("    ✓ Loaded Pooling module")
+                        
+                        dense_dir = labse_model_path / "2_Dense"
+                        if dense_dir.exists():
+                            modules.append(Dense.load(dense_dir))
+                            _log_with_time("    ✓ Loaded Dense module")
+                        
+                        normalize_dir = labse_model_path / "3_Normalize"
+                        if normalize_dir.exists():
+                            modules.append(Normalize.load(normalize_dir))
+                            _log_with_time("    ✓ Loaded Normalize module")
+                        
+                        # Create SentenceTransformer with modules
+                        labse_model = SentenceTransformer(modules=modules)
+                        _log_with_time("  ✓ SentenceTransformer created from AutoModel (workaround)")
                     except Exception as e3:
-                        _log_with_time(f"  Third attempt (model name) also failed: {type(e3).__name__}: {e3}")
-                        
-                        # Final check - verify files are actually readable and not corrupted
-                        _log_with_time("  Performing final file integrity checks...")
-                        if model_safetensors.exists():
-                            try:
-                                stat = model_safetensors.stat()
-                                _log_with_time(f"  model.safetensors: size={stat.st_size / (1024*1024):.1f} MB, readable={os.access(model_safetensors, os.R_OK)}")
-                                # Try to open the file to verify it's not corrupted
-                                with open(model_safetensors, 'rb') as f:
-                                    header = f.read(16)
-                                    _log_with_time(f"  model.safetensors header (first 16 bytes): {header.hex()}")
-                            except Exception as e:
-                                _log_with_time(f"  Could not read model.safetensors: {e}")
-                        
-                        if model_bin.exists():
-                            try:
-                                stat = model_bin.stat()
-                                _log_with_time(f"  pytorch_model.bin: size={stat.st_size / (1024*1024):.1f} MB, readable={os.access(model_bin, os.R_OK)}")
-                            except Exception as e:
-                                _log_with_time(f"  Could not read pytorch_model.bin: {e}")
-                        
-                        # Re-raise the original error with more context
+                        _log_with_time(f"  Workaround also failed: {type(e3).__name__}: {e3}")
                         raise RuntimeError(
                             f"Could not load SentenceTransformer from {labse_model_path}\n"
+                            f"Even AutoModel workaround failed.\n"
                             f"First error ({type(e1).__name__}): {e1}\n"
                             f"Second error ({type(e2).__name__}): {e2}\n"
-                            f"Third error ({type(e3).__name__}): {e3}\n"
+                            f"Workaround error ({type(e3).__name__}): {e3}\n"
                             f"Files exist: model.safetensors={model_safetensors.exists()}, "
                             f"pytorch_model.bin={model_bin.exists()}\n"
-                            f"Path being used: {labse_model_path}\n"
-                            f"Path resolved: {labse_model_path.resolve()}\n"
-                            f"Please check:\n"
-                            f"  1. File permissions: chmod -R 755 {labse_model_path}\n"
-                            f"  2. Model structure matches modules.json expectations\n"
-                            f"  3. Files are not corrupted or incomplete"
+                            f"Path: {labse_model_path.resolve()}"
                         ) from e3
+            
             _log_with_time("  ✓ SentenceTransformer loaded")
             
             # Move model to GPU if available
