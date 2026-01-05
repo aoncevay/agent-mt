@@ -265,7 +265,8 @@ def process_experiment(
     lang_pair: str,
     workflows: List[str],
     models: List[str],
-    labse_model=None  # Optional pre-loaded model
+    labse_model=None,  # Optional pre-loaded SentenceTransformer model
+    polyfuzz_model=None  # Optional pre-loaded PolyFuzz model
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single experiment and compute metrics.
@@ -382,15 +383,31 @@ def process_experiment(
     from metrics.docpreprocessor import DocPreprocessor
     import torch
     
-    # Use provided model or load if not provided (should be provided from main)
+    # Use provided models or load if not provided (should be provided from main)
     use_gpu = torch.cuda.is_available()
-    if labse_model is None:
-        from metrics.docpreprocessor import load_labse_model_once
-        _log_with_time("  Loading LaBSE model (fallback - should be provided from main)...")
-        labse_model = load_labse_model_once(use_gpu=use_gpu)
+    if labse_model is None or polyfuzz_model is None:
+        from metrics.docpreprocessor import (
+            load_labse_model_once,
+            load_polyfuzz_model_once,
+            load_embeddings_wrapper_once,
+            find_labse_model_path
+        )
+        _log_with_time("  Loading models (fallback - should be provided from main)...")
+        labse_model_path = find_labse_model_path()
+        if labse_model is None:
+            labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
+        if polyfuzz_model is None:
+            embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
+            polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
     
-    # Create preprocessor with the loaded model (reuses it, no reload)
-    preprocessor = DocPreprocessor(src_lang, tgt_lang, labse_model=labse_model, use_gpu=use_gpu)
+    # Create preprocessor with the loaded models (reuses them, no reload)
+    preprocessor = DocPreprocessor(
+        src_lang, 
+        tgt_lang, 
+        labse_model=labse_model,
+        polyfuzz_model=polyfuzz_model,
+        use_gpu=use_gpu
+    )
     aligned_df = preprocessor.process_documents(
         documents,
         terminology=terminology,
@@ -769,13 +786,30 @@ def main():
     
     print(f"\nProcessing {len(experiments_by_lang_pair)} language pair(s)...")
     
-    # Load LaBSE model ONCE at the start (reused for all experiments)
+    # Load LaBSE model, embeddings, and PolyFuzz ONCE at the start (reused for all experiments)
     _log_with_time("="*80)
-    _log_with_time("Loading LaBSE model (once, will be reused for all experiments)...")
-    from metrics.docpreprocessor import load_labse_model_once
+    _log_with_time("Loading LaBSE model and embeddings (once, will be reused for all experiments)...")
+    from metrics.docpreprocessor import (
+        load_labse_model_once,
+        load_embeddings_wrapper_once,
+        load_polyfuzz_model_once,
+        find_labse_model_path
+    )
     import torch
     use_gpu = torch.cuda.is_available()
-    labse_model = load_labse_model_once(use_gpu=use_gpu)
+    
+    # Find model path first
+    labse_model_path = find_labse_model_path()
+    
+    # Load model
+    labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
+    
+    # Load embeddings wrapper (needs path, not model object)
+    embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
+    
+    # Load PolyFuzz model
+    polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+    
     _log_with_time("="*80)
     
     # Process each language pair
@@ -795,7 +829,8 @@ def main():
                     lang_pair,
                     workflows,
                     models,
-                    labse_model=labse_model  # Pass the pre-loaded model
+                    labse_model=labse_model,  # Pass the pre-loaded model
+                    polyfuzz_model=polyfuzz_model  # Pass the pre-loaded PolyFuzz model
                 )
                 
                 if results:

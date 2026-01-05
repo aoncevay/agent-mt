@@ -23,14 +23,37 @@ from nltk.tokenize import word_tokenize
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-# Global cache for loaded models (loaded once, reused everywhere)
+# Global cache for loaded models and embeddings (loaded once, reused everywhere)
 _loaded_models_cache = {}
+_loaded_embeddings_cache = {}
+_loaded_polyfuzz_cache = {}
 
 
 def _log_with_time(message: str):
     """Log message with timestamp."""
     timestamp = time.strftime("%H:%M:%S")
     print(f"[{timestamp}] {message}")
+
+
+def find_labse_model_path(labse_model_path: Optional[Path] = None) -> Path:
+    """Find LaBSE model path from common locations."""
+    if labse_model_path is not None:
+        return Path(labse_model_path).resolve()
+    
+    possible_paths = [
+        Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/LaBSE"),
+        Path.home() / "user-default-efs" / "HF_models" / "LaBSE",
+        Path("/mnt/custom-file-systems/efs") / "HF_models" / "LaBSE",
+        Path.home() / "Documents" / "Code" / "HF_models" / "LaBSE",  # Local path
+    ]
+    
+    for path in possible_paths:
+        if path.exists():
+            return Path(path).resolve()
+    
+    raise FileNotFoundError(
+        f"LaBSE model not found. Tried paths:\n" + "\n".join(f"  - {p}" for p in possible_paths)
+    )
 
 
 def load_labse_model_once(
@@ -54,25 +77,7 @@ def load_labse_model_once(
         return _loaded_models_cache[cache_key]
     
     # Find model path
-    if labse_model_path is None:
-        possible_paths = [
-            Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/LaBSE"),
-            Path.home() / "user-default-efs" / "HF_models" / "LaBSE",
-            Path("/mnt/custom-file-systems/efs") / "HF_models" / "LaBSE",
-            Path.home() / "Documents" / "Code" / "HF_models" / "LaBSE",  # Local path
-        ]
-        
-        for path in possible_paths:
-            if path.exists():
-                labse_model_path = path
-                break
-        
-        if labse_model_path is None:
-            raise FileNotFoundError(
-                f"LaBSE model not found. Tried paths:\n" + "\n".join(f"  - {p}" for p in possible_paths)
-            )
-    
-    labse_model_path = Path(labse_model_path).resolve()
+    labse_model_path = find_labse_model_path(labse_model_path)
     _log_with_time(f"Loading LaBSE model from: {labse_model_path}")
     
     # Check sentence-transformers version
@@ -121,6 +126,89 @@ def load_labse_model_once(
     return labse_model
 
 
+def load_embeddings_wrapper_once(
+    labse_model_path: Optional[Path] = None,
+    labse_model: Optional[SentenceTransformer] = None
+) -> SentenceTransformerDocumentEmbeddings:
+    """
+    Load embeddings wrapper once and cache it. Reuses the same instance.
+    
+    Args:
+        labse_model_path: Path to LaBSE model directory (used if labse_model not provided)
+        labse_model: Optional pre-loaded SentenceTransformer model
+        
+    Returns:
+        SentenceTransformerDocumentEmbeddings instance
+    """
+    # Check cache first
+    cache_key = str(labse_model_path) if labse_model_path else "default"
+    if cache_key in _loaded_embeddings_cache:
+        _log_with_time(f"  Using cached embeddings wrapper from {cache_key}")
+        return _loaded_embeddings_cache[cache_key]
+    
+    # Get model path (needed for SentenceTransformerDocumentEmbeddings)
+    if labse_model_path is None:
+        labse_model_path = find_labse_model_path()
+    
+    labse_model_path = Path(labse_model_path).resolve()
+    
+    _log_with_time("  Creating embeddings wrapper for PolyFuzz...")
+    
+    # SentenceTransformerDocumentEmbeddings needs a path, not a model object
+    # So we use the path even if we have the model loaded
+    try:
+        embeddings = SentenceTransformerDocumentEmbeddings(str(labse_model_path))
+        _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from path")
+    except Exception as e:
+        _log_with_time(f"  ✗ Could not create embeddings wrapper: {e}")
+        raise RuntimeError(
+            f"Could not create SentenceTransformerDocumentEmbeddings from {labse_model_path}\n"
+            f"Error: {e}"
+        ) from e
+    
+    # Cache it
+    _loaded_embeddings_cache[cache_key] = embeddings
+    _log_with_time("  ✓ Embeddings wrapper cached for reuse")
+    
+    return embeddings
+
+
+def load_polyfuzz_model_once(
+    labse_model_path: Optional[Path] = None,
+    embeddings: Optional[SentenceTransformerDocumentEmbeddings] = None
+) -> PolyFuzz:
+    """
+    Load PolyFuzz model once and cache it. Reuses the same instance.
+    
+    Args:
+        labse_model_path: Path to LaBSE model directory (used if embeddings not provided)
+        embeddings: Optional pre-loaded SentenceTransformerDocumentEmbeddings
+        
+    Returns:
+        PolyFuzz instance
+    """
+    # Check cache first
+    cache_key = str(labse_model_path) if labse_model_path else "default"
+    if cache_key in _loaded_polyfuzz_cache:
+        _log_with_time(f"  Using cached PolyFuzz model from {cache_key}")
+        return _loaded_polyfuzz_cache[cache_key]
+    
+    # Load embeddings if not provided
+    if embeddings is None:
+        embeddings = load_embeddings_wrapper_once(labse_model_path)
+    
+    _log_with_time("  Creating PolyFuzz model...")
+    LaBSE_embeddings = Embeddings(embeddings, min_similarity=0, model_id="LaBSE")
+    polyfuzz_model = PolyFuzz([LaBSE_embeddings])
+    _log_with_time("  ✓ PolyFuzz model created")
+    
+    # Cache it
+    _loaded_polyfuzz_cache[cache_key] = polyfuzz_model
+    _log_with_time("  ✓ PolyFuzz model cached for reuse")
+    
+    return polyfuzz_model
+
+
 class DocPreprocessor:
     """
     Document preprocessor that splits and aligns documents using LaBSE embeddings.
@@ -134,6 +222,8 @@ class DocPreprocessor:
         tgt_lang: str, 
         labse_model_path: Optional[Path] = None,
         labse_model: Optional[SentenceTransformer] = None,
+        embeddings: Optional[SentenceTransformerDocumentEmbeddings] = None,
+        polyfuzz_model: Optional[PolyFuzz] = None,
         use_gpu: bool = True
     ):
         """
@@ -144,6 +234,8 @@ class DocPreprocessor:
             tgt_lang: Target language code (e.g., 'zht', 'es')
             labse_model_path: Optional path to local LaBSE model (default: auto-detect)
             labse_model: Optional pre-loaded SentenceTransformer model (reuses if provided)
+            embeddings: Optional pre-loaded SentenceTransformerDocumentEmbeddings (reuses if provided)
+            polyfuzz_model: Optional pre-loaded PolyFuzz model (reuses if provided)
             use_gpu: Whether to use GPU if available
         """
         self.src_lang = src_lang
@@ -157,41 +249,22 @@ class DocPreprocessor:
             # Load once using the centralized loader (cached, reused across instances)
             self.labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
-        # Create embeddings wrapper for PolyFuzz
-        _log_with_time("  Creating embeddings wrapper for PolyFuzz...")
-        try:
-            # Try passing the SentenceTransformer instance directly
-            self.embeddings = SentenceTransformerDocumentEmbeddings(self.labse_model)
-            _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from model instance")
-        except (TypeError, ValueError) as e:
-            _log_with_time(f"  ⚠ Could not pass model instance: {e}")
-            _log_with_time("  Trying with model path as fallback...")
-            # Fallback: try with path (but this might reload, which we want to avoid)
-            # Get the path from the cache if possible
-            try:
-                model_path = None
-                for key, model in _loaded_models_cache.items():
-                    if model is self.labse_model:
-                        model_path = key
-                        break
-                
-                if model_path and model_path != "default":
-                    self.embeddings = SentenceTransformerDocumentEmbeddings(str(model_path))
-                    _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from path")
-                else:
-                    raise ValueError("Could not determine model path for fallback")
-            except Exception as e2:
-                _log_with_time(f"  ✗ Fallback also failed: {e2}")
-                raise RuntimeError(
-                    f"Could not create embeddings wrapper. "
-                    f"Model loaded successfully but cannot create PolyFuzz embeddings.\n"
-                    f"Original error: {e}\n"
-                    f"Fallback error: {e2}"
-                ) from e2
+        # Load or reuse PolyFuzz model (use centralized loader)
+        if polyfuzz_model is not None:
+            _log_with_time("  Using provided PolyFuzz model (reusing existing, no reload)")
+            self.model = polyfuzz_model
+        else:
+            # Load embeddings wrapper if not provided
+            if embeddings is None:
+                # Get model path for embeddings wrapper (needs path, not model object)
+                if labse_model_path is None:
+                    labse_model_path = find_labse_model_path()
+                embeddings = load_embeddings_wrapper_once(labse_model_path, self.labse_model)
+            
+            # Load PolyFuzz model using centralized loader
+            self.model = load_polyfuzz_model_once(labse_model_path, embeddings)
         
-        self.LaBSE = Embeddings(self.embeddings, min_similarity=0, model_id="LaBSE")
-        self.model = PolyFuzz([self.LaBSE])
-        _log_with_time("  ✓ PolyFuzz model initialized")
+        _log_with_time("  ✓ DocPreprocessor initialized with cached models")
         
         # Initialize stanza for English normalization (if needed)
         if src_lang == 'en':
