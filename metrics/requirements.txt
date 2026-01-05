@@ -1,0 +1,26 @@
+# Requirements for metrics evaluation system
+# Install with: pip install -r metrics/requirements.txt
+
+# Core dependencies
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Text processing and tokenization
+nltk>=3.8
+stanza>=1.5.0
+jieba>=0.42.1
+pymorphy3>=2.0.0
+
+# Embeddings and alignment
+sentence-transformers>=2.2.0
+polyfuzz>=0.5.0
+flair>=0.12.0
+
+# Machine learning and transformers
+transformers>=4.20.0
+torch>=1.12.0
+scikit-learn>=1.0.0
+
+# Evaluation metrics
+unbabel-comet>=2.0.0
+
