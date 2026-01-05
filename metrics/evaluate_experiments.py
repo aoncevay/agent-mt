@@ -17,9 +17,16 @@ Usage:
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
+
+
+def _log_with_time(msg: str):
+    """Print message with timestamp."""
+    timestamp = time.strftime("%H:%M:%S")
+    print(f"[{timestamp}] {msg}")
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -370,9 +377,19 @@ def process_experiment(
         terminology = sample_data[0].get('terminology')
     
     # 1. Run docpreprocessor (split + align segments)
-    print(f"  Step 1: Splitting and aligning documents...")
+    _log_with_time(f"  Step 1: Splitting and aligning documents...")
     from metrics.docpreprocessor import DocPreprocessor
-    preprocessor = DocPreprocessor(src_lang, tgt_lang)
+    import torch
+    
+    # Use provided model or load if not provided (should be provided from main)
+    use_gpu = torch.cuda.is_available()
+    if labse_model is None:
+        from metrics.docpreprocessor import load_labse_model_once
+        _log_with_time("  Loading LaBSE model (fallback - should be provided from main)...")
+        labse_model = load_labse_model_once(use_gpu=use_gpu)
+    
+    # Create preprocessor with the loaded model (reuses it, no reload)
+    preprocessor = DocPreprocessor(src_lang, tgt_lang, labse_model=labse_model, use_gpu=use_gpu)
     aligned_df = preprocessor.process_documents(
         documents,
         terminology=terminology,
@@ -751,6 +768,15 @@ def main():
     
     print(f"\nProcessing {len(experiments_by_lang_pair)} language pair(s)...")
     
+    # Load LaBSE model ONCE at the start (reused for all experiments)
+    _log_with_time("="*80)
+    _log_with_time("Loading LaBSE model (once, will be reused for all experiments)...")
+    from metrics.docpreprocessor import load_labse_model_once
+    import torch
+    use_gpu = torch.cuda.is_available()
+    labse_model = load_labse_model_once(use_gpu=use_gpu)
+    _log_with_time("="*80)
+    
     # Process each language pair
     for lang_pair, lang_experiments in experiments_by_lang_pair.items():
         print(f"\n{'='*80}")
@@ -767,7 +793,8 @@ def main():
                     args.dataset,
                     lang_pair,
                     workflows,
-                    models
+                    models,
+                    labse_model=labse_model  # Pass the pre-loaded model
                 )
                 
                 if results:
