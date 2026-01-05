@@ -80,8 +80,25 @@ class TermBasedMetric():
             # Load awesome-align model from local path (if available) to avoid HF connection
             # Default: try to use local model, fallback to HF if not found
             import os
-            awesome_align_path = Path.home() / "user-default-efs" / "HF_models" / "awesome-align-with-co"
-            if awesome_align_path.exists():
+            # Try multiple possible paths for EFS mount
+            possible_paths = [
+                # EFS mount path (SageMaker)
+                Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/awesome-align-with-co"),
+                # Home directory path
+                Path.home() / "user-default-efs" / "HF_models" / "awesome-align-with-co",
+                # Alternative EFS path pattern
+                Path("/mnt/custom-file-systems/efs") / "HF_models" / "awesome-align-with-co",
+            ]
+            
+            # Find the first path that exists
+            awesome_align_path = None
+            for path in possible_paths:
+                if path.exists():
+                    awesome_align_path = path
+                    break
+            
+            if awesome_align_path is not None:
+                awesome_align_path = Path(awesome_align_path).resolve()
                 # Use local model
                 os.environ["TRANSFORMERS_OFFLINE"] = "1"
                 os.environ["HF_HUB_OFFLINE"] = "1"

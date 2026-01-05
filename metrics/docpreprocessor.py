@@ -44,15 +44,38 @@ class DocPreprocessor:
         
         # Find LaBSE model path
         if labse_model_path is None:
-            # Default path from user's configuration
-            labse_model_path = Path.home() / "user-default-efs" / "HF_models" / "LaBSE"
+            # Try multiple possible paths for EFS mount
+            possible_paths = [
+                # EFS mount path (SageMaker)
+                Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/LaBSE"),
+                # Home directory path
+                Path.home() / "user-default-efs" / "HF_models" / "LaBSE",
+                # Alternative EFS path pattern
+                Path("/mnt/custom-file-systems/efs") / "HF_models" / "LaBSE",
+            ]
+            
+            # Find the first path that exists
+            labse_model_path = None
+            for path in possible_paths:
+                if path.exists():
+                    labse_model_path = path
+                    break
+            
+            # If none found, use the first one as default (will raise error below)
+            if labse_model_path is None:
+                labse_model_path = possible_paths[0]
         
-        # Check if local model exists
+        # Convert to absolute path and check if local model exists
+        labse_model_path = Path(labse_model_path).resolve()
+        
         if not labse_model_path.exists():
             raise FileNotFoundError(
                 f"LaBSE model not found at {labse_model_path}\n"
                 f"Please ensure the model is downloaded and available locally.\n"
-                f"The model should be at: ~/user-default-efs/HF_models/LaBSE"
+                f"Tried paths:\n"
+                f"  - /mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/LaBSE\n"
+                f"  - ~/user-default-efs/HF_models/LaBSE\n"
+                f"  - /mnt/custom-file-systems/efs/HF_models/LaBSE"
             )
         
         # Initialize LaBSE embeddings from local path (no HF connection)

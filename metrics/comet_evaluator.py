@@ -97,13 +97,38 @@ def compute_comet_scores(
         - 'scores': List of per-segment scores
     """
     if comet_model_path is None:
-        # Default path from user's configuration
-        comet_model_path = Path.home() / "user-default-efs" / "HF_models" / "wmt22-comet-da"
+        # Try multiple possible paths for EFS mount
+        possible_paths = [
+            # EFS mount path (SageMaker)
+            Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/wmt22-comet-da"),
+            # Home directory path
+            Path.home() / "user-default-efs" / "HF_models" / "wmt22-comet-da",
+            # Alternative EFS path pattern
+            Path("/mnt/custom-file-systems/efs") / "HF_models" / "wmt22-comet-da",
+        ]
+        
+        # Find the first path that exists
+        comet_model_path = None
+        for path in possible_paths:
+            if path.exists():
+                comet_model_path = path
+                break
+        
+        # If none found, use the first one as default (will raise error below)
+        if comet_model_path is None:
+            comet_model_path = possible_paths[0]
+    
+    # Convert to absolute path and check if model exists
+    comet_model_path = Path(comet_model_path).resolve()
     
     if not comet_model_path.exists():
         raise FileNotFoundError(
             f"COMET-DA model not found at {comet_model_path}\n"
-            f"Please ensure the model is downloaded and available."
+            f"Please ensure the model is downloaded and available.\n"
+            f"Tried paths:\n"
+            f"  - /mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/wmt22-comet-da\n"
+            f"  - ~/user-default-efs/HF_models/wmt22-comet-da\n"
+            f"  - /mnt/custom-file-systems/efs/HF_models/wmt22-comet-da"
         )
     
     # Load COMET module from cloned repo
