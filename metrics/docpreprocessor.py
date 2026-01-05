@@ -191,45 +191,78 @@ class DocPreprocessor:
                 except Exception as e2:
                     _log_with_time(f"  Second attempt also failed: {type(e2).__name__}: {e2}")
                     
-                    # Workaround: Load with AutoModel and construct SentenceTransformer manually
+                    # Workaround: Load with AutoModel ONCE and construct SentenceTransformer manually
                     _log_with_time("  Using workaround: Loading with AutoModel and constructing SentenceTransformer...")
                     try:
                         from transformers import AutoModel, AutoTokenizer
                         from sentence_transformers.models import Transformer, Pooling, Dense, Normalize
+                        # json is already imported at module level
                         
-                        # Load the base transformer model (which we know works)
-                        _log_with_time("    Loading AutoModel...")
+                        # Load the base transformer model ONCE (which we know works) - reuse everywhere
+                        _log_with_time("    Loading AutoModel and AutoTokenizer (once, will be reused)...")
                         transformer_model = AutoModel.from_pretrained(str(labse_model_path), local_files_only=True)
                         tokenizer = AutoTokenizer.from_pretrained(str(labse_model_path), local_files_only=True)
-                        _log_with_time("    ✓ AutoModel loaded")
+                        _log_with_time("    ✓ AutoModel and tokenizer loaded")
                         
                         # Construct SentenceTransformer from modules
                         _log_with_time("    Constructing SentenceTransformer from modules...")
                         modules = []
                         
-                        # Module 0: Transformer - pass the model and tokenizer objects
+                        # Module 0: Transformer - use the loaded model directly (no reload)
                         modules.append(Transformer(transformer_model, tokenizer))
-                        _log_with_time("    ✓ Created Transformer module")
+                        _log_with_time("    ✓ Created Transformer module from loaded model")
                         
-                        # Load other modules from subdirectories - pass paths as strings
+                        # Load other modules from their config.json files (not using .load() which looks for model files)
+                        # Pooling module
                         pooling_dir = labse_model_path / "1_Pooling"
                         if pooling_dir.exists():
-                            modules.append(Pooling.load(str(pooling_dir)))
-                            _log_with_time("    ✓ Loaded Pooling module")
+                            pooling_config_path = pooling_dir / "config.json"
+                            if pooling_config_path.exists():
+                                with open(pooling_config_path, 'r', encoding='utf-8') as f:
+                                    pooling_config = json.load(f)
+                                # Create Pooling from config (no model files needed for pooling)
+                                pooling = Pooling(**pooling_config)
+                                modules.append(pooling)
+                                _log_with_time("    ✓ Created Pooling module from config")
+                            else:
+                                _log_with_time("    ⚠ Pooling directory exists but no config.json, using defaults")
+                                modules.append(Pooling())  # Use defaults
                         
+                        # Dense module
                         dense_dir = labse_model_path / "2_Dense"
                         if dense_dir.exists():
-                            modules.append(Dense.load(str(dense_dir)))
-                            _log_with_time("    ✓ Loaded Dense module")
+                            dense_config_path = dense_dir / "config.json"
+                            if dense_config_path.exists():
+                                with open(dense_config_path, 'r', encoding='utf-8') as f:
+                                    dense_config = json.load(f)
+                                # Dense module needs in_features - get from transformer model
+                                if 'in_features' not in dense_config:
+                                    try:
+                                        dense_config['in_features'] = transformer_model.config.hidden_size
+                                    except:
+                                        dense_config['in_features'] = 768  # Default for LaBSE
+                                dense = Dense(**dense_config)
+                                modules.append(dense)
+                                _log_with_time("    ✓ Created Dense module from config")
+                            else:
+                                _log_with_time("    ⚠ Dense directory exists but no config.json, using defaults")
+                                # Use default Dense with transformer's hidden size
+                                try:
+                                    in_features = transformer_model.config.hidden_size
+                                except:
+                                    in_features = 768
+                                modules.append(Dense(in_features=in_features))
                         
+                        # Normalize module (typically doesn't need config)
                         normalize_dir = labse_model_path / "3_Normalize"
                         if normalize_dir.exists():
-                            modules.append(Normalize.load(str(normalize_dir)))
-                            _log_with_time("    ✓ Loaded Normalize module")
+                            normalize = Normalize()
+                            modules.append(normalize)
+                            _log_with_time("    ✓ Created Normalize module")
                         
-                        # Create SentenceTransformer with modules
+                        # Create SentenceTransformer with modules (using loaded model, no reloads)
                         labse_model = SentenceTransformer(modules=modules)
-                        _log_with_time("  ✓ SentenceTransformer created from AutoModel (workaround)")
+                        _log_with_time("  ✓ SentenceTransformer created from AutoModel (workaround, single load)")
                     except Exception as e3:
                         _log_with_time(f"  Workaround also failed: {type(e3).__name__}: {e3}")
                         raise RuntimeError(
