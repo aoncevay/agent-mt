@@ -1516,6 +1516,266 @@ def create_workflow_shape_legend(output_path: Path):
     plt.close()
 
 
+def plot_dataset_avg_price_pareto_simplified(
+    dataset: str,
+    reports_by_lang_pair: Dict[str, List[Dict]],
+    output_dir: Path,
+    metric: str = "chrf",  # "chrf" or "termacc"
+    use_batch: bool = False,
+    is_term: bool = False,
+    connect_points: bool = False
+):
+    """
+    Create simplified Pareto optimality plot for AVG dataset results.
+    Uses workflow colors, circle markers for all points, and labels model names
+    for points with Pareto stars.
+    """
+    # Filter lang pairs to match table logic (use same lang pairs as tables)
+    import importlib.util
+    table_script_path = Path(__file__).parent / "write_tables_paper.py"
+    spec = importlib.util.spec_from_file_location("write_tables_paper", table_script_path)
+    table_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(table_module)
+    
+    if dataset == "dolfin":
+        valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
+    elif dataset == "wmt25" and is_term:
+        valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
+    else:
+        valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
+    
+    # Filter reports_by_lang_pair to only include valid lang pairs
+    filtered_reports_by_lang_pair = {
+        lp: reports for lp, reports in reports_by_lang_pair.items() 
+        if lp in valid_lang_pairs
+    }
+    
+    # Aggregate data across language pairs
+    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    
+    for lang_pair, reports in filtered_reports_by_lang_pair.items():
+        for report in reports:
+            workflow_name = report.get("workflow", "")
+            workflow = get_workflow_acronym(workflow_name)
+            model = report["model"]
+            key = (workflow, model)
+            
+            # Get metric value
+            if metric == "chrf":
+                value = report.get("chrf")
+            elif metric == "termacc":
+                value = report.get("term_acc")
+            else:
+                continue
+            
+            if value is None:
+                continue
+            
+            # Calculate cost for this lang pair
+            tokens_input = report.get("tokens_input", 0)
+            tokens_output = report.get("tokens_output", 0)
+            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
+            
+            if cost is None:
+                continue
+            
+            aggregated_data[key]["values"].append(value)
+            aggregated_data[key]["costs"].append(cost)
+    
+    workflows = set()
+    models = set()
+    data_points = []
+    
+    # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
+    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    
+    for workflow in WORKFLOW_ORDER:
+        for model in MODEL_ORDER_FOR_PARETO:
+            # Filter by MODEL_MARKERS (same as tables)
+            if model not in MODEL_MARKERS:
+                continue
+            
+            key = (workflow, model)
+            if key not in aggregated_data:
+                continue
+            
+            data = aggregated_data[key]
+            
+            # GPT-5 is zero-shot baseline only (same as tables)
+            if model == "gpt-5" and workflow != "ZS":
+                continue
+            
+            if not data["values"] or not data["costs"]:
+                continue
+            
+            avg_value = sum(data["values"]) / len(data["values"])
+            total_cost = sum(data["costs"])  # Total cost across all lang pairs
+            
+            workflows.add(workflow)
+            models.add(model)
+            
+            data_points.append({
+                "workflow": workflow,
+                "model": model,
+                "value": avg_value,
+                "cost": total_cost
+            })
+    
+    if not data_points:
+        return
+    
+    # Extract costs and values for Pareto analysis
+    costs = [d["cost"] for d in data_points]
+    values = [d["value"] for d in data_points]
+    
+    # Compute Pareto ranks with percentile-based quality threshold (75th percentile)
+    min_value = np.percentile(values, 75) if len(values) > 1 else None
+    pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
+    
+    # Create figure
+    figsize = (3.5, 2) if metric == "termacc" else (3.5, 2.5)
+    _fig, ax = plt.subplots(figsize=figsize)
+    
+    # Set log scale for x-axis
+    ax.set_xscale('log')
+    
+    # First pass: collect all workflow points and draw lines (if requested)
+    workflow_points_dict = {}
+    
+    for workflow in sorted(workflows):
+        workflow_data = [d for d in data_points if d["workflow"] == workflow]
+        
+        if not workflow_data:
+            continue
+        
+        color = WORKFLOW_COLORS.get(workflow, "#000000")
+        
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
+            model_data = [d for d in workflow_data if d["model"] == model]
+            if model_data:
+                point = model_data[0]
+                # Find index in data_points to check if it has a star
+                point_idx = None
+                for idx, dp in enumerate(data_points):
+                    if dp["workflow"] == workflow and dp["model"] == model:
+                        point_idx = idx
+                        break
+                
+                # Check if this point has a star (rank 1 or 2)
+                has_star = False
+                if point_idx is not None:
+                    if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
+                        has_star = True
+                    elif 2 in pareto_ranks and point_idx in pareto_ranks[2]:
+                        has_star = True
+                
+                workflow_points.append((point["cost"], point["value"], model, has_star))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines if requested
+        if connect_points and len(workflow_points_sorted) > 1:
+            costs_line = [p[0] for p in workflow_points_sorted]
+            values_line = [p[1] for p in workflow_points_sorted]
+            ax.plot(costs_line, values_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=1)
+    
+    # Second pass: plot all markers (all circles, colored by workflow)
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow (all use circle marker)
+        for cost, value, model, has_star in workflow_points_sorted:
+            ax.scatter(cost, value, c=color, marker='o', s=63,
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+    
+    # Labels
+    ax.set_xlabel('Cost ($, log scale)', fontsize=10)
+    if metric == "chrf":
+        ax.set_ylabel('chrF++', fontsize=10)
+    elif metric == "termacc":
+        ax.set_ylabel('Term. Accuracy', fontsize=10)
+    
+    # Auto-scale y-axis, then adjust ticks
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    if metric == "termacc":
+        y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+        y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)
+    else:
+        y_min_rounded = 5 * (int(y_min) // 5)
+        y_max_rounded = 5 * ((int(y_max) + 4) // 5)
+    ax.set_ylim(y_min_rounded, y_max_rounded)
+    
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
+    
+    # Add model name labels for points with Pareto stars
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        for cost, value, model, has_star in workflow_points_sorted:
+            if not has_star:
+                continue
+            
+            # Find index of this point in data_points
+            point_idx = None
+            for idx, dp in enumerate(data_points):
+                if dp["workflow"] == workflow and dp["model"] == model:
+                    point_idx = idx
+                    break
+            
+            if point_idx is None:
+                continue
+            
+            # Check if it's rank 1 or 2
+            is_rank1 = (1 in pareto_ranks and point_idx in pareto_ranks[1])
+            is_rank2 = (2 in pareto_ranks and point_idx in pareto_ranks[2])
+            
+            if is_rank1 or is_rank2:
+                # Get model display name
+                model_display = MODEL_DISPLAY_NAMES.get(model, model)
+                
+                # Position label to the right of the point
+                # For log scale x-axis: multiply by a factor
+                x_offset_factor = 1.15  # 15% to the right in log space
+                label_x = cost * x_offset_factor
+                
+                # For y-axis: slight offset upward
+                y_range = y_max_rounded - y_min_rounded
+                y_offset = y_range * 0.02  # 2% of range
+                label_y = value + y_offset
+                
+                # Add text label with workflow color
+                ax.text(label_x, label_y, model_display, fontsize=8, color=color,
+                       weight='bold', ha='left', va='bottom', zorder=7)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    safe_dataset = dataset.replace("/", "_")
+    if is_term:
+        if metric == "chrf":
+            output_path = output_dir / f"{safe_dataset}+T_AVG_chrF_x_price_pareto_simplified.pdf"
+        else:  # termacc
+            output_path = output_dir / f"{safe_dataset}+T_AVG_TAcc_x_price_pareto_simplified.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_AVG_chrF_x_price_pareto_simplified.pdf"
+    
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    print(f"Created simplified Pareto plot: {output_path}")
+
+
 def plot_per_model(
     dataset: str,
     reports_by_lang_pair: Dict[str, List[Dict]],
@@ -1760,6 +2020,11 @@ def main():
         action="store_true",
         help="Create per-model plots (2x2 subplots, one per model, workflows as shapes)"
     )
+    parser.add_argument(
+        "--simplify",
+        action="store_true",
+        help="Create simplified Pareto plots (workflow colors, circle markers, model labels for stars)"
+    )
     
     args = parser.parse_args()
     
@@ -1865,6 +2130,21 @@ def main():
     # DOLFIN AVG Pareto plot
     if dolfin_reports:
         plot_dataset_avg_price_pareto("dolfin", dolfin_reports, output_dir, metric="chrf", use_batch=False, is_term=False, connect_points=args.connect_points)
+    
+    # Create simplified Pareto plots if requested
+    if args.simplify:
+        print("\nCreating simplified Pareto plots...")
+        simplified_dir = output_dir / "simplified"
+        simplified_dir.mkdir(parents=True, exist_ok=True)
+        
+        # DOLFIN simplified Pareto plot (chrF++)
+        if dolfin_reports:
+            plot_dataset_avg_price_pareto_simplified("dolfin", dolfin_reports, simplified_dir, metric="chrf", use_batch=False, is_term=False, connect_points=args.connect_points)
+        
+        # WMT25+Term simplified Pareto plots (chrF++ and Term Acc)
+        if wmt25_term_reports:
+            plot_dataset_avg_price_pareto_simplified("wmt25", wmt25_term_reports, simplified_dir, metric="chrf", use_batch=False, is_term=True, connect_points=args.connect_points)
+            plot_dataset_avg_price_pareto_simplified("wmt25", wmt25_term_reports, simplified_dir, metric="termacc", use_batch=False, is_term=True, connect_points=args.connect_points)
     
     # Create per-model plots if requested
     if args.per_model:
