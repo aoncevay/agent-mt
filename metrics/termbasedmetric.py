@@ -21,7 +21,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score # TODO: generalize to input other metrics
 from sklearn.metrics import confusion_matrix
 from collections import defaultdict
-import pymorphy3
+# import pymorphy3  # Only needed for Russian, not used in our experiments
 import jieba
 
 # Set environment variables to prevent HuggingFace connections
@@ -69,7 +69,9 @@ class TermBasedMetric():
         self.lang_src, self.lang_tgt = src_lang, tgt_lang
         self.stanza_src = stanza.Pipeline(self.lang_src, processors='tokenize,lemma', lemma_pretagged=True, tokenize_pretokenized=False)
         self.stanza_tgt = stanza.Pipeline(self.lang_tgt, processors='tokenize,lemma', lemma_pretagged=True, tokenize_pretokenized=False)
-        self.ru_morph = pymorphy3.MorphAnalyzer()
+        # pymorphy3 only needed for Russian, not used in our experiments
+        # self.ru_morph = pymorphy3.MorphAnalyzer()
+        self.ru_morph = None
         self.keyword_extractor = keyword_extractor
         self.aligner = aligner
         if self.aligner == 'llm':
@@ -618,6 +620,9 @@ Translated term: """
         :return: str, normalized form of the input word.
         """
         if lang == 'ru':
+            if self.ru_morph is None:
+                # pymorphy3 not available (not needed for our experiments)
+                return word  # Return word as-is if Russian normalization not available
             return self.ru_morph.parse(word)[0].normal_form
         elif lang in ['en', 'de', 'es']:
             if lang == self.lang_src:

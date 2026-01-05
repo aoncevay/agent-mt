@@ -333,7 +333,8 @@ class DocPreprocessor:
                 # Store aligned segments
                 for align_idx, (src_seg, tgt_seg, score) in enumerate(alignment):
                     df_data.append({
-                        'paragraph': para_idx,
+                        'document': doc_idx,  # Document/sample index
+                        'paragraph': para_idx,  # Paragraph index within document
                         'sentence': align_idx,
                         'alignment': 'labse',
                         'src_segment': src_seg,
@@ -482,22 +483,54 @@ class DocPreprocessor:
             return [(src_sentences[i], tgt_sentences[i] if i < len(tgt_sentences) else "", 1.0) for i in range(min_len)]
     
     def _extract_terms(self, src_text: str, tgt_text: str, terminology: Dict[str, list]) -> Optional[Dict[str, list]]:
-        """Extract terminology terms from source and target text."""
+        """
+        Extract terminology terms from source and target text.
+        
+        Terminology format: Dict[str, List[str]] where keys are source terms and values are lists of target terms.
+        Example: {"source_term": ["target_term1", "target_term2"], ...}
+        """
         if not terminology:
             return None
         
         found_terms = {}
-        for term_type, term_list in terminology.items():
-            found = []
-            for term in term_list:
-                src_term = term.get('source', '')
-                tgt_term = term.get('target', '')
+        try:
+            for src_term, tgt_terms_list in terminology.items():
+                # Handle both formats:
+                # 1. Dict[str, List[str]]: {"source_term": ["target1", "target2"]}
+                # 2. Dict[str, List[Dict]]: {"type": [{"source": "...", "target": "..."}]}
                 
-                # Case-insensitive search
-                if src_term.lower() in src_text.lower() and tgt_term.lower() in tgt_text.lower():
-                    found.append(term)
-            
-            if found:
-                found_terms[term_type] = found
+                if not isinstance(tgt_terms_list, list):
+                    continue
+                
+                found = []
+                for tgt_term_item in tgt_terms_list:
+                    # Check if it's a dict format (old format)
+                    if isinstance(tgt_term_item, dict):
+                        term_src = tgt_term_item.get('source', '')
+                        term_tgt = tgt_term_item.get('target', '')
+                    # Otherwise, it's a string format (WMT25 format)
+                    elif isinstance(tgt_term_item, str):
+                        term_src = src_term
+                        term_tgt = tgt_term_item
+                    else:
+                        continue
+                    
+                    # Case-insensitive search
+                    if term_src and term_tgt:
+                        if term_src.lower() in src_text.lower() and term_tgt.lower() in tgt_text.lower():
+                            # Store in consistent format
+                            found.append({
+                                'source': term_src,
+                                'target': term_tgt
+                            })
+                
+                if found:
+                    # Use source term as key (or 'proper' if we want to group by type)
+                    found_terms[src_term] = found
+        
+        except Exception as e:
+            # If there's any error in term extraction, log and return None
+            _log_with_time(f"      ⚠ Warning: Error extracting terms: {e}")
+            return None
         
         return found_terms if found_terms else None

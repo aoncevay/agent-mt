@@ -471,7 +471,8 @@ def process_experiment(
         
         for sample_idx in sample_iterator:
             sample_info = sample_data[sample_idx]
-            sample_segments_df = aligned_df[aligned_df['paragraph'] == sample_idx]
+            # Filter by document column (which corresponds to sample index)
+            sample_segments_df = aligned_df[aligned_df['document'] == sample_idx]
             
             if len(sample_segments_df) == 0:
                 # No aligned segments for this sample
