@@ -1636,17 +1636,8 @@ def plot_dataset_avg_price_pareto_simplified(
     figsize = (3.5, 2) if metric == "termacc" else (3.5, 2.5)
     _fig, ax = plt.subplots(figsize=figsize)
     
-    # Set axis limits first (same as original Pareto plot)
+    # Set log scale for x-axis
     ax.set_xscale('log')
-    if metric == "chrf":
-        if dataset == "dolfin":
-            y_min, y_max = 57.5, 77.5
-        else:  # wmt25
-            y_min, y_max = 42.5, 62.5
-    elif metric == "termacc":
-        y_min, y_max = 0.5, 0.7
-    
-    ax.set_ylim(y_min, y_max)
     
     # First pass: collect all workflow points and draw lines (if requested)
     workflow_points_dict = {}
@@ -1710,6 +1701,21 @@ def plot_dataset_avg_price_pareto_simplified(
     elif metric == "termacc":
         ax.set_ylabel('Term. Accuracy', fontsize=10)
     
+    # Auto-scale y-axis, then adjust ticks to use non-decimal steps (same as original)
+    ax.set_ylim(auto=True)
+    y_min, y_max = ax.get_ylim()
+    if metric == "termacc":
+        # For TermAcc (0-1 range), use steps of 0.05 (but ensure non-decimal major ticks)
+        y_min_rounded = 0.05 * (int(y_min * 20) // 1)
+        y_max_rounded = 0.05 * ((int(y_max * 20) + 1) // 1)  # Round up
+        y_min, y_max = y_min_rounded, y_max_rounded
+    else:
+        # For chrF++ and other metrics, use steps of 5
+        y_min_rounded = 5 * (int(y_min) // 5)
+        y_max_rounded = 5 * ((int(y_max) + 4) // 5)  # Round up
+        y_min, y_max = y_min_rounded, y_max_rounded
+    ax.set_ylim(y_min, y_max)
+    
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
@@ -1746,7 +1752,7 @@ def plot_dataset_avg_price_pareto_simplified(
                 label_x = cost * x_offset_factor
                 
                 # For y-axis: slight offset upward
-                y_range = y_max - y_min
+                y_range = y_max_rounded - y_min_rounded
                 y_offset = y_range * 0.02  # 2% of range
                 label_y = value + y_offset
                 
