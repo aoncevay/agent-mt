@@ -147,7 +147,39 @@ class DocPreprocessor:
             _log_with_time(f"  Path exists: {labse_model_path.exists()}")
             _log_with_time(f"  Path is directory: {labse_model_path.is_dir()}")
             
-            labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+            # Check modules.json to understand the expected structure
+            modules_json = labse_model_path / "modules.json"
+            if modules_json.exists():
+                try:
+                    with open(modules_json, 'r') as f:
+                        modules_data = json.load(f)
+                    _log_with_time(f"  modules.json structure: {json.dumps(modules_data, indent=2)}")
+                except Exception as e:
+                    _log_with_time(f"  Could not read modules.json: {e}")
+            
+            # Try loading with explicit device_map or trust_remote_code if needed
+            # Also try without local_files_only first to see if that's the issue
+            try:
+                _log_with_time("  Attempting to load SentenceTransformer...")
+                # Try with local_files_only=True first
+                labse_model = SentenceTransformer(str(labse_model_path), local_files_only=True)
+            except Exception as e1:
+                _log_with_time(f"  First attempt failed: {e1}")
+                _log_with_time("  Trying without local_files_only (but with offline env vars)...")
+                try:
+                    # Try without local_files_only - the offline env vars should prevent downloads
+                    labse_model = SentenceTransformer(str(labse_model_path), local_files_only=False)
+                except Exception as e2:
+                    _log_with_time(f"  Second attempt also failed: {e2}")
+                    # Re-raise the original error with more context
+                    raise RuntimeError(
+                        f"Could not load SentenceTransformer from {labse_model_path}\n"
+                        f"First error: {e1}\n"
+                        f"Second error: {e2}\n"
+                        f"Files exist: model.safetensors={model_safetensors.exists()}, "
+                        f"pytorch_model.bin={model_bin.exists()}\n"
+                        f"Please check if the model structure is correct."
+                    ) from e2
             _log_with_time("  ✓ SentenceTransformer loaded")
             
             # Move model to GPU if available
