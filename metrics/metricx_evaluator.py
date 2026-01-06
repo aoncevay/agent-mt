@@ -71,8 +71,9 @@ def _find_mt5_tokenizer() -> Optional[Path]:
     for path in possible_paths:
         if path.exists():
             # Check for tokenizer files
+            # mT5 uses 'spiece.model' (not 'sentencepiece.model')
             tokenizer_files = [
-                path / "sentencepiece.model",
+                path / "spiece.model",  # mT5 uses this name
                 path / "tokenizer_config.json",
             ]
             # Also check in snapshots subdirectory (HF cache structure)
@@ -80,7 +81,7 @@ def _find_mt5_tokenizer() -> Optional[Path]:
                 for snapshot_dir in (path / "snapshots").iterdir():
                     if snapshot_dir.is_dir():
                         snapshot_tokenizer_files = [
-                            snapshot_dir / "sentencepiece.model",
+                            snapshot_dir / "spiece.model",  # mT5 uses this name
                             snapshot_dir / "tokenizer_config.json",
                         ]
                         if any(f.exists() for f in snapshot_tokenizer_files):

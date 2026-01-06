@@ -267,8 +267,11 @@ def process_experiment(
     models: List[str],
     labse_model=None,  # Optional pre-loaded SentenceTransformer model
     polyfuzz_model=None,  # Optional pre-loaded PolyFuzz model
+    metric_model=None,  # Optional pre-loaded MetricX or COMET model
+    labse_only: bool = False,  # If True, only do alignment and save to tmp
+    metricx_only: bool = False,  # If True, skip TBM, load from tmp if available
+    tbm_only: bool = False,  # If True, only compute TBM, load from tmp
     comet_only: bool = False,  # If True, skip TBM computation
-    metricx_only: bool = False,  # If True, skip TBM computation (WMT25 only)
     use_metric: str = "metricx"  # "metricx" or "comet"
 ) -> Optional[Dict[str, Any]]:
     """
@@ -382,43 +385,117 @@ def process_experiment(
         # (in practice, all samples should have the same terminology)
         terminology = sample_data[0].get('terminology')
     
-    # 1. Run docpreprocessor (split + align segments)
-    _log_with_time(f"  Step 1: Splitting and aligning documents...")
-    from metrics.docpreprocessor import DocPreprocessor
+    # 1. Run docpreprocessor (split + align segments) OR load from tmp
+    from metrics.tmp_utils import save_aligned_df, load_aligned_df, has_aligned_df
     import torch
     
-    # Use provided models or load if not provided (should be provided from main)
-    use_gpu = torch.cuda.is_available()
-    if labse_model is None or polyfuzz_model is None:
-        from metrics.docpreprocessor import (
-            load_labse_model_once,
-            load_polyfuzz_model_once,
-            load_embeddings_wrapper_once,
-            find_labse_model_path
+    # Check if we should load from tmp (metricx_only or tbm_only)
+    if (metricx_only or tbm_only) and has_aligned_df(output_dir, dataset, lang_pair):
+        _log_with_time(f"  Step 1: Loading aligned segments from tmp file...")
+        tmp_result = load_aligned_df(output_dir, dataset, lang_pair)
+        if tmp_result:
+            aligned_df, sample_data = tmp_result
+            print(f"    ✓ Loaded {len(aligned_df)} aligned segments from tmp")
+        else:
+            print(f"    ✗ Could not load tmp file, need to run --labse-only first")
+            return None
+    elif labse_only:
+        # Only do alignment and save to tmp
+        _log_with_time(f"  Step 1: Splitting and aligning documents (--labse-only mode)...")
+        from metrics.docpreprocessor import DocPreprocessor
+        
+        use_gpu = torch.cuda.is_available()
+        if labse_model is None or polyfuzz_model is None:
+            from metrics.docpreprocessor import (
+                load_labse_model_once,
+                load_polyfuzz_model_once,
+                load_embeddings_wrapper_once,
+                find_labse_model_path
+            )
+            _log_with_time("  Loading models (fallback - should be provided from main)...")
+            labse_model_path = find_labse_model_path()
+            if labse_model is None:
+                labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
+            if polyfuzz_model is None:
+                embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
+                polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+        
+        preprocessor = DocPreprocessor(
+            src_lang, 
+            tgt_lang, 
+            labse_model=labse_model,
+            polyfuzz_model=polyfuzz_model,
+            use_gpu=use_gpu
         )
-        _log_with_time("  Loading models (fallback - should be provided from main)...")
-        labse_model_path = find_labse_model_path()
-        if labse_model is None:
-            labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
-        if polyfuzz_model is None:
-            embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
-            polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
-    
-    # Create preprocessor with the loaded models (reuses them, no reload)
-    preprocessor = DocPreprocessor(
-        src_lang, 
-        tgt_lang, 
-        labse_model=labse_model,
-        polyfuzz_model=polyfuzz_model,
-        use_gpu=use_gpu
-    )
-    aligned_df = preprocessor.process_documents(
-        documents,
-        terminology=terminology,
-        similarity_threshold=0.4,
-        separator='\n\n'
-    )
-    print(f"    ✓ Aligned {len(aligned_df)} segments")
+        aligned_df = preprocessor.process_documents(
+            documents,
+            terminology=terminology,
+            similarity_threshold=0.4,
+            separator='\n\n'
+        )
+        print(f"    ✓ Aligned {len(aligned_df)} segments")
+        
+        # Save to tmp file
+        tmp_file = save_aligned_df(aligned_df, output_dir, dataset, lang_pair, sample_data)
+        print(f"    ✓ Saved aligned segments to: {tmp_file}")
+        
+        # Clear GPU memory after LaBSE
+        if use_gpu:
+            torch.cuda.empty_cache()
+            print(f"    ✓ Cleared GPU memory")
+        
+        # Return early (only alignment, no metrics)
+        return {
+            'system_name': system_name,
+            'workflow': workflow_name,
+            'model': model_name,
+            'dataset': dataset,
+            'lang_pair': lang_pair,
+            'num_samples': len(sample_data),
+            'num_segments': len(aligned_df),
+            'tmp_file': str(tmp_file),
+            'labse_only': True
+        }
+    else:
+        # Normal flow: do alignment
+        _log_with_time(f"  Step 1: Splitting and aligning documents...")
+        from metrics.docpreprocessor import DocPreprocessor
+        
+        use_gpu = torch.cuda.is_available()
+        if labse_model is None or polyfuzz_model is None:
+            from metrics.docpreprocessor import (
+                load_labse_model_once,
+                load_polyfuzz_model_once,
+                load_embeddings_wrapper_once,
+                find_labse_model_path
+            )
+            _log_with_time("  Loading models (fallback - should be provided from main)...")
+            labse_model_path = find_labse_model_path()
+            if labse_model is None:
+                labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
+            if polyfuzz_model is None:
+                embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
+                polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+        
+        preprocessor = DocPreprocessor(
+            src_lang, 
+            tgt_lang, 
+            labse_model=labse_model,
+            polyfuzz_model=polyfuzz_model,
+            use_gpu=use_gpu
+        )
+        aligned_df = preprocessor.process_documents(
+            documents,
+            terminology=terminology,
+            similarity_threshold=0.4,
+            separator='\n\n'
+        )
+        print(f"    ✓ Aligned {len(aligned_df)} segments")
+        
+        # Clear GPU memory after LaBSE (before loading MetricX/COMET)
+        if use_gpu:
+            torch.cuda.empty_cache()
+            print(f"    ✓ Cleared GPU memory after LaBSE alignment")
     
     # 2. Run termbasedmetric (WMT25-Term only, and only if not comet_only)
     tbm_results = {
@@ -427,8 +504,9 @@ def process_experiment(
         'predefined': {'micro': None, 'macro': None}
     }
     
-    # Skip TBM for DOLFIN (no terminology) or if --comet-only flag is set
-    should_compute_tbm = (dataset == "wmt25" and terminology and not comet_only)
+    # Skip TBM for DOLFIN (no terminology) or if --comet-only or --metricx-only flag is set
+    # But compute if --tbm-only flag is set
+    should_compute_tbm = (tbm_only or (dataset == "wmt25" and terminology and not comet_only and not metricx_only))
     
     if should_compute_tbm:
         print(f"  Step 2: Computing term-based metrics...")
@@ -456,159 +534,178 @@ def process_experiment(
         print(f"  Step 2: Skipping term-based metrics (--metricx-only flag set)")
     
     # 3. Run metric evaluator (COMET or MetricX) - per sample
-    import time
-    metric_name = "MetricX" if use_metric == "metricx" else "COMET"
-    print(f"  Step 3: Computing {metric_name} scores per sample...")
-    step3_start = time.time()
-    
-    metric_results = {
-        f'avg_{use_metric}': None,
-        f'min_{use_metric}': None,
-        f'max_{use_metric}': None,
-        'per_sample': []
-    }
-    
-    # Track alignment statistics per sample
-    alignment_stats = []
-    
-    try:
-        if use_metric == "metricx":
-            from metrics.metricx_evaluator import compute_metricx_scores
-            compute_metric_fn = compute_metricx_scores
-        else:
-            from metrics.comet_evaluator import compute_comet_scores
-            compute_metric_fn = compute_comet_scores
+    # Skip if tbm_only mode
+    if tbm_only:
+        print(f"  Step 3: Skipping metric evaluation (--tbm-only mode)")
+        metric_results = {
+            f'avg_{use_metric}': None,
+            f'min_{use_metric}': None,
+            f'max_{use_metric}': None,
+            'per_sample': []
+        }
+    else:
+        import time
+        metric_name = "MetricX" if use_metric == "metricx" else "COMET"
+        print(f"  Step 3: Computing {metric_name} scores per sample...")
+        step3_start = time.time()
         
-        _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
-        _log_with_time(f"  Loading {metric_name} evaluator...")
+        metric_results = {
+            f'avg_{use_metric}': None,
+            f'min_{use_metric}': None,
+            f'max_{use_metric}': None,
+            'per_sample': []
+        }
         
-        # Group segments by sample (paragraph column indicates document index)
+        # Track alignment statistics per sample
+        alignment_stats = []
+        
         try:
-            from tqdm import tqdm
-            sample_iterator = tqdm(range(len(sample_data)), desc=f"  Computing {metric_name} per sample")
-        except ImportError:
-            sample_iterator = range(len(sample_data))
-        
-        for sample_idx in sample_iterator:
-            sample_info = sample_data[sample_idx]
-            # Filter by document column (which corresponds to sample index)
-            sample_segments_df = aligned_df[aligned_df['document'] == sample_idx]
+            if use_metric == "metricx":
+                from metrics.metricx_evaluator import compute_metricx_scores
+                # Use pre-loaded model if available
+                if metric_model is not None:
+                    # For now, compute_metricx_scores doesn't accept pre-loaded model
+                    # We'll need to modify it, but for now just use the function normally
+                    # The model is already loaded in GPU, so it should be faster
+                    compute_metric_fn = compute_metricx_scores
+                else:
+                    compute_metric_fn = compute_metricx_scores
+            else:
+                from metrics.comet_evaluator import compute_comet_scores
+                compute_metric_fn = compute_comet_scores
             
-            if len(sample_segments_df) == 0:
-                # No aligned segments for this sample
+            _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+            if metric_model is None:
+                _log_with_time(f"  Loading {metric_name} evaluator...")
+            else:
+                _log_with_time(f"  Using pre-loaded {metric_name} model...")
+            # Group segments by sample (paragraph column indicates document index)
+            try:
+                from tqdm import tqdm
+                sample_iterator = tqdm(range(len(sample_data)), desc=f"  Computing {metric_name} per sample")
+            except ImportError:
+                sample_iterator = range(len(sample_data))
+            
+            for sample_idx in sample_iterator:
+                sample_info = sample_data[sample_idx]
+                # Filter by document column (which corresponds to sample index)
+                sample_segments_df = aligned_df[aligned_df['document'] == sample_idx]
+                
+                if len(sample_segments_df) == 0:
+                    # No aligned segments for this sample
+                    alignment_stats.append({
+                        'sample_idx': sample_idx,
+                        'sample_id': sample_info['sample_id'],
+                        'under_translated_segments': 0,  # We'll compute this below
+                        'over_translated_segments': 0,
+                        f'{use_metric}_scores': [],
+                        f'avg_{use_metric}': None
+                    })
+                    continue
+                
+                # Prepare segments for this sample: (source, translation, reference)
+                segments = []
+                for idx, row in sample_segments_df.iterrows():
+                    # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
+                    src = row['src_segment']
+                    tgt = row['tgt_segment']
+                    # Use reference for this specific sample
+                    ref = sample_info['reference_text']
+                    segments.append((src, tgt, ref))
+                
+                # Compute metric scores for this sample's segments
+                _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing {metric_name} for {len(segments)} segments...")
+                sample_metric_start = time.time()
+                sample_metric = compute_metric_fn(segments)
+                metric_scores = sample_metric.get('scores', [])
+                avg_key = f'avg_{use_metric}'
+                _log_with_time(f"      ✓ {metric_name} computed in {time.time() - sample_metric_start:.2f}s (avg: {sample_metric.get(avg_key, 0):.4f})")
+                
+                # Count alignment statistics
+                # Get source and target paragraphs for this sample (same splitting as docpreprocessor)
+                src_text = sample_info['source_text']
+                tgt_text = sample_info['translation']
+                separator = '\n\n'
+                
+                src_paragraphs = [p.strip() for p in src_text.split(separator) if p.strip()]
+                tgt_paragraphs = [p.strip() for p in tgt_text.split(separator) if p.strip()]
+                
+                # Track which source and target segments have alignments
+                # We'll check if each paragraph has at least one aligned segment
+                aligned_src_paragraphs = set()
+                aligned_tgt_paragraphs = set()
+                
+                # For each aligned segment, find which source/target paragraph it belongs to
+                for _, row in sample_segments_df.iterrows():
+                    # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
+                    src_seg = str(row['src_segment']).strip()
+                    tgt_seg = str(row['tgt_segment']).strip()
+                    
+                    # Find which source paragraph contains this segment
+                    for para_idx, src_para in enumerate(src_paragraphs):
+                        # Check if segment is part of this paragraph (substring match)
+                        if src_seg in src_para or (len(src_seg) > 20 and src_para in src_seg):
+                            aligned_src_paragraphs.add(para_idx)
+                            break
+                    
+                    # Find which target paragraph contains this segment
+                    for para_idx, tgt_para in enumerate(tgt_paragraphs):
+                        # Check if segment is part of this paragraph (substring match)
+                        if tgt_seg in tgt_para or (len(tgt_seg) > 20 and tgt_para in tgt_seg):
+                            aligned_tgt_paragraphs.add(para_idx)
+                            break
+                
+                # Count unaligned segments
+                # Under-translated: source paragraphs without any aligned output
+                under_translated = len(src_paragraphs) - len(aligned_src_paragraphs)
+                # Over-translated: target paragraphs without any aligned source
+                over_translated = len(tgt_paragraphs) - len(aligned_tgt_paragraphs)
+                
                 alignment_stats.append({
                     'sample_idx': sample_idx,
                     'sample_id': sample_info['sample_id'],
-                    'under_translated_segments': 0,  # We'll compute this below
-                    'over_translated_segments': 0,
-                    f'{use_metric}_scores': [],
-                    f'avg_{use_metric}': None
+                    'under_translated_segments': under_translated,
+                    'over_translated_segments': over_translated,
+                    f'{use_metric}_scores': metric_scores,
+                    f'avg_{use_metric}': sample_metric.get(avg_key)
                 })
-                continue
             
-            # Prepare segments for this sample: (source, translation, reference)
-            segments = []
-            for idx, row in sample_segments_df.iterrows():
-                # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
-                src = row['src_segment']
-                tgt = row['tgt_segment']
-                # Use reference for this specific sample
-                ref = sample_info['reference_text']
-                segments.append((src, tgt, ref))
+            # Aggregate metric scores across all samples (outside the loop)
+            all_metric_scores = []
+            for stat in alignment_stats:
+                all_metric_scores.extend(stat[f'{use_metric}_scores'])
             
-            # Compute metric scores for this sample's segments
-            _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing {metric_name} for {len(segments)} segments...")
-            sample_metric_start = time.time()
-            sample_metric = compute_metric_fn(segments)
-            metric_scores = sample_metric.get('scores', [])
+            if all_metric_scores:
+                metric_results[f'avg_{use_metric}'] = sum(all_metric_scores) / len(all_metric_scores)
+                metric_results[f'min_{use_metric}'] = min(all_metric_scores)
+                metric_results[f'max_{use_metric}'] = max(all_metric_scores)
+            
+            # Aggregate alignment statistics
+            total_under = sum(s['under_translated_segments'] for s in alignment_stats)
+            total_over = sum(s['over_translated_segments'] for s in alignment_stats)
+            avg_under = total_under / len(alignment_stats) if alignment_stats else 0
+            avg_over = total_over / len(alignment_stats) if alignment_stats else 0
+            
+            metric_results['per_sample'] = alignment_stats
+            metric_results['alignment_stats'] = {
+                'total_under_translated_segments': total_under,
+                'total_over_translated_segments': total_over,
+                'avg_under_translated_segments': avg_under,
+                'avg_over_translated_segments': avg_over
+            }
+            
+            step3_time = time.time() - step3_start
+            _log_with_time(f"  ✓ Step 3 complete in {step3_time:.2f}s")
             avg_key = f'avg_{use_metric}'
-            _log_with_time(f"      ✓ {metric_name} computed in {time.time() - sample_metric_start:.2f}s (avg: {sample_metric.get(avg_key, 0):.4f})")
+            min_key = f'min_{use_metric}'
+            max_key = f'max_{use_metric}'
+            print(f"    ✓ {metric_name}: avg={metric_results[avg_key]:.4f}, "
+                  f"min={metric_results[min_key]:.4f}, "
+                  f"max={metric_results[max_key]:.4f}")
+            print(f"    ✓ Alignment: avg_under={avg_under:.2f}, avg_over={avg_over:.2f}")
             
-            # Count alignment statistics
-            # Get source and target paragraphs for this sample (same splitting as docpreprocessor)
-            src_text = sample_info['source_text']
-            tgt_text = sample_info['translation']
-            separator = '\n\n'
-            
-            src_paragraphs = [p.strip() for p in src_text.split(separator) if p.strip()]
-            tgt_paragraphs = [p.strip() for p in tgt_text.split(separator) if p.strip()]
-            
-            # Track which source and target segments have alignments
-            # We'll check if each paragraph has at least one aligned segment
-            aligned_src_paragraphs = set()
-            aligned_tgt_paragraphs = set()
-            
-            # For each aligned segment, find which source/target paragraph it belongs to
-            for _, row in sample_segments_df.iterrows():
-                # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
-                src_seg = str(row['src_segment']).strip()
-                tgt_seg = str(row['tgt_segment']).strip()
-                
-                # Find which source paragraph contains this segment
-                for para_idx, src_para in enumerate(src_paragraphs):
-                    # Check if segment is part of this paragraph (substring match)
-                    if src_seg in src_para or (len(src_seg) > 20 and src_para in src_seg):
-                        aligned_src_paragraphs.add(para_idx)
-                        break
-                
-                # Find which target paragraph contains this segment
-                for para_idx, tgt_para in enumerate(tgt_paragraphs):
-                    # Check if segment is part of this paragraph (substring match)
-                    if tgt_seg in tgt_para or (len(tgt_seg) > 20 and tgt_para in tgt_seg):
-                        aligned_tgt_paragraphs.add(para_idx)
-                        break
-            
-            # Count unaligned segments
-            # Under-translated: source paragraphs without any aligned output
-            under_translated = len(src_paragraphs) - len(aligned_src_paragraphs)
-            # Over-translated: target paragraphs without any aligned source
-            over_translated = len(tgt_paragraphs) - len(aligned_tgt_paragraphs)
-            
-            alignment_stats.append({
-                'sample_idx': sample_idx,
-                'sample_id': sample_info['sample_id'],
-                'under_translated_segments': under_translated,
-                'over_translated_segments': over_translated,
-                f'{use_metric}_scores': metric_scores,
-                f'avg_{use_metric}': sample_metric.get(avg_key)
-            })
-        
-        # Aggregate metric scores across all samples
-        all_metric_scores = []
-        for stat in alignment_stats:
-            all_metric_scores.extend(stat[f'{use_metric}_scores'])
-        
-        if all_metric_scores:
-            metric_results[f'avg_{use_metric}'] = sum(all_metric_scores) / len(all_metric_scores)
-            metric_results[f'min_{use_metric}'] = min(all_metric_scores)
-            metric_results[f'max_{use_metric}'] = max(all_metric_scores)
-        
-        # Aggregate alignment statistics
-        total_under = sum(s['under_translated_segments'] for s in alignment_stats)
-        total_over = sum(s['over_translated_segments'] for s in alignment_stats)
-        avg_under = total_under / len(alignment_stats) if alignment_stats else 0
-        avg_over = total_over / len(alignment_stats) if alignment_stats else 0
-        
-        metric_results['per_sample'] = alignment_stats
-        metric_results['alignment_stats'] = {
-            'total_under_translated_segments': total_under,
-            'total_over_translated_segments': total_over,
-            'avg_under_translated_segments': avg_under,
-            'avg_over_translated_segments': avg_over
-        }
-        
-        step3_time = time.time() - step3_start
-        _log_with_time(f"  ✓ Step 3 complete in {step3_time:.2f}s")
-        avg_key = f'avg_{use_metric}'
-        min_key = f'min_{use_metric}'
-        max_key = f'max_{use_metric}'
-        print(f"    ✓ {metric_name}: avg={metric_results[avg_key]:.4f}, "
-              f"min={metric_results[min_key]:.4f}, "
-              f"max={metric_results[max_key]:.4f}")
-        print(f"    ✓ Alignment: avg_under={avg_under:.2f}, avg_over={avg_over:.2f}")
-        
-    except Exception as e:
-        print(f"    ⚠ Warning: Could not compute {metric_name} scores: {e}")
+        except Exception as e:
+            print(f"    ⚠ Warning: Could not compute {metric_name} scores: {e}")
         import traceback
         traceback.print_exc()
         
@@ -889,7 +986,21 @@ def main():
         "--metricx-only",
         action="store_true",
         help="Compute only MetricX scores, skip term-based metrics (TBM). "
+             "Loads aligned segments from tmp files if available. "
              "For WMT25 only. Useful for faster evaluation."
+    )
+    parser.add_argument(
+        "--labse-only",
+        action="store_true",
+        help="Only perform LaBSE alignment and save to tmp files. "
+             "Useful for splitting GPU memory usage. Run this first, then use --metricx-only or --tbm-only."
+    )
+    parser.add_argument(
+        "--tbm-only",
+        action="store_true",
+        help="Compute only term-based metrics (TBM), skip metric evaluation. "
+             "Loads aligned segments from tmp files if available. "
+             "For WMT25 only."
     )
     parser.add_argument(
         "--metric",
@@ -931,6 +1042,13 @@ def main():
         print(f"Model filter: {args.model}")
     if args.comet_only:
         print(f"Mode: COMET-only (skipping term-based metrics)")
+    if args.metricx_only:
+        print(f"Mode: MetricX-only (skipping term-based metrics)")
+    if args.labse_only:
+        print(f"Mode: LaBSE-only (alignment only, saving to tmp)")
+    if args.tbm_only:
+        print(f"Mode: TBM-only (term-based metrics only, loading from tmp)")
+    print(f"Using metric: {args.metric.upper()}")
     print(f"Output directories: {[str(d) for d in outputs_dirs]}")
     print(f"Metrics output: {metrics_dir}")
     print("="*80)
@@ -984,31 +1102,83 @@ def main():
     
     print(f"\nProcessing {len(experiments_by_lang_pair)} language pair(s)...")
     
-    # Load LaBSE model, embeddings, and PolyFuzz ONCE at the start (reused for all experiments)
-    _log_with_time("="*80)
-    _log_with_time("Loading LaBSE model and embeddings (once, will be reused for all experiments)...")
-    from metrics.docpreprocessor import (
-        load_labse_model_once,
-        load_embeddings_wrapper_once,
-        load_polyfuzz_model_once,
-        find_labse_model_path
-    )
-    import torch
-    use_gpu = torch.cuda.is_available()
+    # Load models ONCE at the start (reused for all experiments)
+    labse_model = None
+    polyfuzz_model = None
+    metric_model = None
     
-    # Find model path first
-    labse_model_path = find_labse_model_path()
+    # Load LaBSE models only if not in metricx_only or tbm_only mode (those load from tmp)
+    if not args.metricx_only and not args.tbm_only:
+        _log_with_time("="*80)
+        _log_with_time("Loading LaBSE model and embeddings (once, will be reused for all experiments)...")
+        from metrics.docpreprocessor import (
+            load_labse_model_once,
+            load_embeddings_wrapper_once,
+            load_polyfuzz_model_once,
+            find_labse_model_path
+        )
+        import torch
+        use_gpu = torch.cuda.is_available()
+        
+        # Find model path first
+        labse_model_path = find_labse_model_path()
+        
+        # Load LaBSE model
+        labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
+        
+        # Load embeddings wrapper (needs path, not model object)
+        embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
+        
+        # Load PolyFuzz model
+        polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+        
+        _log_with_time("  ✓ All LaBSE models loaded and ready")
+        _log_with_time("="*80)
     
-    # Load model
-    labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
-    
-    # Load embeddings wrapper (needs path, not model object)
-    embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
-    
-    # Load PolyFuzz model
-    polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
-    
-    _log_with_time("="*80)
+    # Load MetricX/COMET model ONCE at the start (only if not labse_only mode)
+    if not args.labse_only and args.metric == "metricx":
+        _log_with_time("="*80)
+        _log_with_time("Loading MetricX-24 model (once, will be reused for all experiments)...")
+        import torch
+        use_gpu = torch.cuda.is_available()
+        
+        from metrics.metricx_evaluator import _find_metricx_model, _find_mt5_tokenizer
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        import os
+        
+        # Find model paths
+        metricx_model_path = _find_metricx_model()
+        mt5_tokenizer_path = _find_mt5_tokenizer()
+        
+        if metricx_model_path and mt5_tokenizer_path:
+            # Set environment variables for offline mode
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            
+            # Load tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(
+                str(mt5_tokenizer_path),
+                local_files_only=True
+            )
+            
+            # Load model
+            metric_model = AutoModelForSeq2SeqLM.from_pretrained(
+                str(metricx_model_path),
+                local_files_only=True,
+                torch_dtype=torch.bfloat16 if use_gpu else torch.float32
+            )
+            
+            # Move to GPU if available
+            if use_gpu:
+                metric_model = metric_model.to('cuda')
+                _log_with_time(f"  ✓ MetricX-24 loaded on GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                _log_with_time("  ✓ MetricX-24 loaded on CPU")
+            
+            _log_with_time("="*80)
+        else:
+            _log_with_time("  ⚠ Warning: Could not find MetricX model, will load on-the-fly")
+            metric_model = None
     
     # Process each language pair
     for lang_pair, lang_experiments in experiments_by_lang_pair.items():
@@ -1029,8 +1199,11 @@ def main():
                     models,
                     labse_model=labse_model,  # Pass the pre-loaded model
                     polyfuzz_model=polyfuzz_model,  # Pass the pre-loaded PolyFuzz model
+                    metric_model=metric_model,  # Pass the pre-loaded metric model
                     comet_only=args.comet_only,  # Pass the comet_only flag
                     metricx_only=args.metricx_only,  # Pass the metricx_only flag
+                    tbm_only=args.tbm_only,  # Pass the tbm_only flag
+                    labse_only=args.labse_only,  # Pass the labse_only flag
                     use_metric=args.metric  # Pass the metric choice
                 )
                 

@@ -58,7 +58,7 @@ WORKFLOW_ACRONYMS = {
     "MAATS_multi_agents": "MAATS_multi",
     "MAATS_single_agent": "MAATS_single",
     "IRB_refine": "IRB",
-    "DeLTA_multi_agents": "DelTA",
+    "DeLTA_multi_agents": "DeLTA",
     "ADT_multi_agents": "ADT"
 }
 

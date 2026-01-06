@@ -36,7 +36,7 @@ def download_mt5_tokenizer_files(output_dir: Path, model_id: str = "google/mt5-b
     
     # Required tokenizer files for mT5
     tokenizer_files = [
-        "sentencepiece.model",      # SentencePiece model (REQUIRED)
+        "spiece.model",             # SentencePiece model (REQUIRED) - mT5 uses 'spiece.model'
         "tokenizer_config.json",    # Tokenizer settings (REQUIRED)
         "special_tokens_map.json",  # Special token mappings (REQUIRED)
         "config.json",              # Model config (recommended)
@@ -74,7 +74,7 @@ def download_mt5_tokenizer_files(output_dir: Path, model_id: str = "google/mt5-b
         for f in failed_files:
             print(f"    - {f}")
         print(f"\n  Note: Some files may not be critical. The minimum required files are:")
-        print(f"    - sentencepiece.model (REQUIRED)")
+        print(f"    - spiece.model (REQUIRED) - mT5 uses 'spiece.model'")
         print(f"    - tokenizer_config.json (REQUIRED)")
         print(f"    - special_tokens_map.json (REQUIRED)")
     
