@@ -395,25 +395,39 @@ class DocPreprocessor:
                 src_text, tgt_text, separator=separator
             )
             
+            # Filter out any empty paragraphs (shouldn't happen after filtering, but safety check)
+            # This prevents "empty Sentence" warnings from Flair/PolyFuzz
+            src_paragraphs = [p for p in src_paragraphs if p and p.strip()]
+            tgt_paragraphs = [p for p in tgt_paragraphs if p and p.strip()]
+            
             # Align reference paragraphs with source paragraphs using LaBSE
-            # (Reference should align with source, not assume 1-to-1 correspondence)
+            # Default: If same count, use 1-to-1. Else: align using LaBSE
             ref_paragraphs = None
             ref_para_alignment = None  # Track which ref para aligns with which src para
             if ref_text:
                 ref_paragraphs_raw = [p.strip() for p in ref_text.split(separator) if p.strip()]
+                # Filter out empty paragraphs
+                ref_paragraphs_raw = [p for p in ref_paragraphs_raw if p and p.strip()]
                 if ref_paragraphs_raw:
-                    # Align reference paragraphs with source paragraphs using LaBSE
-                    _log_with_time(f"      Aligning reference paragraphs with source paragraphs...")
-                    ref_paragraphs, ref_para_alignment = self._align_reference_paragraphs(
-                        src_paragraphs, ref_paragraphs_raw
-                    )
-                    # Check alignment quality
-                    unaligned_src = sum(1 for align in ref_para_alignment if align is None)
-                    if unaligned_src > 0:
-                        _log_with_time(f"      ⚠ WARNING: {unaligned_src} source paragraphs have no aligned reference paragraph")
+                    if len(ref_paragraphs_raw) == len(src_paragraphs):
+                        # Same count: use 1-to-1 correspondence (no alignment needed)
+                        ref_paragraphs = ref_paragraphs_raw
+                        ref_para_alignment = list(range(len(ref_paragraphs_raw)))
+                        _log_with_time(f"      Source and reference have same paragraph count ({len(src_paragraphs)}), using 1-to-1 correspondence")
+                    else:
+                        # Different counts: align using LaBSE
+                        _log_with_time(f"      Aligning {len(ref_paragraphs_raw)} reference paragraphs with {len(src_paragraphs)} source paragraphs (counts differ)...")
+                        ref_paragraphs, ref_para_alignment = self._align_reference_paragraphs(
+                            src_paragraphs, ref_paragraphs_raw
+                        )
+                        # Check alignment quality (only warn if counts differed and alignment failed)
+                        unaligned_src = sum(1 for align in ref_para_alignment if align is None)
+                        if unaligned_src > 0:
+                            _log_with_time(f"      ⚠ WARNING: {unaligned_src} source paragraphs have no aligned reference paragraph")
                 else:
                     _log_with_time(f"      ⚠ WARNING: Reference text has no paragraphs after splitting")
                     ref_paragraphs = []
+                    ref_para_alignment = [None] * len(src_paragraphs)
             
             _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs" + 
                           (f", Reference: {len(ref_paragraphs)} paragraphs" if ref_paragraphs else ""))
@@ -564,6 +578,10 @@ class DocPreprocessor:
             - aligned_ref_paragraphs: List of reference paragraphs in source order (empty string if unaligned)
             - alignment_mapping: List mapping src_para_idx -> ref_para_idx (None if unaligned)
         """
+        # Filter out any empty paragraphs before passing to PolyFuzz (prevents "empty Sentence" warnings)
+        src_paragraphs = [p for p in src_paragraphs if p and p.strip()]
+        ref_paragraphs = [p for p in ref_paragraphs if p and p.strip()]
+        
         if len(src_paragraphs) == len(ref_paragraphs):
             # Simple 1-to-1 alignment (assume same structure)
             return ref_paragraphs, list(range(len(ref_paragraphs)))
@@ -728,6 +746,13 @@ class DocPreprocessor:
             List of tuples: (src_segment, tgt_segment, score, src_para_idx)
             src_para_idx is None for unaligned target paragraphs (empty source)
         """
+        if not src_paragraphs or not tgt_paragraphs:
+            return []
+        
+        # Filter out any empty paragraphs before passing to PolyFuzz (prevents "empty Sentence" warnings)
+        src_paragraphs = [p for p in src_paragraphs if p and p.strip()]
+        tgt_paragraphs = [p for p in tgt_paragraphs if p and p.strip()]
+        
         if not src_paragraphs or not tgt_paragraphs:
             return []
         
