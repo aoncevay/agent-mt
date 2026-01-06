@@ -1187,9 +1187,9 @@ def main():
         _log_with_time("  ✓ All LaBSE models loaded and ready")
         _log_with_time("="*80)
     
-    # Load MetricX/COMET model ONCE at the start (only if not labse_only mode)
+    # Load MetricX/COMET model ONCE at the start (only if not labse_only or tbm_only mode)
     metric_tokenizer = None  # Store tokenizer separately
-    if not args.labse_only and args.metric == "metricx":
+    if not args.labse_only and not args.tbm_only and args.metric == "metricx":
         _log_with_time("="*80)
         _log_with_time("Loading MetricX-24 model and tokenizer (once, will be reused for all experiments)...")
         import torch
