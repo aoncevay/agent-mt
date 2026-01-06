@@ -25,7 +25,6 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from scipy.spatial import ConvexHull
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
@@ -1888,34 +1887,6 @@ def plot_dataset_avg_price_pareto_simplified_with_cluster(
         "gpt-4-1-nano": "s",      # square
         "qwen3-32b": "s",         # square
     }
-    
-    # Draw convex hulls for clusters
-    cluster_colors = ['lightblue', 'lightcoral']
-    cluster_alphas = [0.2, 0.2]
-    
-    for cluster_id in range(2):
-        cluster_points = np.array([[costs[i], values[i]] for i in range(len(data_points)) if cluster_labels[i] == cluster_id])
-        
-        if len(cluster_points) >= 3:  # Need at least 3 points for convex hull
-            # For log scale, compute hull in log space
-            log_cluster_costs = np.log10(cluster_points[:, 0])
-            cluster_values = cluster_points[:, 1]
-            hull_points = np.column_stack([log_cluster_costs, cluster_values])
-            
-            try:
-                hull = ConvexHull(hull_points)
-                # Convert back to original scale for plotting
-                hull_x = 10 ** hull_points[hull.vertices, 0]
-                hull_y = hull_points[hull.vertices, 1]
-                
-                # Close the hull
-                hull_x = np.append(hull_x, hull_x[0])
-                hull_y = np.append(hull_y, hull_y[0])
-                
-                ax.fill(hull_x, hull_y, color=cluster_colors[cluster_id], alpha=cluster_alphas[cluster_id], zorder=0)
-            except:
-                # If convex hull fails, skip
-                pass
     
     # Collect workflow points
     workflow_points_dict = {}
