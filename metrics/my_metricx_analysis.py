@@ -25,16 +25,15 @@ import sys
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data_loaders import get_data_loader
 from metrics.evaluate_experiments import (
     find_experiments,
     get_latest_agent_output,
     load_sample_data,
     get_metrics_file_path,
-    BASE_DATA_DIR
+    BASE_DATA_DIR,
+    get_workflows_and_models_to_process
 )
 from metrics.metricx_evaluator import compute_metricx_scores
-from report.write_tables_paper import get_workflows_and_models_to_process
 
 
 def _log_with_time(msg: str):
@@ -160,8 +159,17 @@ def process_experiment_simplified(
             print(f"  ✗ Could not find MetricX model or tokenizer")
             return None
         
-        from metrics.metricx_evaluator import compute_metricx_scores
-        # We'll load it in compute_metricx_scores if needed
+        # Load model and tokenizer
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        import torch
+        
+        _log_with_time("    Loading MetricX model and tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(mt5_tokenizer_path, local_files_only=True)
+        metric_model = AutoModelForSeq2SeqLM.from_pretrained(metricx_model_path, local_files_only=True)
+        
+        if torch.cuda.is_available():
+            metric_model = metric_model.to('cuda')
+            _log_with_time("    Moved MetricX model to GPU")
     
     # Load samples from report
     samples = report_data.get('samples', [])
@@ -258,8 +266,8 @@ def process_experiment_simplified(
         try:
             metric_result = compute_metricx_scores(
                 valid_segments,
-                metricx_model_path=None,  # Will auto-detect
-                mt5_tokenizer_path=None,  # Will auto-detect
+                metricx_model_path=None,  # Not needed if metric_model is provided
+                mt5_tokenizer_path=None,  # Not needed if tokenizer is provided
                 metric_model=metric_model,
                 tokenizer=tokenizer
             )
@@ -390,7 +398,7 @@ def main():
     
     # Load MetricX model once
     _log_with_time("Loading MetricX model...")
-    from metrics.metricx_evaluator import _find_metricx_model, _find_mt5_tokenizer, compute_metricx_scores
+    from metrics.metricx_evaluator import _find_metricx_model, _find_mt5_tokenizer
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
     import torch
     
