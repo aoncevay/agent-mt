@@ -2,10 +2,22 @@
 """
 Test script to verify COMET repository can be loaded correctly.
 Run this after installing dependencies from requirements.txt.
+
+Usage:
+    python metrics/test_comet_loading.py
+    # OR from within metrics/ directory:
+    python test_comet_loading.py
 """
 
 import sys
 from pathlib import Path
+
+# Add parent directory to path so we can import metrics module
+# This allows the script to be run from either the project root or from within metrics/
+script_dir = Path(__file__).parent
+project_root = script_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 def test_comet_loading():
     """Test if COMET can be imported and loaded."""
