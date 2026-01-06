@@ -27,9 +27,25 @@ else
 fi
 echo ""
 
-# 3. Kill processes using GPU
+# 3. Find zombie/stopped Python processes (especially evaluate_experiments.py)
+echo "3. Finding zombie/stopped Python processes..."
+ZOMBIE_PIDS=$(ps aux | grep -E "python.*evaluate_experiments|python.*metrics" | grep -v grep | awk '{print $2}' | sort -u)
+
+if [ ! -z "$ZOMBIE_PIDS" ]; then
+    echo "   Found Python processes: $ZOMBIE_PIDS"
+    for PID in $ZOMBIE_PIDS; do
+        if [ -d "/proc/$PID" ]; then
+            PROC_NAME=$(cat /proc/$PID/comm 2>/dev/null || echo "unknown")
+            PROC_STAT=$(cat /proc/$PID/stat 2>/dev/null | awk '{print $3}' || echo "unknown")
+            echo "   PID $PID: $PROC_NAME (state: $PROC_STAT)"
+        fi
+    done
+fi
+echo ""
+
+# 4. Kill processes using GPU
 if [ ! -z "$GPU_PIDS" ]; then
-    echo "3. Killing processes..."
+    echo "4. Killing processes using GPU devices..."
     for PID in $GPU_PIDS; do
         if [ -d "/proc/$PID" ]; then
             kill -9 $PID 2>/dev/null && echo "   ✓ Killed PID $PID" || echo "   ✗ Failed to kill PID $PID"
@@ -37,15 +53,33 @@ if [ ! -z "$GPU_PIDS" ]; then
     done
     sleep 2
 fi
+
+# 5. Kill zombie/stopped Python processes
+if [ ! -z "$ZOMBIE_PIDS" ]; then
+    echo "5. Killing zombie/stopped Python processes..."
+    for PID in $ZOMBIE_PIDS; do
+        if [ -d "/proc/$PID" ]; then
+            # Try SIGTERM first (gentle)
+            kill $PID 2>/dev/null && sleep 1
+            # If still alive, force kill
+            if [ -d "/proc/$PID" ]; then
+                kill -9 $PID 2>/dev/null && echo "   ✓ Killed PID $PID" || echo "   ✗ Failed to kill PID $PID"
+            else
+                echo "   ✓ Killed PID $PID (SIGTERM)"
+            fi
+        fi
+    done
+    sleep 2
+fi
 echo ""
 
-# 4. Clear PyTorch cache via Python
-echo "4. Clearing PyTorch CUDA cache..."
+# 6. Clear PyTorch cache via Python
+echo "6. Clearing PyTorch CUDA cache..."
 python3 -c "import torch; torch.cuda.empty_cache(); torch.cuda.synchronize(); print('   ✓ Cache cleared')" 2>/dev/null || echo "   ⚠ PyTorch not available"
 echo ""
 
-# 5. Final GPU status
-echo "5. Final GPU Status:"
+# 7. Final GPU status
+echo "7. Final GPU Status:"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
 echo ""
 
