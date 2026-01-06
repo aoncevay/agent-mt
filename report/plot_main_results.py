@@ -1912,13 +1912,16 @@ def plot_dataset_avg_price_pareto_simplified_with_cluster(
                         point_idx = idx
                         break
                 
-                # Check if this point has Rank 1 star
+                # Check if this point has Rank 1 or Rank 2 star
                 has_rank1_star = False
+                has_rank2_star = False
                 if point_idx is not None:
                     if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
                         has_rank1_star = True
+                    elif 2 in pareto_ranks and point_idx in pareto_ranks[2]:
+                        has_rank2_star = True
                 
-                workflow_points.append((point["cost"], point["value"], model, has_rank1_star, point_idx))
+                workflow_points.append((point["cost"], point["value"], model, has_rank1_star, has_rank2_star, point_idx))
         
         # Sort by cost (cheapest to most expensive) for connecting lines
         workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
@@ -1937,7 +1940,7 @@ def plot_dataset_avg_price_pareto_simplified_with_cluster(
         workflow_points_sorted, color = workflow_points_dict[workflow]
         
         # Plot each model for this workflow with capacity tier shapes
-        for cost, value, model, has_rank1_star, point_idx in workflow_points_sorted:
+        for cost, value, model, has_rank1_star, has_rank2_star, point_idx in workflow_points_sorted:
             shape = CAPACITY_TIER_SHAPES.get(model, 'o')  # Default to circle if not found
             
             ax.scatter(cost, value, c=color, marker=shape, s=63,
@@ -1950,14 +1953,14 @@ def plot_dataset_avg_price_pareto_simplified_with_cluster(
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
-    # Add Rank 1 Pareto stars only (no labels)
+    # Add Rank 1 and Rank 2 Pareto stars (no labels)
     for workflow in sorted(workflows):
         if workflow not in workflow_points_dict:
             continue
         workflow_points_sorted, color = workflow_points_dict[workflow]
         
-        for cost, value, model, has_rank1_star, point_idx in workflow_points_sorted:
-            if not has_rank1_star:
+        for cost, value, model, has_rank1_star, has_rank2_star, point_idx in workflow_points_sorted:
+            if not (has_rank1_star or has_rank2_star):
                 continue
             
             # Position star at upper-left corner of marker
@@ -1978,9 +1981,13 @@ def plot_dataset_avg_price_pareto_simplified_with_cluster(
             marker_height_data = y_range * marker_fraction_of_fig * 1.2
             star_y = value + marker_height_data
             
-            # Add gold star for rank 1 (no label)
-            ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
-                      edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
+            # Add gold star for rank 1, silver star for rank 2 (no labels)
+            if has_rank1_star:
+                ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
+                          edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
+            elif has_rank2_star:
+                ax.scatter(star_x, star_y, marker='*', s=90, c='silver', 
+                          edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
     
     # Tight layout
     plt.tight_layout()
