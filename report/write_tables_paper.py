@@ -393,16 +393,11 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     
     # Compute averages first
     dolfin_chrf_avg = compute_averages(data, "dolfin", "chrf", DOLFIN_LANG_PAIRS)
-    dolfin_metricx_avg = compute_averages(data, "dolfin", "metricx", DOLFIN_LANG_PAIRS)
     
     # Compute min/max for color coding from Avg values (since we color the Avg column)
     chrf_values = [val for val in dolfin_chrf_avg.values() if val is not None]
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
-    
-    metricx_values = [val for val in dolfin_metricx_avg.values() if val is not None]
-    metricx_min = min(metricx_values) if metricx_values else 0
-    metricx_max = max(metricx_values) if metricx_values else 100
     
     # Compute total costs (sum across all lang pairs)
     dolfin_total_costs = compute_total_costs(data, "dolfin", DOLFIN_LANG_PAIRS)
@@ -455,21 +450,19 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\centering")
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
-    lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
-    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + MetricX-24 (5: Avg + 4 lang pairs) + Cost (1: Total) = 13
-    lines.append("\\begin{tabular}{ll" + "c" * 11 + "}")
+    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + Cost (1: Total) = 8
+    lines.append("\\begin{tabular}{ll" + "c" * 6 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | MetricX-24 | Cost ($)
+    # First header row: chrF++ | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{5}{c}{\\textbf{chrF++} $\\uparrow$} & "
-    header1 += "\\multicolumn{5}{c}{\\textbf{MetricX-24} $\\downarrow$} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
-    lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-12} \\cmidrule(lr){13-13}")
+    lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-8}")
     
     # Second header row: language pairs and Total
-    header2 = "& & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Total} \\\\"
+    header2 = "& & \\textbf{Avg} & En-De & En-Es & En-Fr & En-It & \\textbf{Total} \\\\"
     lines.append(header2)
     lines.append("\\midrule")
     
@@ -513,16 +506,6 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # MetricX-24 columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It)
-            avg_val = dolfin_metricx_avg.get((workflow, model))
-            color = get_color_for_value(avg_val, metricx_min, metricx_max, "metricx") if avg_val is not None else ""
-            formatted = format_value(avg_val, "metricx")
-            row_parts.append(f"{color}{formatted}")
-            
-            for lang_pair in DOLFIN_LANG_PAIRS:
-                val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("metricx")
-                row_parts.append(format_value(val, "metricx"))
-            
             # Cost column (Total) - inverse color scale (lower is better)
             # Use logarithmic normalization for better distribution across wide cost range
             total_cost = dolfin_total_costs.get((workflow, model))
@@ -550,7 +533,6 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
-    lines.append("}")  # End resizebox
     lines.append("\\caption{Main results for DOLFIN dataset. Top-performing systems are labelled as rank 1\\textcolor{rank1}{$\\bigstar$} and rank 2\\textcolor{rank2}{$\\bigstar$} according to Pareto optimality (only systems above the 75th percentile in performance are considered for Pareto ranking).}")
     lines.append("\\label{tab:main_results_dolfin}")
     lines.append("\\end{table*}")
@@ -567,17 +549,12 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     # Compute averages first
     wmt25_chrf_avg = compute_averages(data, "wmt25_term", "chrf", WMT25_LANG_PAIRS)
-    wmt25_metricx_avg = compute_averages(data, "wmt25_term", "metricx", WMT25_LANG_PAIRS)
     wmt25_termacc_avg = compute_averages(data, "wmt25_term", "termacc", WMT25_LANG_PAIRS)
     
     # Compute min/max for color coding from Avg values (since we color the Avg column)
     chrf_values = [val for val in wmt25_chrf_avg.values() if val is not None]
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
-    
-    metricx_values = [val for val in wmt25_metricx_avg.values() if val is not None]
-    metricx_min = min(metricx_values) if metricx_values else 0
-    metricx_max = max(metricx_values) if metricx_values else 100
     
     termacc_values = [val for val in wmt25_termacc_avg.values() if val is not None]
     termacc_min = min(termacc_values) if termacc_values else 0
@@ -654,22 +631,20 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\centering")
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
-    lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
-    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + MetricX-24 (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) + Cost (1: Total) = 12
-    lines.append("\\begin{tabular}{ll" + "c" * 10 + "}")
+    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) + Cost (1: Total) = 9
+    lines.append("\\begin{tabular}{ll" + "c" * 7 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | MetricX-24 | TermAcc | Cost ($)
+    # First header row: chrF++ | TermAcc | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{chrF++} $\\uparrow$} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{MetricX-24} $\\downarrow$} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc} $\\uparrow$} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
-    lines.append("\\cmidrule(lr){3-5} \\cmidrule(lr){6-8} \\cmidrule(lr){9-11} \\cmidrule(lr){12-12}")
+    lines.append("\\cmidrule(lr){3-5} \\cmidrule(lr){6-8} \\cmidrule(lr){9-9}")
     
     # Second header row: language pairs and Total
-    header2 = "& & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Total} \\\\"
+    header2 = "& & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Avg} & En-Zht & Zht-En & \\textbf{Total} \\\\"
     lines.append(header2)
     lines.append("\\midrule")
     
@@ -713,18 +688,6 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # MetricX-24 columns (3 columns: Avg, En-Zht, Zht-En)
-            avg_val = wmt25_metricx_avg.get((workflow, model))
-            color = get_color_for_value(avg_val, metricx_min, metricx_max, "metricx") if avg_val is not None else ""
-            formatted = format_value(avg_val, "metricx")
-            row_parts.append(f"{color}{formatted}")
-            
-            for lang_pair in WMT25_LANG_PAIRS:
-                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("metricx")
-                row_parts.append(format_value(val, "metricx"))
-                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("metricx")
-                row_parts.append(format_value(val, "metricx"))
-            
             # TermAcc columns (3 columns: Avg, En-Zht, Zht-En)
             avg_val = wmt25_termacc_avg.get((workflow, model))
             color = get_color_for_value(avg_val, termacc_min, termacc_max, "termacc") if avg_val is not None else ""
@@ -763,7 +726,6 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
-    lines.append("}")  # End resizebox
     lines.append("\\caption{Main results for WMT25+Term dataset. Top-performing systems are labelled as rank 1\\textcolor{rank1}{$\\bigstar$} and rank 2\\textcolor{rank2}{$\\bigstar$} according to Pareto optimality (only systems above the 75th percentile in performance are considered for Pareto ranking).}")
     lines.append("\\label{tab:main_results_wmt25}")
     lines.append("\\end{table*}")
