@@ -215,6 +215,7 @@ def compute_comet_scores(
             hparams_file = checkpoint_path_obj / "hparams.yaml"
         
         use_softmax_fallback = False
+        local_pretrained_path = None
         
         if hparams_file.exists():
             try:
@@ -351,20 +352,59 @@ def compute_comet_scores(
                 print(f"    - {p}")
             print(f"  Will attempt to load anyway (may fail if tokenizer files are missing)...")
         
-        if use_softmax_fallback:
-            # Load with softmax override
-            from comet.models import str2model
-            model_class = str2model[hparams["class_identifier"]]
-            model = model_class.load_from_checkpoint(
-                str(comet_model_path),
-                layer_transformation="softmax",
-                load_pretrained_weights=False,
-                strict=False,
-                local_files_only=True
-            )
-        else:
-            # Normal loading (model uses softmax or entmax is available)
-            model = load_from_checkpoint(str(comet_model_path), local_files_only=True)
+        # IMPORTANT: The checkpoint error "BertTokenizer vs XLMRobertaTokenizer" suggests
+        # transformers is trying to load a tokenizer from the checkpoint directory itself.
+        # We need to ensure transformers uses the local xlm-roberta-large tokenizer by
+        # temporarily modifying hparams.yaml to point to the local path.
+        hparams_modified = False
+        if local_pretrained_path and hparams_file.exists():
+            import os
+            import shutil
+            # Set environment variables
+            hf_models_dir = Path(local_pretrained_path).parent.parent
+            os.environ["HF_HOME"] = str(hf_models_dir)
+            os.environ["TRANSFORMERS_CACHE"] = str(hf_models_dir)
+            os.environ["HF_HUB_CACHE"] = str(hf_models_dir / ".cache" / "huggingface" / "hub")
+            print(f"  ✓ Environment variables set")
+            
+            # Modify hparams to use local path directly (this forces transformers to use the correct tokenizer)
+            original_pretrained = hparams.get("pretrained_model")
+            if original_pretrained and original_pretrained != local_pretrained_path:
+                # Backup original hparams
+                hparams_backup = hparams_file.with_suffix('.yaml.bak')
+                if not hparams_backup.exists():
+                    shutil.copy2(hparams_file, hparams_backup)
+                    print(f"  ✓ Backed up hparams.yaml")
+                
+                # Temporarily modify hparams to use local path
+                hparams["pretrained_model"] = local_pretrained_path
+                with open(hparams_file, 'w', encoding='utf-8') as f:
+                    yaml.dump(hparams, f, default_flow_style=False, sort_keys=False)
+                hparams_modified = True
+                print(f"  ⚠ Temporarily modified hparams.yaml: {original_pretrained} -> {local_pretrained_path}")
+        
+        try:
+            if use_softmax_fallback:
+                # Load with softmax override
+                from comet.models import str2model
+                model_class = str2model[hparams["class_identifier"]]
+                model = model_class.load_from_checkpoint(
+                    str(comet_model_path),
+                    layer_transformation="softmax",
+                    load_pretrained_weights=False,
+                    strict=False,
+                    local_files_only=True
+                )
+            else:
+                # Normal loading (model uses softmax or entmax is available)
+                model = load_from_checkpoint(str(comet_model_path), local_files_only=True)
+        finally:
+            # Restore original hparams if we modified it
+            if hparams_modified and hparams_file.exists() and 'original_pretrained' in locals():
+                hparams["pretrained_model"] = original_pretrained
+                with open(hparams_file, 'w', encoding='utf-8') as f:
+                    yaml.dump(hparams, f, default_flow_style=False, sort_keys=False)
+                print(f"  ✓ Restored original hparams.yaml")
         
         # Check GPU availability and inform user
         import torch
