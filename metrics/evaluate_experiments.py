@@ -268,6 +268,7 @@ def process_experiment(
     labse_model=None,  # Optional pre-loaded SentenceTransformer model
     polyfuzz_model=None,  # Optional pre-loaded PolyFuzz model
     metric_model=None,  # Optional pre-loaded MetricX or COMET model
+    metric_tokenizer=None,  # Optional pre-loaded tokenizer (for MetricX)
     labse_only: bool = False,  # If True, only do alignment and save to tmp
     metricx_only: bool = False,  # If True, skip TBM, load from tmp if available
     tbm_only: bool = False,  # If True, only compute TBM, load from tmp
@@ -562,12 +563,16 @@ def process_experiment(
         try:
             if use_metric == "metricx":
                 from metrics.metricx_evaluator import compute_metricx_scores
-                # Use pre-loaded model if available
-                if metric_model is not None:
-                    # For now, compute_metricx_scores doesn't accept pre-loaded model
-                    # We'll need to modify it, but for now just use the function normally
-                    # The model is already loaded in GPU, so it should be faster
-                    compute_metric_fn = compute_metricx_scores
+                # Use pre-loaded model and tokenizer if available
+                if metric_model is not None and metric_tokenizer is not None:
+                    # Create a wrapper that uses the pre-loaded model
+                    def compute_with_preloaded(segments):
+                        return compute_metricx_scores(
+                            segments,
+                            metric_model=metric_model,
+                            tokenizer=metric_tokenizer
+                        )
+                    compute_metric_fn = compute_with_preloaded
                 else:
                     compute_metric_fn = compute_metricx_scores
             else:
@@ -1136,9 +1141,10 @@ def main():
         _log_with_time("="*80)
     
     # Load MetricX/COMET model ONCE at the start (only if not labse_only mode)
+    metric_tokenizer = None  # Store tokenizer separately
     if not args.labse_only and args.metric == "metricx":
         _log_with_time("="*80)
-        _log_with_time("Loading MetricX-24 model (once, will be reused for all experiments)...")
+        _log_with_time("Loading MetricX-24 model and tokenizer (once, will be reused for all experiments)...")
         import torch
         use_gpu = torch.cuda.is_available()
         
@@ -1156,12 +1162,14 @@ def main():
             os.environ["HF_HUB_OFFLINE"] = "1"
             
             # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(
+            _log_with_time("  Loading mT5 tokenizer...")
+            metric_tokenizer = AutoTokenizer.from_pretrained(
                 str(mt5_tokenizer_path),
                 local_files_only=True
             )
             
             # Load model
+            _log_with_time("  Loading MetricX-24 model...")
             metric_model = AutoModelForSeq2SeqLM.from_pretrained(
                 str(metricx_model_path),
                 local_files_only=True,
@@ -1179,6 +1187,7 @@ def main():
         else:
             _log_with_time("  ⚠ Warning: Could not find MetricX model, will load on-the-fly")
             metric_model = None
+            metric_tokenizer = None
     
     # Process each language pair
     for lang_pair, lang_experiments in experiments_by_lang_pair.items():
@@ -1200,6 +1209,7 @@ def main():
                     labse_model=labse_model,  # Pass the pre-loaded model
                     polyfuzz_model=polyfuzz_model,  # Pass the pre-loaded PolyFuzz model
                     metric_model=metric_model,  # Pass the pre-loaded metric model
+                    metric_tokenizer=metric_tokenizer,  # Pass the pre-loaded tokenizer
                     comet_only=args.comet_only,  # Pass the comet_only flag
                     metricx_only=args.metricx_only,  # Pass the metricx_only flag
                     tbm_only=args.tbm_only,  # Pass the tbm_only flag
@@ -1210,6 +1220,15 @@ def main():
                 if results:
                     # Save results to file matching output directory structure
                     save_metrics_results(results, output_dir, metrics_dir)
+                    
+                    # Clear GPU cache after each experiment to prevent memory buildup
+                    if args.metric == "metricx" and metric_model is not None:
+                        try:
+                            import torch
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                        except Exception:
+                            pass
                     
             except Exception as e:
                 print(f"  ✗ Error processing experiment: {e}")

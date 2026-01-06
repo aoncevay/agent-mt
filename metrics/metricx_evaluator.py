@@ -97,15 +97,19 @@ def _find_mt5_tokenizer() -> Optional[Path]:
 def compute_metricx_scores(
     segments: List[Tuple[str, str, str]],
     metricx_model_path: Optional[Path] = None,
-    mt5_tokenizer_path: Optional[Path] = None
+    mt5_tokenizer_path: Optional[Path] = None,
+    metric_model=None,  # Optional pre-loaded model
+    tokenizer=None  # Optional pre-loaded tokenizer
 ) -> Dict[str, Any]:
     """
     Compute MetricX-24 scores for aligned segments.
     
     Args:
         segments: List of (source, translation, reference) tuples
-        metricx_model_path: Path to MetricX-24 model directory (auto-detected if None)
-        mt5_tokenizer_path: Path to mT5 tokenizer directory (auto-detected if None)
+        metricx_model_path: Path to MetricX-24 model directory (auto-detected if None, ignored if metric_model provided)
+        mt5_tokenizer_path: Path to mT5 tokenizer directory (auto-detected if None, ignored if tokenizer provided)
+        metric_model: Optional pre-loaded AutoModelForSeq2SeqLM model (reuses if provided)
+        tokenizer: Optional pre-loaded AutoTokenizer (reuses if provided)
     
     Returns:
         Dictionary with:
@@ -114,47 +118,52 @@ def compute_metricx_scores(
         - 'max_metricx': Maximum MetricX score
         - 'scores': List of per-segment scores
     """
-    # Find model path
-    if metricx_model_path is None:
-        metricx_model_path = _find_metricx_model()
-    
-    if metricx_model_path is None:
-        raise FileNotFoundError(
-            "MetricX-24 model not found. Please ensure the model is available.\n"
-            "Expected locations:\n"
-            "  - /mnt/custom-file-systems/efs/.../HF_models/metricx-24-hybrid-large-v2p6-bfloat16\n"
-            "  - ~/user-default-efs/HF_models/metricx-24-hybrid-large-v2p6-bfloat16"
-        )
-    
-    metricx_model_path = Path(metricx_model_path).resolve()
-    
-    if not metricx_model_path.exists():
-        raise FileNotFoundError(f"MetricX-24 model not found at {metricx_model_path}")
-    
-    # Find mT5 tokenizer path
-    if mt5_tokenizer_path is None:
-        mt5_tokenizer_path = _find_mt5_tokenizer()
-    
-    if mt5_tokenizer_path is None:
-        raise FileNotFoundError(
-            "mT5 tokenizer not found. MetricX-24 requires mT5 tokenizer files.\n"
-            "Please download mT5 tokenizer files (sentencepiece.model, tokenizer_config.json)\n"
-            "Expected locations:\n"
-            "  - /mnt/custom-file-systems/efs/.../HF_models/mt5-base\n"
-            "  - ~/user-default-efs/HF_models/mt5-base"
-        )
-    
-    mt5_tokenizer_path = Path(mt5_tokenizer_path).resolve()
-    
-    # Set environment variables for offline mode
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    
     print(f"  Computing MetricX-24 scores for {len(segments)} segments...")
     
-    # Use transformers directly (default approach)
-    # We don't install SEGALE/metricx24 package, so we use transformers
-    try:
+    # Use pre-loaded model and tokenizer if provided
+    if metric_model is not None and tokenizer is not None:
+        print(f"  Using pre-loaded MetricX-24 model and tokenizer...")
+        model = metric_model
+        # Tokenizer is already loaded
+    else:
+        # Find model path
+        if metricx_model_path is None:
+            metricx_model_path = _find_metricx_model()
+        
+        if metricx_model_path is None:
+            raise FileNotFoundError(
+                "MetricX-24 model not found. Please ensure the model is available.\n"
+                "Expected locations:\n"
+                "  - /mnt/custom-file-systems/efs/.../HF_models/metricx-24-hybrid-large-v2p6-bfloat16\n"
+                "  - ~/user-default-efs/HF_models/metricx-24-hybrid-large-v2p6-bfloat16"
+            )
+        
+        metricx_model_path = Path(metricx_model_path).resolve()
+        
+        if not metricx_model_path.exists():
+            raise FileNotFoundError(f"MetricX-24 model not found at {metricx_model_path}")
+        
+        # Find mT5 tokenizer path
+        if mt5_tokenizer_path is None:
+            mt5_tokenizer_path = _find_mt5_tokenizer()
+        
+        if mt5_tokenizer_path is None:
+            raise FileNotFoundError(
+                "mT5 tokenizer not found. MetricX-24 requires mT5 tokenizer files.\n"
+                "Please download mT5 tokenizer files (spiece.model, tokenizer_config.json)\n"
+                "Expected locations:\n"
+                "  - /mnt/custom-file-systems/efs/.../HF_models/mt5-base\n"
+                "  - ~/user-default-efs/HF_models/mt5-base"
+            )
+        
+        mt5_tokenizer_path = Path(mt5_tokenizer_path).resolve()
+        
+        # Set environment variables for offline mode
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        
+        # Use transformers directly (default approach)
+        # We don't install SEGALE/metricx24 package, so we use transformers
         print(f"  Loading MetricX-24 model from {metricx_model_path}...")
         
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
@@ -181,8 +190,9 @@ def compute_metricx_scores(
             print(f"  MetricX-24 will use GPU")
         else:
             print(f"  No GPU available, using CPU")
-        
-        # Prepare data for MetricX-24
+    
+    # Prepare data for MetricX-24
+    try:
         # MetricX-24 expects input format: "source: {src} target: {tgt} reference: {ref}"
         sources = [seg[0] for seg in segments]
         translations = [seg[1] for seg in segments]
@@ -194,48 +204,61 @@ def compute_metricx_scores(
             for src, tgt, ref in zip(sources, translations, references)
         ]
         
-        # Tokenize
-        encoded = tokenizer(
-            inputs,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=1536,  # Same as SEGALE
-        )
+        # Process in batches to avoid GPU OOM
+        # MetricX-24 can handle large batches, but we'll use smaller batches for safety
+        batch_size = 32  # Adjust based on GPU memory
+        all_scores = []
         
-        if torch.cuda.is_available():
-            encoded = {k: v.to('cuda') for k, v in encoded.items()}
-        
-        # Generate scores (MetricX-24 outputs a score as text)
-        with torch.no_grad():
-            outputs = model.generate(
-                **encoded,
-                max_new_tokens=10,
-                num_beams=1,  # Greedy decoding for speed
-                do_sample=False,
+        for i in range(0, len(inputs), batch_size):
+            batch_inputs = inputs[i:i+batch_size]
+            
+            # Tokenize batch
+            encoded = tokenizer(
+                batch_inputs,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=1536,  # Same as SEGALE
             )
+            
+            if torch.cuda.is_available():
+                encoded = {k: v.to('cuda') for k, v in encoded.items()}
+            
+            # Generate scores (MetricX-24 outputs a score as text)
+            with torch.no_grad():
+                outputs = model.generate(
+                    **encoded,
+                    max_new_tokens=10,
+                    num_beams=1,  # Greedy decoding for speed
+                    do_sample=False,
+                )
+            
+            # Decode the generated tokens to get score strings
+            generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+            
+            # Parse scores from generated text
+            import re
+            for text in generated_texts:
+                try:
+                    # Extract the first number from the generated text
+                    numbers = re.findall(r'\d+\.?\d*', text.strip())
+                    if numbers:
+                        score = float(numbers[0])
+                        # Clip to [0, 25] range as per MetricX-24 documentation
+                        score = max(0.0, min(25.0, score))
+                        all_scores.append(score)
+                    else:
+                        print(f"  ⚠ Warning: Could not parse score from: '{text}'")
+                        all_scores.append(0.0)
+                except Exception as e:
+                    print(f"  ⚠ Warning: Error parsing score from '{text}': {e}")
+                    all_scores.append(0.0)
+            
+            # Clear GPU cache after each batch to prevent memory buildup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         
-        # Decode the generated tokens to get score strings
-        generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-        
-        # Parse scores from generated text
-        import re
-        scores = []
-        for text in generated_texts:
-            try:
-                # Extract the first number from the generated text
-                numbers = re.findall(r'\d+\.?\d*', text.strip())
-                if numbers:
-                    score = float(numbers[0])
-                    # Clip to [0, 25] range as per MetricX-24 documentation
-                    score = max(0.0, min(25.0, score))
-                    scores.append(score)
-                else:
-                    print(f"  ⚠ Warning: Could not parse score from: '{text}'")
-                    scores.append(0.0)
-            except Exception as e:
-                print(f"  ⚠ Warning: Error parsing score from '{text}': {e}")
-                scores.append(0.0)
+        scores = all_scores
         
         # Compute statistics
         if not scores:
