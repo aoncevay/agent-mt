@@ -1630,8 +1630,12 @@ def plot_dataset_avg_price_pareto_simplified(
     min_value = np.percentile(values, 75) if len(values) > 1 else None
     pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
     
-    # Create figure (same size for all)
-    _fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    # Create figure: square for chrF++, original shape for term acc
+    if metric == "chrf":
+        figsize = (3.5, 3.5)  # Square shape for chrF++
+    else:  # termacc
+        figsize = (3.5, 2.5)  # Original shape for term acc
+    _fig, ax = plt.subplots(figsize=figsize)
     
     # Set log scale for x-axis
     ax.set_xscale('log')
@@ -1764,6 +1768,8 @@ def plot_dataset_avg_price_pareto_simplified(
                 
                 # Add model label for Rank 1 only
                 model_display = MODEL_DISPLAY_NAMES.get(model, model)
+                # Replace spaces with dashes for better connection
+                model_display = model_display.replace(' ', '-')
                 
                 # Position label to the right of the point
                 label_x_offset_factor = 1.15  # 15% to the right in log space
