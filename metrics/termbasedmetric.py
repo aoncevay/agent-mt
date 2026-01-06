@@ -159,13 +159,15 @@ class TermBasedMetric():
                             lang=src_stanza_lang,
                             processors='tokenize,lemma',
                             model_dir=str(stanza_dir),
-                            use_gpu=use_gpu
+                            use_gpu=use_gpu,
+                            download_method=None  # Disable update checks (offline mode)
                         )
                     else:
                         self.stanza_src = stanza.Pipeline(
                             lang=src_stanza_lang,
                             processors='tokenize,lemma',
-                            use_gpu=use_gpu
+                            use_gpu=use_gpu,
+                            download_method=None  # Disable update checks (offline mode)
                         )
                     print(f"  ✓ Loaded Stanza pipeline for {self.lang_src}")
             except Exception as e:
@@ -181,13 +183,15 @@ class TermBasedMetric():
                             lang=tgt_stanza_lang,
                             processors='tokenize,lemma',
                             model_dir=str(stanza_dir),
-                            use_gpu=use_gpu
+                            use_gpu=use_gpu,
+                            download_method=None  # Disable update checks (offline mode)
                         )
                     else:
                         self.stanza_tgt = stanza.Pipeline(
                             lang=tgt_stanza_lang,
                             processors='tokenize,lemma',
-                            use_gpu=use_gpu
+                            use_gpu=use_gpu,
+                            download_method=None  # Disable update checks (offline mode)
                         )
                     print(f"  ✓ Loaded Stanza pipeline for {self.lang_tgt}")
             except Exception as e:
