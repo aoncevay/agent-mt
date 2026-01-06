@@ -308,10 +308,8 @@ def collect_reports_from_dir(outputs_dir: Path, seen_settings: Set[Tuple[str, st
                         incomplete_settings.add(setting_key)
                         continue
                     
-                    # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-                    # Check if workflow is zero-shot (either "ZS" or "ZS.term")
-                    is_zero_shot = workflow_acronym == "ZS" or workflow_acronym.startswith("ZS.")
-                    if model == "gpt-5" and not is_zero_shot:
+                    # Exclude gpt-5
+                    if model == "gpt-5":
                         continue
                     
                     # Mark as seen and add to reports
@@ -588,8 +586,8 @@ def plot_dataset_lang_pair(
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
         
-        # GPT-5 is zero-shot baseline only
-        if model == "gpt-5" and workflow != "ZS":
+        # Exclude gpt-5
+        if model == "gpt-5":
             continue
         
         workflows.add(workflow)
@@ -692,8 +690,8 @@ def plot_dataset_lang_pair_price(
         workflow = get_workflow_acronym(workflow_name)
         model = report["model"]
         
-        # GPT-5 is zero-shot baseline only
-        if model == "gpt-5" and workflow != "ZS":
+        # Exclude gpt-5
+        if model == "gpt-5":
             continue
         
         workflows.add(workflow)
@@ -1243,7 +1241,7 @@ def plot_dataset_avg_price_pareto(
     # Tables iterate through WORKFLOW_ORDER × MODEL_ORDER when computing pareto ranks
     # Use same order for consistency to ensure the same set of points is included
     # This ensures the 75th percentile threshold and pareto ranking are identical
-    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    MODEL_ORDER_FOR_PARETO = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER_FOR_PARETO:
@@ -1257,8 +1255,8 @@ def plot_dataset_avg_price_pareto(
             
             data = aggregated_data[key]
             
-            # GPT-5 is zero-shot baseline only (same as tables)
-            if model == "gpt-5" and workflow != "ZS":
+            # Exclude gpt-5
+            if model == "gpt-5":
                 continue
             
             if not data["values"] or not data["costs"]:
@@ -1587,7 +1585,7 @@ def plot_dataset_avg_price_pareto_simplified(
     data_points = []
     
     # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
-    MODEL_ORDER_FOR_PARETO = ["gpt-5", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    MODEL_ORDER_FOR_PARETO = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER_FOR_PARETO:
@@ -1601,8 +1599,8 @@ def plot_dataset_avg_price_pareto_simplified(
             
             data = aggregated_data[key]
             
-            # GPT-5 is zero-shot baseline only (same as tables)
-            if model == "gpt-5" and workflow != "ZS":
+            # Exclude gpt-5
+            if model == "gpt-5":
                 continue
             
             if not data["values"] or not data["costs"]:
@@ -1716,7 +1714,7 @@ def plot_dataset_avg_price_pareto_simplified(
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
     
-    # Add model name labels for points with Pareto Rank 1 only
+    # Add stars and labels for Pareto optimal points
     for workflow in sorted(workflows):
         if workflow not in workflow_points_dict:
             continue
@@ -1736,26 +1734,52 @@ def plot_dataset_avg_price_pareto_simplified(
             if point_idx is None:
                 continue
             
-            # Only label Rank 1 points
+            # Check ranks
             is_rank1 = (1 in pareto_ranks and point_idx in pareto_ranks[1])
+            is_rank2 = (2 in pareto_ranks and point_idx in pareto_ranks[2])
             
+            # Position star at upper-left corner of marker
+            # Get axis ranges to calculate appropriate offset
+            x_lim = ax.get_xlim()
+            y_lim = ax.get_ylim()
+            
+            # For log scale x-axis: marker radius in data coordinates
+            marker_size_points = 7  # Approximate radius of s=63 marker
+            fig_width_points = 3.5 * 72  # 3.5 inches * 72 points/inch
+            marker_fraction_of_fig = marker_size_points / fig_width_points
+            
+            # For log scale: move left by full marker radius
+            x_offset_factor = marker_fraction_of_fig * 1.2  # Full radius + a bit more
+            star_x = cost / (1 + x_offset_factor)
+            
+            # For linear y-axis: move up by full marker radius
+            y_range = y_lim[1] - y_lim[0]
+            marker_height_data = y_range * marker_fraction_of_fig * 1.2
+            star_y = value + marker_height_data
+            
+            # Add gold star for rank 1, silver star for rank 2
             if is_rank1:
-                # Get model display name
+                ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
+                          edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
+                
+                # Add model label for Rank 1 only
                 model_display = MODEL_DISPLAY_NAMES.get(model, model)
                 
                 # Position label to the right of the point
-                # For log scale x-axis: multiply by a factor
-                x_offset_factor = 1.15  # 15% to the right in log space
-                label_x = cost * x_offset_factor
+                label_x_offset_factor = 1.15  # 15% to the right in log space
+                label_x = cost * label_x_offset_factor
                 
                 # For y-axis: slight offset upward
-                y_range = y_max - y_min
                 y_offset = y_range * 0.02  # 2% of range
                 label_y = value + y_offset
                 
-                # Add text label with workflow color, smaller, not bold, rotated 45 degrees
-                ax.text(label_x, label_y, model_display, fontsize=7, color=color,
-                       weight='normal', ha='left', va='bottom', rotation=45, zorder=7)
+                # Add text label in black, smaller font, rotated 35 degrees
+                ax.text(label_x, label_y, model_display, fontsize=6, color='black',
+                       weight='normal', ha='left', va='bottom', rotation=35, zorder=7)
+            elif is_rank2:
+                # Silver star for rank 2 (no label)
+                ax.scatter(star_x, star_y, marker='*', s=90, c='silver', 
+                          edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
     
     # Tight layout
     plt.tight_layout()
@@ -1808,8 +1832,8 @@ def plot_per_model(
             if model not in models_to_plot:
                 continue
             
-            # GPT-5 is zero-shot baseline only
-            if model == "gpt-5" and workflow != "ZS":
+            # Exclude gpt-5
+            if model == "gpt-5":
                 continue
             
             # Only include workflows with shapes defined

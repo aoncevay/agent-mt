@@ -24,8 +24,8 @@ get_model_base_cost = plot_module.get_model_base_cost
 
 # Model order (from most expensive to least expensive)
 # Note: The get_models_sorted_by_cost() function will sort by base cost, but this order
-# provides a fallback. Based on pricing: GPT-5 > GPT-4.1 > GPT-4.1-mini > qwen3-235b > qwen3-32b > gpt-4-1-nano
-MODEL_ORDER = ["gpt-5", "gpt-4-1", "gpt-4-1-mini", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+# provides a fallback. Based on pricing: GPT-4.1 > GPT-4.1-mini > qwen3-235b > qwen3-32b > gpt-4-1-nano
+MODEL_ORDER = ["gpt-4-1", "gpt-4-1-mini", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
 
 
 def format_price(price: float) -> str:
@@ -65,8 +65,8 @@ def print_latex_table():
     
     sorted_models = get_models_sorted_by_cost(use_batch=False)
     
-    # Filter out gpt-4-1-mini
-    sorted_models = [m for m in sorted_models if m != "gpt-4-1-mini"]
+    # Filter out gpt-4-1-mini and gpt-5
+    sorted_models = [m for m in sorted_models if m != "gpt-4-1-mini" and m != "gpt-5"]
     
     for model in sorted_models:
         if model not in MODEL_PRICING_STANDARD:

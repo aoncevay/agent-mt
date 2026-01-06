@@ -59,8 +59,7 @@ WORKFLOW_DISPLAY_NAMES = {
 }
 
 # Model order (from larger to smaller) - will be sorted by cost in tables
-# Note: GPT-5 is zero-shot baseline only
-MODEL_ORDER = ["gpt-5", "gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+MODEL_ORDER = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
 
 def get_models_sorted_by_cost() -> List[str]:
     """Get models sorted by base API cost (most expensive first)."""
@@ -209,8 +208,8 @@ def collect_data_by_workflow_model(
             if workflow not in WORKFLOW_ORDER or model not in MODEL_MARKERS:
                 continue
             
-            # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-            if model == "gpt-5" and workflow != "ZS":
+            # Exclude gpt-5
+            if model == "gpt-5":
                 continue
             
             data[workflow][model]["dolfin"][lang_pair]["chrf"] = report.get("chrf")
@@ -236,8 +235,8 @@ def collect_data_by_workflow_model(
             if workflow not in WORKFLOW_ORDER or model not in MODEL_MARKERS:
                 continue
             
-            # GPT-5 and GPT-4.1 mini are zero-shot baselines only
-            if model == "gpt-5" and workflow != "ZS":
+            # Exclude gpt-5
+            if model == "gpt-5":
                 continue
             
             # Store both chrF and TermAcc for term workflows
@@ -394,11 +393,8 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
-        # Filter models: GPT-5 and GPT-4.1 mini only for zero-shot
-        if workflow == "ZS":
-            models_to_show = sorted_models  # All models, sorted by cost
-        else:
-            models_to_show = [m for m in sorted_models if m != "gpt-5"]
+        # All models are shown for all workflows
+        models_to_show = sorted_models
         
         # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
         for i, model in enumerate(models_to_show):
@@ -583,11 +579,8 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
         if workflow != WORKFLOW_ORDER[0]:
             lines.append("\\midrule")
         
-        # Filter models: GPT-5 and GPT-4.1 mini only for zero-shot
-        if workflow == "ZS":
-            models_to_show = sorted_models  # All models, sorted by cost
-        else:
-            models_to_show = [m for m in sorted_models if m != "gpt-5"]
+        # All models are shown for all workflows
+        models_to_show = sorted_models
         
         # Add rows for all models (sorted by cost, most expensive first), even if they don't have data
         for i, model in enumerate(models_to_show):
