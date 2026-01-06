@@ -1580,11 +1580,8 @@ def plot_dataset_avg_price_pareto_simplified(
     min_value = np.percentile(values, 75) if len(values) > 1 else None
     pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
     
-    # Create figure: square for chrF++, original shape for term acc
-    if metric == "chrf":
-        figsize = (3.5, 3.5)  # Square shape for chrF++
-    else:  # termacc
-        figsize = (3.5, 2.5)  # Original shape for term acc
+    # Create figure: same size for both chrF++ and term acc
+    figsize = (3.5, 2.5)
     _fig, ax = plt.subplots(figsize=figsize)
     
     # Set log scale for x-axis
@@ -1593,7 +1590,7 @@ def plot_dataset_avg_price_pareto_simplified(
     # Set fixed y-axis limits
     if metric == "chrf":
         if dataset == "dolfin":
-            y_min, y_max = 55, 80
+            y_min, y_max = 60, 80
         else:  # wmt25
             y_min, y_max = 40, 65
     elif metric == "termacc":
