@@ -199,7 +199,23 @@ def get_metricx_score(
     Returns:
         Average MetricX score if found, None otherwise
     """
+    # Try both underscore and dash formats for language pairs
+    # First try the original format
     metrics_file = metrics_base_dir / dataset / lang_pair / workflow_dir / model / "metrics.json"
+    
+    if not metrics_file.exists():
+        # Try with normalized format (underscore to dash or vice versa)
+        # For DOLFIN: try converting en_de -> en-de
+        # For WMT25: try converting en-zht -> en_zht (though WMT25 uses dashes)
+        if '_' in lang_pair:
+            # Convert underscore to dash
+            normalized_lang_pair = lang_pair.replace('_', '-')
+        else:
+            # Convert dash to underscore
+            normalized_lang_pair = lang_pair.replace('-', '_')
+        
+        if normalized_lang_pair != lang_pair:
+            metrics_file = metrics_base_dir / dataset / normalized_lang_pair / workflow_dir / model / "metrics.json"
     
     if not metrics_file.exists():
         return None
