@@ -208,7 +208,10 @@ class TermBasedMetric():
             self.llm = create_openai_llm(openai_model_id, temperature=0.0)
             
             # Load awesome-align model from local path (if available) to avoid HF connection
-            # Default: try to use local model, fallback to HF if not found
+            # Set offline mode BEFORE trying to load models
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            
             # Try multiple possible paths for EFS mount
             possible_paths = [
                 # EFS mount path (SageMaker)
@@ -228,11 +231,17 @@ class TermBasedMetric():
             
             if awesome_align_path is not None:
                 awesome_align_path = Path(awesome_align_path).resolve()
-                # Use local model
-                os.environ["TRANSFORMERS_OFFLINE"] = "1"
-                os.environ["HF_HUB_OFFLINE"] = "1"
-                self.aligner_model = AutoModel.from_pretrained(str(awesome_align_path), local_files_only=True)
-                self.aligner_tokenizer = AutoTokenizer.from_pretrained(str(awesome_align_path), local_files_only=True)
+                print(f"  Loading awesome-align from local path: {awesome_align_path}")
+                # Use local model with strict offline mode
+                self.aligner_model = AutoModel.from_pretrained(
+                    str(awesome_align_path), 
+                    local_files_only=True
+                )
+                self.aligner_tokenizer = AutoTokenizer.from_pretrained(
+                    str(awesome_align_path), 
+                    local_files_only=True,
+                    fix_mistral_regex=True  # Fix the tokenizer regex warning
+                )
                 
                 # Move model to GPU if available
                 import torch
@@ -242,11 +251,12 @@ class TermBasedMetric():
                 else:
                     print(f"  Using CPU for awesome-align model")
             else:
-                # Fallback: try HF (will fail if offline, but user should have model locally)
-                print(f"  ⚠ Warning: awesome-align model not found at {awesome_align_path}")
-                print(f"  Attempting to load from HuggingFace (will fail if offline)...")
-            self.aligner_model = AutoModel.from_pretrained("aneuraz/awesome-align-with-co")
-            self.aligner_tokenizer = AutoTokenizer.from_pretrained("aneuraz/awesome-align-with-co")
+                # No local model found - raise error instead of trying HF
+                raise FileNotFoundError(
+                    f"awesome-align model not found in any of these locations:\n"
+                    f"  {chr(10).join(str(p) for p in possible_paths)}\n"
+                    f"Please ensure the model is downloaded locally before running in offline mode."
+                )
         #self.pseudoreference_mode = pseudoreference_mode
         #self.statistical_metric = statistical_metric
 
