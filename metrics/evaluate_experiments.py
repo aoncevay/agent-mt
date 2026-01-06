@@ -267,7 +267,9 @@ def process_experiment(
     models: List[str],
     labse_model=None,  # Optional pre-loaded SentenceTransformer model
     polyfuzz_model=None,  # Optional pre-loaded PolyFuzz model
-    comet_only: bool = False  # If True, skip TBM computation
+    comet_only: bool = False,  # If True, skip TBM computation
+    metricx_only: bool = False,  # If True, skip TBM computation (WMT25 only)
+    use_metric: str = "metricx"  # "metricx" or "comet"
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single experiment and compute metrics.
@@ -450,16 +452,19 @@ def process_experiment(
         print(f"  Step 2: Skipping term-based metrics (DOLFIN has no terminology)")
     elif comet_only:
         print(f"  Step 2: Skipping term-based metrics (--comet-only flag set)")
+    elif metricx_only:
+        print(f"  Step 2: Skipping term-based metrics (--metricx-only flag set)")
     
-    # 3. Run comet_evaluator (all datasets) - per sample
+    # 3. Run metric evaluator (COMET or MetricX) - per sample
     import time
-    print(f"  Step 3: Computing COMET scores per sample...")
+    metric_name = "MetricX" if use_metric == "metricx" else "COMET"
+    print(f"  Step 3: Computing {metric_name} scores per sample...")
     step3_start = time.time()
     
-    comet_results = {
-        'avg_comet': None,
-        'min_comet': None,
-        'max_comet': None,
+    metric_results = {
+        f'avg_{use_metric}': None,
+        f'min_{use_metric}': None,
+        f'max_{use_metric}': None,
         'per_sample': []
     }
     
@@ -467,14 +472,20 @@ def process_experiment(
     alignment_stats = []
     
     try:
-        from metrics.comet_evaluator import compute_comet_scores
+        if use_metric == "metricx":
+            from metrics.metricx_evaluator import compute_metricx_scores
+            compute_metric_fn = compute_metricx_scores
+        else:
+            from metrics.comet_evaluator import compute_comet_scores
+            compute_metric_fn = compute_comet_scores
+        
         _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
-        _log_with_time("  Loading COMET evaluator...")
+        _log_with_time(f"  Loading {metric_name} evaluator...")
         
         # Group segments by sample (paragraph column indicates document index)
         try:
             from tqdm import tqdm
-            sample_iterator = tqdm(range(len(sample_data)), desc="  Computing COMET per sample")
+            sample_iterator = tqdm(range(len(sample_data)), desc=f"  Computing {metric_name} per sample")
         except ImportError:
             sample_iterator = range(len(sample_data))
         
@@ -490,8 +501,8 @@ def process_experiment(
                     'sample_id': sample_info['sample_id'],
                     'under_translated_segments': 0,  # We'll compute this below
                     'over_translated_segments': 0,
-                    'comet_scores': [],
-                    'avg_comet': None
+                    f'{use_metric}_scores': [],
+                    f'avg_{use_metric}': None
                 })
                 continue
             
@@ -505,12 +516,13 @@ def process_experiment(
                 ref = sample_info['reference_text']
                 segments.append((src, tgt, ref))
             
-            # Compute COMET scores for this sample's segments
-            _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing COMET for {len(segments)} segments...")
-            sample_comet_start = time.time()
-            sample_comet = compute_comet_scores(segments)
-            comet_scores = sample_comet.get('scores', [])
-            _log_with_time(f"      ✓ COMET computed in {time.time() - sample_comet_start:.2f}s (avg: {sample_comet.get('avg_comet', 0):.4f})")
+            # Compute metric scores for this sample's segments
+            _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing {metric_name} for {len(segments)} segments...")
+            sample_metric_start = time.time()
+            sample_metric = compute_metric_fn(segments)
+            metric_scores = sample_metric.get('scores', [])
+            avg_key = f'avg_{use_metric}'
+            _log_with_time(f"      ✓ {metric_name} computed in {time.time() - sample_metric_start:.2f}s (avg: {sample_metric.get(avg_key, 0):.4f})")
             
             # Count alignment statistics
             # Get source and target paragraphs for this sample (same splitting as docpreprocessor)
@@ -557,19 +569,19 @@ def process_experiment(
                 'sample_id': sample_info['sample_id'],
                 'under_translated_segments': under_translated,
                 'over_translated_segments': over_translated,
-                'comet_scores': comet_scores,
-                'avg_comet': sample_comet.get('avg_comet')
+                f'{use_metric}_scores': metric_scores,
+                f'avg_{use_metric}': sample_metric.get(avg_key)
             })
         
-        # Aggregate COMET scores across all samples
-        all_comet_scores = []
+        # Aggregate metric scores across all samples
+        all_metric_scores = []
         for stat in alignment_stats:
-            all_comet_scores.extend(stat['comet_scores'])
+            all_metric_scores.extend(stat[f'{use_metric}_scores'])
         
-        if all_comet_scores:
-            comet_results['avg_comet'] = sum(all_comet_scores) / len(all_comet_scores)
-            comet_results['min_comet'] = min(all_comet_scores)
-            comet_results['max_comet'] = max(all_comet_scores)
+        if all_metric_scores:
+            metric_results[f'avg_{use_metric}'] = sum(all_metric_scores) / len(all_metric_scores)
+            metric_results[f'min_{use_metric}'] = min(all_metric_scores)
+            metric_results[f'max_{use_metric}'] = max(all_metric_scores)
         
         # Aggregate alignment statistics
         total_under = sum(s['under_translated_segments'] for s in alignment_stats)
@@ -577,8 +589,8 @@ def process_experiment(
         avg_under = total_under / len(alignment_stats) if alignment_stats else 0
         avg_over = total_over / len(alignment_stats) if alignment_stats else 0
         
-        comet_results['per_sample'] = alignment_stats
-        comet_results['alignment_stats'] = {
+        metric_results['per_sample'] = alignment_stats
+        metric_results['alignment_stats'] = {
             'total_under_translated_segments': total_under,
             'total_over_translated_segments': total_over,
             'avg_under_translated_segments': avg_under,
@@ -587,17 +599,20 @@ def process_experiment(
         
         step3_time = time.time() - step3_start
         _log_with_time(f"  ✓ Step 3 complete in {step3_time:.2f}s")
-        print(f"    ✓ COMET: avg={comet_results['avg_comet']:.4f}, "
-              f"min={comet_results['min_comet']:.4f}, "
-              f"max={comet_results['max_comet']:.4f}")
+        avg_key = f'avg_{use_metric}'
+        min_key = f'min_{use_metric}'
+        max_key = f'max_{use_metric}'
+        print(f"    ✓ {metric_name}: avg={metric_results[avg_key]:.4f}, "
+              f"min={metric_results[min_key]:.4f}, "
+              f"max={metric_results[max_key]:.4f}")
         print(f"    ✓ Alignment: avg_under={avg_under:.2f}, avg_over={avg_over:.2f}")
         
     except Exception as e:
-        print(f"    ⚠ Warning: Could not compute COMET scores: {e}")
+        print(f"    ⚠ Warning: Could not compute {metric_name} scores: {e}")
         import traceback
         traceback.print_exc()
         
-        # Clear GPU cache on COMET error (COMET uses GPU)
+        # Clear GPU cache on metric error (both metrics use GPU)
         try:
             import torch
             if torch.cuda.is_available():
@@ -625,7 +640,7 @@ def process_experiment(
         'first': tbm_results['first'],
         'frequent': tbm_results['frequent'],
         'predefined': tbm_results['predefined'],
-        'comet': comet_results
+        use_metric: metric_results  # Dynamic key based on use_metric
     }
     
     print(f"  ✓ Processed successfully")
@@ -679,7 +694,9 @@ def get_metrics_file_path(
 def has_complete_metrics(
     metrics_file: Path,
     dataset: str,
-    comet_only: bool = False
+    comet_only: bool = False,
+    metricx_only: bool = False,
+    use_metric: str = "metricx"
 ) -> bool:
     """
     Check if a metrics.json file exists and contains all required metrics.
@@ -703,13 +720,25 @@ def has_complete_metrics(
     except (json.JSONDecodeError, IOError):
         return False
     
-    # Check for COMET (required for both datasets)
-    comet = metrics_data.get('comet', {})
-    if not comet or comet.get('avg_comet') is None:
+    # Check for metric (COMET or MetricX) - required for both datasets
+    # Use the specified metric, or try to detect from data
+    metric_key = use_metric
+    if metric_key not in metrics_data:
+        # Try to detect from data if use_metric not found
+        if 'metricx' in metrics_data:
+            metric_key = 'metricx'
+        elif 'comet' in metrics_data:
+            metric_key = 'comet'
+        else:
+            return False
+    
+    metric_data = metrics_data.get(metric_key, {})
+    avg_key = f'avg_{metric_key}'
+    if not metric_data or metric_data.get(avg_key) is None:
         return False
     
-    # For WMT25, also check for TBM metrics (unless comet_only mode)
-    if dataset == "wmt25" and not comet_only:
+    # For WMT25, also check for TBM metrics (unless comet_only or metricx_only mode)
+    if dataset == "wmt25" and not comet_only and not metricx_only:
         first = metrics_data.get('first', {})
         frequent = metrics_data.get('frequent', {})
         predefined = metrics_data.get('predefined', {})
@@ -784,7 +813,8 @@ def save_metrics_results(
         'first': results.get('first', {}),
         'frequent': results.get('frequent', {}),
         'predefined': results.get('predefined', {}),
-        'comet': results.get('comet', {})
+        'comet': results.get('comet', {}),
+        'metricx': results.get('metricx', {})
     }
     
     # Atomic write
@@ -855,6 +885,19 @@ def main():
              "Useful for faster evaluation or when TBM dependencies are unavailable. "
              "For DOLFIN, this is the default behavior."
     )
+    parser.add_argument(
+        "--metricx-only",
+        action="store_true",
+        help="Compute only MetricX scores, skip term-based metrics (TBM). "
+             "For WMT25 only. Useful for faster evaluation."
+    )
+    parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["metricx", "comet"],
+        default="metricx",
+        help="Which metric to use for evaluation: 'metricx' (default) or 'comet'"
+    )
     
     args = parser.parse_args()
     
@@ -916,7 +959,7 @@ def main():
         if args.resume:
             try:
                 metrics_file = get_metrics_file_path(output_dir, metrics_dir)
-                if has_complete_metrics(metrics_file, args.dataset, comet_only=args.comet_only):
+                if has_complete_metrics(metrics_file, args.dataset, comet_only=args.comet_only, metricx_only=args.metricx_only, use_metric=args.metric):
                     skipped_resume += 1
                     continue
             except (ValueError, Exception):
@@ -986,7 +1029,9 @@ def main():
                     models,
                     labse_model=labse_model,  # Pass the pre-loaded model
                     polyfuzz_model=polyfuzz_model,  # Pass the pre-loaded PolyFuzz model
-                    comet_only=args.comet_only  # Pass the comet_only flag
+                    comet_only=args.comet_only,  # Pass the comet_only flag
+                    metricx_only=args.metricx_only,  # Pass the metricx_only flag
+                    use_metric=args.metric  # Pass the metric choice
                 )
                 
                 if results:
