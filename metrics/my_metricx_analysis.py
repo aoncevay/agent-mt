@@ -16,6 +16,7 @@ Usage:
 import argparse
 import json
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import tiktoken
@@ -234,9 +235,8 @@ def process_experiment_simplified(
     
     print(f"  Processing {len(sample_data)} samples...")
     
-    # Process each sample: split into chunks and compute MetricX
-    all_scores = []
-    per_sample_results = []
+    # Step 1: Prepare all segments from all samples (for efficient batching)
+    all_segments_with_metadata = []
     
     for sample_info in sample_data:
         sample_idx = sample_info['sample_idx']
@@ -282,32 +282,75 @@ def process_experiment_simplified(
             print(f"    ⚠ Sample {sample_idx}: No valid segments with source text after chunking")
             continue
         
-        # Compute MetricX scores for this sample
-        try:
-            metric_result = compute_metricx_scores(
-                valid_segments,
-                metricx_model_path=None,  # Not needed if metric_model is provided
-                mt5_tokenizer_path=None,  # Not needed if tokenizer is provided
-                metric_model=metric_model,
-                tokenizer=tokenizer
-            )
-            
-            sample_scores = metric_result.get('scores', [])
-            if sample_scores:
-                all_scores.extend(sample_scores)
-                per_sample_results.append({
-                    'sample_idx': sample_idx,
-                    'sample_id': sample_id,
-                    'num_chunks': len(valid_segments),
-                    'src_tokens': src_tokens,
-                    'avg_metricx': sum(sample_scores) / len(sample_scores) if sample_scores else None,
-                    'min_metricx': min(sample_scores) if sample_scores else None,
-                    'max_metricx': max(sample_scores) if sample_scores else None,
-                    'scores': sample_scores
-                })
-        except Exception as e:
-            print(f"    ⚠ Sample {sample_idx}: Error computing MetricX: {e}")
-            continue
+        # Store segments with metadata for later aggregation
+        for seg in valid_segments:
+            all_segments_with_metadata.append({
+                'sample_idx': sample_idx,
+                'sample_id': sample_id,
+                'src_tokens': src_tokens,
+                'num_chunks': len(valid_segments),
+                'segment': seg
+            })
+    
+    if not all_segments_with_metadata:
+        print(f"  ✗ No valid segments found across all samples")
+        return None
+    
+    # Step 2: Compute MetricX scores for ALL segments at once (efficient batching)
+    print(f"  Computing MetricX-24 scores for {len(all_segments_with_metadata)} total segments (batched across all samples)...")
+    try:
+        # Extract just the segments for MetricX computation
+        all_segments = [item['segment'] for item in all_segments_with_metadata]
+        
+        metric_result = compute_metricx_scores(
+            all_segments,
+            metricx_model_path=None,  # Not needed if metric_model is provided
+            mt5_tokenizer_path=None,  # Not needed if tokenizer is provided
+            metric_model=metric_model,
+            tokenizer=tokenizer
+        )
+        
+        all_scores = metric_result.get('scores', [])
+        
+        if not all_scores or len(all_scores) != len(all_segments_with_metadata):
+            print(f"  ⚠ Warning: Score count mismatch: {len(all_scores)} scores for {len(all_segments_with_metadata)} segments")
+            return None
+        
+        # Step 3: Aggregate scores back by sample
+        per_sample_scores = defaultdict(list)
+        per_sample_metadata = {}
+        
+        for item, score in zip(all_segments_with_metadata, all_scores):
+            sample_idx = item['sample_idx']
+            per_sample_scores[sample_idx].append(score)
+            # Store metadata once per sample
+            if sample_idx not in per_sample_metadata:
+                per_sample_metadata[sample_idx] = {
+                    'sample_id': item['sample_id'],
+                    'src_tokens': item['src_tokens'],
+                    'num_chunks': item['num_chunks']
+                }
+        
+        # Build per-sample results
+        per_sample_results = []
+        for sample_idx, scores in per_sample_scores.items():
+            metadata = per_sample_metadata[sample_idx]
+            per_sample_results.append({
+                'sample_idx': sample_idx,
+                'sample_id': metadata['sample_id'],
+                'num_chunks': metadata['num_chunks'],
+                'src_tokens': metadata['src_tokens'],
+                'avg_metricx': sum(scores) / len(scores) if scores else None,
+                'min_metricx': min(scores) if scores else None,
+                'max_metricx': max(scores) if scores else None,
+                'scores': scores
+            })
+        
+    except Exception as e:
+        print(f"  ✗ Error computing MetricX scores: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
     
     if not all_scores:
         print(f"  ✗ No MetricX scores computed")
