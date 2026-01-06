@@ -153,7 +153,33 @@ def compute_comet_scores(
     # Convert to absolute path and check if model exists
     comet_model_path = Path(comet_model_path).resolve()
     
-    if not comet_model_path.exists():
+    # COMET's load_from_checkpoint expects a checkpoint FILE, not a directory
+    # If the path is a directory, look for the checkpoint file inside it
+    if comet_model_path.is_dir():
+        # Try common checkpoint file locations
+        possible_checkpoint_files = [
+            comet_model_path / "checkpoints" / "model.ckpt",  # Standard COMET structure
+            comet_model_path / "model.ckpt",  # Alternative location
+            comet_model_path / "checkpoint.ckpt",  # Another alternative
+        ]
+        
+        checkpoint_found = False
+        for checkpoint_file in possible_checkpoint_files:
+            if checkpoint_file.exists() and checkpoint_file.is_file():
+                comet_model_path = checkpoint_file
+                checkpoint_found = True
+                break
+        
+        if not checkpoint_found:
+            raise FileNotFoundError(
+                f"COMET-DA model directory found at {comet_model_path}, but no checkpoint file found.\n"
+                f"Looked for:\n"
+                f"  - {comet_model_path / 'checkpoints' / 'model.ckpt'}\n"
+                f"  - {comet_model_path / 'model.ckpt'}\n"
+                f"  - {comet_model_path / 'checkpoint.ckpt'}\n"
+                f"Please ensure the checkpoint file exists in one of these locations."
+            )
+    elif not comet_model_path.exists():
         raise FileNotFoundError(
             f"COMET-DA model not found at {comet_model_path}\n"
             f"Please ensure the model is downloaded and available.\n"
@@ -177,7 +203,17 @@ def compute_comet_scores(
     try:
         # Check if model uses sparsemax (which requires entmax)
         # If entmax is not available, we'll use softmax as fallback
-        hparams_file = Path(comet_model_path).parent.parent / "hparams.yaml"
+        # hparams.yaml is located at checkpoint_path.parent.parent (two levels up from checkpoint file)
+        # If checkpoint is at wmt22-comet-da/checkpoints/model.ckpt, hparams is at wmt22-comet-da/hparams.yaml
+        # If checkpoint is at wmt22-comet-da/model.ckpt, hparams is at wmt22-comet-da/hparams.yaml
+        checkpoint_path_obj = Path(comet_model_path)
+        if checkpoint_path_obj.is_file():
+            # Checkpoint is a file, hparams is two levels up
+            hparams_file = checkpoint_path_obj.parent.parent / "hparams.yaml"
+        else:
+            # Checkpoint is a directory, hparams is in the same directory
+            hparams_file = checkpoint_path_obj / "hparams.yaml"
+        
         use_softmax_fallback = False
         
         if hparams_file.exists():
