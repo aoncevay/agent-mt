@@ -15,6 +15,7 @@ Note: The generated LaTeX tables require the following packages in your .tex fil
 """
 
 import argparse
+import json
 import math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -111,8 +112,18 @@ def get_color_for_value(value: float, min_val: float, max_val: float, metric_typ
             return "\\cellcolor{red!10}"
         else:
             return "\\cellcolor{red!25}"
+    elif metric_type == "metricx":
+        # For MetricX-24, low is good (green), high is bad (red) - inverse scale
+        if normalized <= 0.3:
+            return "\\cellcolor{green!25}"
+        elif normalized <= 0.5:
+            return "\\cellcolor{green!10}"
+        elif normalized <= 0.7:
+            return "\\cellcolor{red!10}"
+        else:
+            return "\\cellcolor{red!25}"
     else:
-        # For chrF++ and MetricX-24, high is good (green), low is bad (red)
+        # For chrF++, high is good (green), low is bad (red)
         if normalized >= 0.7:
             return "\\cellcolor{green!25}"
         elif normalized >= 0.5:
@@ -127,8 +138,8 @@ def format_value(value: Optional[float], metric_type: str = "chrf") -> str:
     """Format a numeric value for LaTeX, returning empty string if None."""
     if value is None:
         return "---"
-    # Use 2 decimals for TermAcc and Cost, 1 for others
-    if metric_type == "termacc" or metric_type == "cost":
+    # Use 2 decimals for TermAcc, MetricX, and Cost, 1 for others
+    if metric_type == "termacc" or metric_type == "metricx" or metric_type == "cost":
         return f"{value:.2f}"
     return f"{value:.1f}"
 
@@ -168,9 +179,51 @@ def format_value_with_star(value: Optional[float], metric_type: str, rank: Optio
         return formatted
 
 
+def get_metricx_score(
+    dataset: str,
+    lang_pair: str,
+    workflow_dir: str,
+    model: str,
+    metrics_base_dir: Path = Path("metrics/results")
+) -> Optional[float]:
+    """
+    Read MetricX score from metrics.json file.
+    
+    Args:
+        dataset: Dataset name (e.g., "dolfin", "wmt25")
+        lang_pair: Language pair (e.g., "en_de", "en-zht")
+        workflow_dir: Workflow directory name (e.g., "IRB", "IRB.term")
+        model: Model name (e.g., "gpt-4-1")
+        metrics_base_dir: Base directory for metrics results
+    
+    Returns:
+        Average MetricX score if found, None otherwise
+    """
+    metrics_file = metrics_base_dir / dataset / lang_pair / workflow_dir / model / "metrics.json"
+    
+    if not metrics_file.exists():
+        return None
+    
+    try:
+        with open(metrics_file, 'r', encoding='utf-8') as f:
+            metrics_data = json.load(f)
+        
+        metricx_data = metrics_data.get("metricx", {})
+        if metricx_data:
+            avg_metricx = metricx_data.get("avg_metricx")
+            if avg_metricx is not None:
+                return float(avg_metricx)
+    except (json.JSONDecodeError, IOError, ValueError, KeyError):
+        # Skip if file doesn't exist, is invalid JSON, or missing data
+        pass
+    
+    return None
+
+
 def collect_data_by_workflow_model(
     reports_by_dataset_lang: Dict,
-    reports_by_dataset_lang_term: Dict
+    reports_by_dataset_lang_term: Dict,
+    metrics_base_dir: Path = Path("metrics/results")
 ) -> Dict[str, Dict[str, Dict[str, Dict[str, Dict[str, Optional[float]]]]]]:
     """
     Organize data by workflow -> model -> dataset -> lang_pair -> metric -> value.
@@ -218,6 +271,12 @@ def collect_data_by_workflow_model(
             tokens_output = report.get("tokens_output", 0)
             cost = calculate_cost(tokens_input, tokens_output, model, use_batch=False)
             data[workflow][model]["dolfin"][lang_pair]["cost"] = cost
+            
+            # Try to read MetricX score from metrics.json
+            workflow_dir = workflow  # For DOLFIN, no .term suffix
+            metricx_score = get_metricx_score(dataset, lang_pair, workflow_dir, model, metrics_base_dir)
+            if metricx_score is not None:
+                data[workflow][model]["dolfin"][lang_pair]["metricx"] = metricx_score
     
     # Process term reports (WMT25 only)
     for (dataset, lang_pair), reports in reports_by_dataset_lang_term.items():
@@ -247,6 +306,13 @@ def collect_data_by_workflow_model(
             tokens_output = report.get("tokens_output", 0)
             cost = calculate_cost(tokens_input, tokens_output, model, use_batch=False)
             data[workflow][model]["wmt25_term"][lang_pair]["cost"] = cost
+            
+            # Try to read MetricX score from metrics.json
+            # For WMT25 term workflows, workflow_dir has .term suffix
+            workflow_dir = f"{workflow}.term"
+            metricx_score = get_metricx_score(dataset, lang_pair, workflow_dir, model, metrics_base_dir)
+            if metricx_score is not None:
+                data[workflow][model]["wmt25_term"][lang_pair]["metricx"] = metricx_score
     
     return data
 
@@ -311,11 +377,16 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     
     # Compute averages first
     dolfin_chrf_avg = compute_averages(data, "dolfin", "chrf", DOLFIN_LANG_PAIRS)
+    dolfin_metricx_avg = compute_averages(data, "dolfin", "metricx", DOLFIN_LANG_PAIRS)
     
     # Compute min/max for color coding from Avg values (since we color the Avg column)
     chrf_values = [val for val in dolfin_chrf_avg.values() if val is not None]
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
+    
+    metricx_values = [val for val in dolfin_metricx_avg.values() if val is not None]
+    metricx_min = min(metricx_values) if metricx_values else 0
+    metricx_max = max(metricx_values) if metricx_values else 100
     
     # Compute total costs (sum across all lang pairs)
     dolfin_total_costs = compute_total_costs(data, "dolfin", DOLFIN_LANG_PAIRS)
@@ -426,10 +497,15 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # MetricX-24 columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It) - empty for now
-            row_parts.append("---")  # Avg column (empty)
-            for _ in DOLFIN_LANG_PAIRS:
-                row_parts.append("---")  # Individual lang pair columns (empty)
+            # MetricX-24 columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It)
+            avg_val = dolfin_metricx_avg.get((workflow, model))
+            color = get_color_for_value(avg_val, metricx_min, metricx_max, "metricx") if avg_val is not None else ""
+            formatted = format_value(avg_val, "metricx")
+            row_parts.append(f"{color}{formatted}")
+            
+            for lang_pair in DOLFIN_LANG_PAIRS:
+                val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("metricx")
+                row_parts.append(format_value(val, "metricx"))
             
             # Cost column (Total) - inverse color scale (lower is better)
             # Use logarithmic normalization for better distribution across wide cost range
@@ -475,6 +551,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     # Compute averages first
     wmt25_chrf_avg = compute_averages(data, "wmt25_term", "chrf", WMT25_LANG_PAIRS)
+    wmt25_metricx_avg = compute_averages(data, "wmt25_term", "metricx", WMT25_LANG_PAIRS)
     wmt25_termacc_avg = compute_averages(data, "wmt25_term", "termacc", WMT25_LANG_PAIRS)
     
     # Compute min/max for color coding from Avg values (since we color the Avg column)
@@ -482,9 +559,13 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     chrf_min = min(chrf_values) if chrf_values else 0
     chrf_max = max(chrf_values) if chrf_values else 100
     
+    metricx_values = [val for val in wmt25_metricx_avg.values() if val is not None]
+    metricx_min = min(metricx_values) if metricx_values else 0
+    metricx_max = max(metricx_values) if metricx_values else 100
+    
     termacc_values = [val for val in wmt25_termacc_avg.values() if val is not None]
     termacc_min = min(termacc_values) if termacc_values else 0
-    termacc_max = max(termacc_values) if termacc_values else 100
+    termacc_max = max(termacc_values) if termacc_values else 1
     
     # Compute total costs (sum across all lang pairs)
     wmt25_total_costs = compute_total_costs(data, "wmt25_term", WMT25_LANG_PAIRS)
@@ -616,10 +697,17 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # MetricX-24 columns (3 columns: Avg, En-Zht, Zht-En) - empty for now
-            row_parts.append("---")  # Avg column (empty)
-            for _ in WMT25_LANG_PAIRS:
-                row_parts.append("---")  # Individual lang pair columns (empty)
+            # MetricX-24 columns (3 columns: Avg, En-Zht, Zht-En)
+            avg_val = wmt25_metricx_avg.get((workflow, model))
+            color = get_color_for_value(avg_val, metricx_min, metricx_max, "metricx") if avg_val is not None else ""
+            formatted = format_value(avg_val, "metricx")
+            row_parts.append(f"{color}{formatted}")
+            
+            for lang_pair in WMT25_LANG_PAIRS:
+                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("metricx")
+                row_parts.append(format_value(val, "metricx"))
+                val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("metricx")
+                row_parts.append(format_value(val, "metricx"))
             
             # TermAcc columns (3 columns: Avg, En-Zht, Zht-En)
             avg_val = wmt25_termacc_avg.get((workflow, model))
