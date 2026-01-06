@@ -142,7 +142,27 @@ def process_experiment_simplified(
     
     workflow_name = report_data.get('workflow', '')
     model_name = report_data.get('model', '')
-    lang_pair = report_data.get('lang_pair', '')
+    # Extract lang_pair from path (set by find_experiments) or report
+    lang_pair = report_data.get('_lang_pair') or report_data.get('lang_pair', '')
+    
+    # If still empty, try to extract from output_dir path
+    if not lang_pair:
+        parts = output_dir.parts
+        try:
+            # Path structure: outputs/{dataset}/{lang_pair}/{workflow}/{model}/
+            outputs_idx = None
+            for i, part in enumerate(parts):
+                if part in ['outputs', 'outputs_qwen3']:
+                    outputs_idx = i
+                    break
+            if outputs_idx is not None and len(parts) > outputs_idx + 2:
+                lang_pair = parts[outputs_idx + 2]
+        except (ValueError, IndexError):
+            pass
+    
+    if not lang_pair:
+        print(f"  ✗ Could not determine lang_pair for experiment")
+        return None
     
     print(f"\n{'='*80}")
     print(f"Processing: {workflow_name} + {model_name}")

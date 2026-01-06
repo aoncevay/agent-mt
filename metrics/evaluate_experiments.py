@@ -226,11 +226,20 @@ def load_sample_data(
         (source_text, reference_text, terminology) or None if not found
     """
     try:
+        # Validate lang_pair
+        if not lang_pair or not lang_pair.strip():
+            print(f"  ⚠ Warning: Empty lang_pair for sample {sample_idx}")
+            return None
+        
         # Get data loader
         if dataset == "wmt25":
             data_loader = get_data_loader(dataset, data_dir, target_languages=None)
         elif dataset == "dolfin":
             # For DOLFIN, we need to create loader with specific lang_pair
+            # Validate lang_pair format (should be like "en_es", "en_de", etc.)
+            if '_' not in lang_pair:
+                print(f"  ⚠ Warning: Invalid lang_pair format for DOLFIN: {lang_pair} (expected format: en_es)")
+                return None
             from src.data_loaders import DOLFINDataLoader
             data_loader = DOLFINDataLoader(data_dir / "dolfin", lang_pair=lang_pair)
         else:
