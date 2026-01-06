@@ -347,6 +347,7 @@ class DocPreprocessor:
             (ref_segment is None if references not provided)
         """
         df_data = []
+        skipped_segments_count = 0  # Track segments skipped due to missing src-ref alignment
         
         _log_with_time(f"  Processing {len(documents)} document(s)...")
         start_time = time.time()
@@ -369,22 +370,30 @@ class DocPreprocessor:
                 src_text, tgt_text, separator=separator
             )
             
-            # Split reference paragraphs using same separator (reference should match source structure)
+            # Align reference paragraphs with source paragraphs using LaBSE
+            # (Reference should align with source, not assume 1-to-1 correspondence)
             ref_paragraphs = None
+            ref_para_alignment = None  # Track which ref para aligns with which src para
             if ref_text:
-                ref_paragraphs = [p.strip() for p in ref_text.split(separator) if p.strip()]
-                # If paragraph counts don't match, try to align them
-                if len(ref_paragraphs) != len(src_paragraphs):
-                    # For now, pad or truncate to match (reference should match source structure)
-                    if len(ref_paragraphs) < len(src_paragraphs):
-                        ref_paragraphs.extend([''] * (len(src_paragraphs) - len(ref_paragraphs)))
-                    else:
-                        ref_paragraphs = ref_paragraphs[:len(src_paragraphs)]
+                ref_paragraphs_raw = [p.strip() for p in ref_text.split(separator) if p.strip()]
+                if ref_paragraphs_raw:
+                    # Align reference paragraphs with source paragraphs using LaBSE
+                    _log_with_time(f"      Aligning reference paragraphs with source paragraphs...")
+                    ref_paragraphs, ref_para_alignment = self._align_reference_paragraphs(
+                        src_paragraphs, ref_paragraphs_raw
+                    )
+                    # Check alignment quality
+                    unaligned_src = sum(1 for align in ref_para_alignment if align is None)
+                    if unaligned_src > 0:
+                        _log_with_time(f"      ⚠ WARNING: {unaligned_src} source paragraphs have no aligned reference paragraph")
+                else:
+                    _log_with_time(f"      ⚠ WARNING: Reference text has no paragraphs after splitting")
+                    ref_paragraphs = []
             
             _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs" + 
                           (f", Reference: {len(ref_paragraphs)} paragraphs" if ref_paragraphs else ""))
             
-            # Align paragraphs
+            # Align paragraphs (source -> translation)
             for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
                 # Split into sentences
                 src_sentences = self._split_sentences(src_para, self.src_lang)
@@ -393,16 +402,47 @@ class DocPreprocessor:
                 if not src_sentences or not tgt_sentences:
                     continue
                 
-                # Split reference sentences using same method (reference should match source structure)
+                # Get aligned reference paragraph for this source paragraph
+                ref_para = None
                 ref_sentences = None
-                if ref_paragraphs and para_idx < len(ref_paragraphs):
-                    ref_para = ref_paragraphs[para_idx]
-                    if ref_para:
-                        ref_sentences = self._split_sentences(ref_para, self.tgt_lang)
+                ref_sent_alignment = None  # Maps src_sent_idx -> ref_sent_idx (or None if unaligned)
+                has_ref_alignment = False
                 
-                # Check if source and reference have same number of sentences
-                if ref_sentences and len(ref_sentences) != len(src_sentences):
-                    _log_with_time(f"      ⚠ Warning: Paragraph {para_idx}: Source has {len(src_sentences)} sentences, Reference has {len(ref_sentences)} sentences")
+                if ref_paragraphs and ref_para_alignment and para_idx < len(ref_para_alignment):
+                    ref_para_idx = ref_para_alignment[para_idx]
+                    if ref_para_idx is not None and ref_para_idx < len(ref_paragraphs):
+                        ref_para = ref_paragraphs[ref_para_idx]
+                        has_ref_alignment = True
+                    else:
+                        _log_with_time(f"      ⚠ WARNING: Source paragraph {para_idx} has no aligned reference paragraph")
+                
+                # Split and align reference sentences with source sentences
+                # Default: If same count, use 1-to-1. Else: align using LaBSE
+                if ref_para:
+                    ref_sentences_raw = self._split_sentences(ref_para, self.tgt_lang)
+                    if ref_sentences_raw:
+                        if len(ref_sentences_raw) == len(src_sentences):
+                            # Same count: use 1-to-1 correspondence (no alignment needed)
+                            ref_sentences = ref_sentences_raw
+                            ref_sent_alignment = list(range(len(ref_sentences_raw)))
+                        else:
+                            # Different counts: align using LaBSE
+                            _log_with_time(f"      Aligning {len(ref_sentences_raw)} reference sentences with {len(src_sentences)} source sentences in paragraph {para_idx} (counts differ)...")
+                            ref_sentences, ref_sent_alignment = self._align_reference_sentences(
+                                src_sentences, ref_sentences_raw, similarity_threshold
+                            )
+                            # Check alignment quality
+                            unaligned_src_sents = sum(1 for align in ref_sent_alignment if align is None)
+                            if unaligned_src_sents > 0:
+                                _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: {unaligned_src_sents}/{len(src_sentences)} source sentences have no aligned reference sentence")
+                    else:
+                        _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: Reference paragraph has no sentences after splitting")
+                        ref_sentences = []
+                        ref_sent_alignment = [None] * len(src_sentences)
+                else:
+                    _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: No reference paragraph available")
+                    ref_sentences = []
+                    ref_sent_alignment = [None] * len(src_sentences)
                 
                 # Align sentences using LaBSE (source -> translation)
                 alignment = self._align_sentences(src_sentences, tgt_sentences, similarity_threshold)
@@ -429,22 +469,38 @@ class DocPreprocessor:
                                     src_sentence_idx = idx
                                     break
                     
-                    # Get corresponding reference segment using source sentence index
+                    # Get corresponding reference segment using alignment mapping
                     # IMPORTANT: Every source segment MUST have a reference segment
                     # (even if target is empty - this represents under-translation and will be penalized)
                     ref_seg = None
-                    if ref_sentences:
-                        if src_sentence_idx is not None:
-                            # We have a source sentence index - get the corresponding reference
-                            if src_sentence_idx < len(ref_sentences):
-                                ref_seg = ref_sentences[src_sentence_idx]
+                    has_ref_seg = False
+                    
+                    if ref_sent_alignment and src_sentence_idx is not None:
+                        # Use the alignment mapping to get the reference sentence index
+                        if src_sentence_idx < len(ref_sent_alignment):
+                            ref_sent_idx = ref_sent_alignment[src_sentence_idx]
+                            if ref_sent_idx is not None and ref_sent_idx < len(ref_sentences):
+                                ref_seg = ref_sentences[ref_sent_idx]
+                                has_ref_seg = True
                             else:
-                                # This shouldn't happen if source and reference have same structure
-                                _log_with_time(f"      ⚠ Warning: Source sentence index {src_sentence_idx} >= reference sentences ({len(ref_sentences)})")
-                        # If src_sentence_idx is None, this is an unaligned target sentence (over-translation)
-                        # For over-translation, we don't have a source, so we can't get a reference
-                        # This is correct - over-translated segments will be counted but won't have reference
-                        # (MetricX might handle this differently, but typically we compare source->target vs source->reference)
+                                # Source sentence has no aligned reference sentence
+                                _log_with_time(f"      ⚠ WARNING: Source sentence {src_sentence_idx} in paragraph {para_idx} has no aligned reference sentence")
+                        else:
+                            _log_with_time(f"      ⚠ WARNING: Source sentence index {src_sentence_idx} >= alignment mapping length ({len(ref_sent_alignment)})")
+                    elif src_seg and not has_ref_seg:
+                        # Fallback: try to find by text matching (shouldn't happen if alignment worked)
+                        for idx, src_sent in enumerate(src_sentences):
+                            if src_seg == src_sent or (len(src_seg) > 10 and (src_seg in src_sent or src_sent in src_seg)):
+                                if ref_sent_alignment and idx < len(ref_sent_alignment):
+                                    ref_sent_idx = ref_sent_alignment[idx]
+                                    if ref_sent_idx is not None and ref_sent_idx < len(ref_sentences):
+                                        ref_seg = ref_sentences[ref_sent_idx]
+                                        has_ref_seg = True
+                                        break
+                    
+                    # If src_sentence_idx is None AND src_seg is empty, this is an unaligned target sentence (over-translation)
+                    # For over-translation, we don't have a source, so we can't get a reference
+                    # This is correct - over-translated segments will be counted but won't have reference
                     
                     df_data.append({
                         'document': doc_idx,  # Document/sample index
@@ -464,8 +520,13 @@ class DocPreprocessor:
         total_time = time.time() - start_time
         _log_with_time(f"  Processed {len(documents)} document(s) in {total_time:.2f}s")
         
+        if skipped_segments_count > 0:
+            _log_with_time(f"  ⚠ WARNING: Skipped {skipped_segments_count} segments due to missing src-ref alignment")
+        
         # Create DataFrame
         self.df = pd.DataFrame(df_data)
+        # Store skipped count as attribute for reporting
+        self.skipped_segments_count = skipped_segments_count
         return self.df
     
     def _paragraph_aligner(self, src_text: str, tgt_text: str, separator: str = '\n\n') -> Tuple[List[str], List[str]]:
@@ -528,6 +589,130 @@ class DocPreprocessor:
             # Fallback: simple 1-to-1 alignment
             min_len = min(len(src_paragraphs), len(tgt_paragraphs))
             return src_paragraphs[:min_len], tgt_paragraphs[:min_len]
+    
+    def _align_reference_paragraphs(
+        self, 
+        src_paragraphs: List[str], 
+        ref_paragraphs: List[str],
+        similarity_threshold: float = 0.4
+    ) -> Tuple[List[str], List[Optional[int]]]:
+        """
+        Align reference paragraphs with source paragraphs using LaBSE.
+        
+        Returns:
+            Tuple of (aligned_ref_paragraphs, alignment_mapping)
+            - aligned_ref_paragraphs: List of reference paragraphs in source order (empty string if unaligned)
+            - alignment_mapping: List mapping src_para_idx -> ref_para_idx (None if unaligned)
+        """
+        if len(src_paragraphs) == len(ref_paragraphs):
+            # Simple 1-to-1 alignment (assume same structure)
+            return ref_paragraphs, list(range(len(ref_paragraphs)))
+        
+        # LaBSE-based alignment
+        try:
+            matches = self.model.match(src_paragraphs, ref_paragraphs)
+            
+            aligned_ref = []
+            alignment_mapping = []
+            used_ref_indices = set()
+            
+            for src_idx, src_para in enumerate(src_paragraphs):
+                best_ref_idx = None
+                best_score = 0.0
+                
+                for ref_idx, ref_para in enumerate(ref_paragraphs):
+                    if ref_idx in used_ref_indices:
+                        continue
+                    
+                    try:
+                        score = float(matches['Similarity'].iloc[src_idx * len(ref_paragraphs) + ref_idx]) if hasattr(matches, 'iloc') else 0.0
+                    except:
+                        score = 0.0
+                    
+                    if score > best_score and score >= similarity_threshold:
+                        best_score = score
+                        best_ref_idx = ref_idx
+                
+                if best_ref_idx is not None:
+                    aligned_ref.append(ref_paragraphs[best_ref_idx])
+                    alignment_mapping.append(best_ref_idx)
+                    used_ref_indices.add(best_ref_idx)
+                else:
+                    # Unaligned source paragraph
+                    aligned_ref.append("")
+                    alignment_mapping.append(None)
+            
+            return aligned_ref, alignment_mapping
+            
+        except Exception as e:
+            _log_with_time(f"      ⚠ Reference paragraph alignment failed: {e}, using simple 1-to-1")
+            # Fallback: simple 1-to-1 alignment
+            min_len = min(len(src_paragraphs), len(ref_paragraphs))
+            aligned_ref = ref_paragraphs[:min_len] + [""] * (len(src_paragraphs) - min_len)
+            alignment_mapping = list(range(min_len)) + [None] * (len(src_paragraphs) - min_len)
+            return aligned_ref, alignment_mapping
+    
+    def _align_reference_sentences(
+        self,
+        src_sentences: List[str],
+        ref_sentences: List[str],
+        similarity_threshold: float = 0.4
+    ) -> Tuple[List[str], List[Optional[int]]]:
+        """
+        Align reference sentences with source sentences using LaBSE.
+        
+        Returns:
+            Tuple of (aligned_ref_sentences, alignment_mapping)
+            - aligned_ref_sentences: List of reference sentences in source order (empty string if unaligned)
+            - alignment_mapping: List mapping src_sent_idx -> ref_sent_idx (None if unaligned)
+        """
+        if len(src_sentences) == len(ref_sentences):
+            # Simple 1-to-1 alignment (assume same structure)
+            return ref_sentences, list(range(len(ref_sentences)))
+        
+        # LaBSE-based alignment
+        try:
+            matches = self.model.match(src_sentences, ref_sentences)
+            
+            aligned_ref = []
+            alignment_mapping = []
+            used_ref_indices = set()
+            
+            for src_idx, src_sent in enumerate(src_sentences):
+                best_ref_idx = None
+                best_score = 0.0
+                
+                for ref_idx, ref_sent in enumerate(ref_sentences):
+                    if ref_idx in used_ref_indices:
+                        continue
+                    
+                    try:
+                        score = float(matches['Similarity'].iloc[src_idx * len(ref_sentences) + ref_idx]) if hasattr(matches, 'iloc') else 0.0
+                    except:
+                        score = 0.0
+                    
+                    if score > best_score and score >= similarity_threshold:
+                        best_score = score
+                        best_ref_idx = ref_idx
+                
+                if best_ref_idx is not None:
+                    aligned_ref.append(ref_sentences[best_ref_idx])
+                    alignment_mapping.append(best_ref_idx)
+                    used_ref_indices.add(best_ref_idx)
+                else:
+                    # Unaligned source sentence
+                    aligned_ref.append("")
+                    alignment_mapping.append(None)
+            
+            return aligned_ref, alignment_mapping
+            
+        except Exception as e:
+            _log_with_time(f"      ⚠ Reference sentence alignment failed: {e}, using simple 1-to-1")
+            # Fallback: simple 1-to-1 alignment
+            min_len = min(len(src_sentences), len(ref_sentences))
+            aligned_ref = ref_sentences[:min_len] + [""] * (len(src_sentences) - min_len)
+            alignment_mapping = list(range(min_len)) + [None] * (len(src_sentences) - min_len)
+            return aligned_ref, alignment_mapping
     
     def _split_sentences(self, text: str, lang: str) -> List[str]:
         """Split text into sentences."""

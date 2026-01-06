@@ -391,6 +391,8 @@ def process_experiment(
     from metrics.tmp_utils import save_aligned_df, load_aligned_df, has_aligned_df
     import torch
     
+    skipped_count = 0  # Track segments skipped due to missing src-ref alignment
+    
     # Check if we should load from tmp (metricx_only or tbm_only)
     if (metricx_only or tbm_only) and has_aligned_df(output_dir, dataset, lang_pair):
         _log_with_time(f"  Step 1: Loading aligned segments from tmp file...")
@@ -398,6 +400,7 @@ def process_experiment(
         if tmp_result:
             aligned_df, sample_data = tmp_result
             print(f"    ✓ Loaded {len(aligned_df)} aligned segments from tmp")
+            # Note: skipped_count is not available from tmp files (would need to save it separately)
         else:
             print(f"    ✗ Could not load tmp file, need to run --labse-only first")
             return None
@@ -436,7 +439,8 @@ def process_experiment(
             similarity_threshold=0.4,
             separator='\n\n'
         )
-        print(f"    ✓ Aligned {len(aligned_df)} segments")
+        skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
+        print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
         
         # Save to tmp file
         tmp_file = save_aligned_df(aligned_df, output_dir, dataset, lang_pair, sample_data)
@@ -494,7 +498,8 @@ def process_experiment(
             similarity_threshold=0.4,
             separator='\n\n'
         )
-        print(f"    ✓ Aligned {len(aligned_df)} segments")
+        skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
+        print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
         
         # Clear GPU memory after LaBSE (before loading MetricX/COMET)
         if use_gpu:
@@ -623,18 +628,23 @@ def process_experiment(
                     ref = row.get('ref_segment')
                     
                     # Handle reference segment
-                    if ref is None or (isinstance(ref, float) and pd.isna(ref)):
+                    # Check if reference was successfully aligned (has_ref_alignment flag)
+                    has_ref_alignment = row.get('has_ref_alignment', True)  # Default True for backward compatibility
+                    
+                    if ref is None or (isinstance(ref, float) and pd.isna(ref)) or (isinstance(ref, str) and not ref.strip()):
                         # If we have a source segment but no reference, this is a problem
                         # (every source should have a reference)
-                        if src:  # Source exists but no reference
-                            # Fallback: use full reference text (shouldn't happen if alignment worked)
-                            ref = sample_info.get('reference_text', '')
-                            if ref:
-                                print(f"      ⚠ Warning: Source segment has no reference for sample {sample_idx}, segment {idx}, using full reference")
-                            else:
-                                print(f"      ⚠ Warning: Source segment has no reference and no reference_text for sample {sample_idx}, segment {idx}")
-                        # If no source (over-translation), ref can be None - this is OK
-                        ref = ref if ref else ""
+                        if src and src.strip():  # Source exists but no reference
+                            # DO NOT use full reference text - this should not happen
+                            # If alignment failed, we should flag it and skip or use empty
+                            print(f"      ⚠ WARNING: Source segment has no aligned reference for sample {sample_idx}, segment {idx} (alignment failed)")
+                            ref = ""  # Use empty string, not full reference
+                        else:
+                            # No source (over-translation) - ref can be empty, this is OK
+                            ref = ""
+                    elif not has_ref_alignment:
+                        # Reference exists but alignment flag indicates it's not properly aligned
+                        print(f"      ⚠ WARNING: Source segment {idx} in sample {sample_idx} has reference but alignment flag is False")
                     else:
                         ref = str(ref)
                     
@@ -721,7 +731,8 @@ def process_experiment(
                 'total_under_translated_segments': total_under,
                 'total_over_translated_segments': total_over,
                 'avg_under_translated_segments': avg_under,
-                'avg_over_translated_segments': avg_over
+                'avg_over_translated_segments': avg_over,
+                'skipped_segments_no_ref_alignment': skipped_count  # Segments skipped due to missing src-ref alignment
             }
             
             step3_time = time.time() - step3_start
