@@ -594,6 +594,14 @@ def process_experiment(
         print(f"    ⚠ Warning: Could not compute COMET scores: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Clear GPU cache on COMET error (COMET uses GPU)
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
     
     # Build results
     # Note: experiment_start is defined at the beginning of process_experiment
@@ -987,7 +995,26 @@ def main():
                 print(f"  ✗ Error processing experiment: {e}")
                 import traceback
                 traceback.print_exc()
+                
+                # Clear GPU cache on error to prevent memory buildup
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        print(f"  ✓ Cleared GPU cache after error")
+                except Exception:
+                    pass
+                
                 continue
+    
+    # Final GPU cleanup
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            _log_with_time("Cleared GPU cache after evaluation")
+    except Exception:
+        pass
     
     print("\n" + "="*80)
     print("Evaluation complete!")
