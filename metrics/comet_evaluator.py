@@ -296,14 +296,50 @@ def compute_comet_scores(
                     os.environ["HF_HOME"] = str(hf_models_dir)
                     # Also set TRANSFORMERS_CACHE
                     os.environ["TRANSFORMERS_CACHE"] = str(hf_models_dir)
-                    # Most importantly: if the model is directly in HF_models/xlm-roberta-large,
-                    # transformers might not find it automatically. We'll need to patch the encoder
-                    # to use the local path, or create a symlink structure.
-                    # For now, try setting the path directly in the environment
                     print(f"  ✓ Set HF_HOME={hf_models_dir}")
                     print(f"  ✓ Set TRANSFORMERS_CACHE={hf_models_dir}")
-                    print(f"  Note: If tokenizer still fails to load, you may need to create a symlink:")
-                    print(f"    ln -s {local_pretrained_path} ~/.cache/huggingface/hub/models--xlm-roberta-large/snapshots/main")
+                    
+                    # Create symlink structure that transformers expects
+                    # This is needed because transformers with local_files_only=True expects
+                    # models in ~/.cache/huggingface/hub/models--{model_name}/snapshots/{hash}/
+                    # Try EFS cache first (if we're on EFS), then fall back to home directory
+                    if "/mnt/custom-file-systems/efs" in str(local_pretrained_path):
+                        # Use EFS for cache (more reliable in SageMaker)
+                        cache_base = Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f") / ".cache" / "huggingface" / "hub"
+                    else:
+                        # Use home directory cache
+                        cache_base = Path.home() / ".cache" / "huggingface" / "hub"
+                    
+                    model_cache_name = f"models--{pretrained_model_name.replace('/', '--')}"
+                    snapshots_dir = cache_base / model_cache_name / "snapshots"
+                    main_snapshot = snapshots_dir / "main"
+                    
+                    try:
+                        # Create directory structure if it doesn't exist
+                        snapshots_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Create symlink if it doesn't exist or is broken
+                        if main_snapshot.exists():
+                            if main_snapshot.is_symlink():
+                                # Check if symlink is valid
+                                if not main_snapshot.resolve().exists():
+                                    print(f"  ⚠ Removing broken symlink: {main_snapshot}")
+                                    main_snapshot.unlink()
+                                else:
+                                    print(f"  ✓ Symlink already exists: {main_snapshot}")
+                                    break
+                            else:
+                                print(f"  ⚠ {main_snapshot} exists but is not a symlink, skipping")
+                        else:
+                            # Create the symlink
+                            main_snapshot.symlink_to(local_pretrained_path)
+                            print(f"  ✓ Created symlink: {main_snapshot} -> {local_pretrained_path}")
+                    except (OSError, PermissionError) as e:
+                        print(f"  ⚠ Could not create symlink: {e}")
+                        print(f"  You may need to create it manually:")
+                        print(f"    mkdir -p {snapshots_dir}")
+                        print(f"    ln -s {local_pretrained_path} {main_snapshot}")
+                    
                     break
         
         if not local_pretrained_path:
