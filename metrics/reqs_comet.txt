@@ -1,0 +1,18 @@
+# COMET dependencies (required when using cloned COMET repo)
+# Note: unbabel-comet is not available via pip in SageMaker environment.
+# Instead, clone the COMET repository to:
+#   - other_repos/COMET (local development)
+#   - ~/user-default-efs/tools/COMET (SageMaker)
+#   - /mnt/custom-file-systems/efs/.../tools/COMET (SageMaker EFS mount)
+# The code will automatically detect and use the cloned repository.
+# unbabel-comet>=2.0.0  # Not needed if using cloned repo
+pytorch-lightning>=2.0.0  # Required by COMET
+sentencepiece>=0.2.0  # Required by COMET
+jsonargparse==3.13.1  # Required by COMET
+torchmetrics>=0.10.2  # Required by COMET
+sacrebleu>=2.0.0  # Required by COMET
+scipy>=1.5.4  # Required by COMET
+entmax>=1.1  # Required by COMET
+huggingface-hub>=0.19.3,<1.0  # Required by COMET
+protobuf>=4.24.4  # Required by COMET
+pyyaml  # Required by COMET (for loading hparams.yaml)
