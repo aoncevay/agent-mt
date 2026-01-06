@@ -1581,7 +1581,7 @@ def plot_dataset_avg_price_pareto_simplified(
     pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
     
     # Create figure: same size for both chrF++ and term acc
-    figsize = (3.5, 2.5)
+    figsize = (3.5, 2.0)
     _fig, ax = plt.subplots(figsize=figsize)
     
     # Set log scale for x-axis

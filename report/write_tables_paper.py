@@ -375,8 +375,8 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     
     # First header row: chrF++ | MetricX-24 | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
-    header1 += "\\multicolumn{5}{c}{\\textbf{chrF++}} & "
-    header1 += "\\multicolumn{5}{c}{\\textbf{MetricX-24}} & "
+    header1 += "\\multicolumn{5}{c}{\\textbf{chrF++} $\\uparrow$} & "
+    header1 += "\\multicolumn{5}{c}{\\textbf{MetricX-24} $\\downarrow$} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
     lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-12} \\cmidrule(lr){13-13}")
@@ -564,9 +564,9 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     
     # First header row: chrF++ | MetricX-24 | TermAcc | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{chrF++}} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{MetricX-24}} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc}} & "
+    header1 += "\\multicolumn{3}{c}{\\textbf{chrF++} $\\uparrow$} & "
+    header1 += "\\multicolumn{3}{c}{\\textbf{MetricX-24} $\\downarrow$} & "
+    header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc} $\\uparrow$} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
     lines.append("\\cmidrule(lr){3-5} \\cmidrule(lr){6-8} \\cmidrule(lr){9-11} \\cmidrule(lr){12-12}")
