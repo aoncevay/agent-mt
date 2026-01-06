@@ -15,7 +15,7 @@ except ImportError:
 from transformers import AutoModel, AutoTokenizer
 import itertools
 import torch
-import stanza
+import spacy
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score # TODO: generalize to input other metrics
@@ -28,19 +28,16 @@ import jieba
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-# Set STANZA_RESOURCES_DIR if not already set (for offline use)
-# Users can set this to point to a local directory with downloaded Stanza models
-if "STANZA_RESOURCES_DIR" not in os.environ:
-    # Try common locations for SageMaker EFS
-    possible_paths = [
-        Path.home() / "user-default-efs" / "stanza_resources",
-        Path("/mnt/custom-file-systems/efs") / "stanza_resources",
-        Path.home() / "stanza_resources",
-    ]
-    for path in possible_paths:
-        if path.exists():
-            os.environ["STANZA_RESOURCES_DIR"] = str(path)
-            break
+# Map language codes to spaCy model names
+SPACY_MODEL_MAP = {
+    'en': 'en_core_web_sm',
+    'de': 'de_core_news_sm',
+    'es': 'es_core_news_sm',
+    'fr': 'fr_core_news_sm',
+    'it': 'it_core_news_sm',
+    'zh': 'zh_core_web_sm',
+    'zht': 'zh_core_web_sm',  # Traditional Chinese uses same model
+}
 
 
 class TermBasedMetric():
@@ -57,8 +54,8 @@ class TermBasedMetric():
     Attributes:
         lang_src (str): Source language code (e.g., 'en').
         lang_tgt (str): Target language code (e.g., 'cs').
-        stanza_src: A stanza pipeline object for processing the source language.
-        stanza_tgt: A stanza pipeline object for processing the target language.
+        spacy_src: A spaCy nlp object for processing the source language.
+        spacy_tgt: A spaCy nlp object for processing the target language.
         ru_morph: A pymorphy3 MorphAnalyzer object for Russian text analysis.
         keyword_extractor (str): Specifies the keyword extraction method.
         aligner (str): Specifies the alignment algorithm.
@@ -71,7 +68,7 @@ class TermBasedMetric():
 
     def __init__(self, src_lang: str, tgt_lang: str, keyword_extractor: str, aligner: str):
         # TODO: consider reallocating keyword-extractor and aligner params to extract_keywords and align methods
-        # TODO: more consistent lemmatizers (stanza_src/tgt VS ru_morph for Russian VS jieba for Chinese)
+        # TODO: more consistent lemmatizers (spacy_src/tgt VS ru_morph for Russian VS jieba for Chinese)
         '''
         initializes the term-based metric instance.
 
@@ -81,8 +78,26 @@ class TermBasedMetric():
         :param aligner: name of the automatic alignment algorithm. {'fastalign', 'awesomealign', 'llm'}, default: 'llm'
         '''
         self.lang_src, self.lang_tgt = src_lang, tgt_lang
-        self.stanza_src = stanza.Pipeline(self.lang_src, processors='tokenize,lemma', lemma_pretagged=True, tokenize_pretokenized=False)
-        self.stanza_tgt = stanza.Pipeline(self.lang_tgt, processors='tokenize,lemma', lemma_pretagged=True, tokenize_pretokenized=False)
+        
+        # Initialize spaCy models for lemmatization
+        self.spacy_src = None
+        self.spacy_tgt = None
+        
+        try:
+            src_model = SPACY_MODEL_MAP.get(self.lang_src)
+            if src_model:
+                self.spacy_src = spacy.load(src_model, disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+        except (OSError, IOError) as e:
+            print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_src}: {e}")
+            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
+        
+        try:
+            tgt_model = SPACY_MODEL_MAP.get(self.lang_tgt)
+            if tgt_model:
+                self.spacy_tgt = spacy.load(tgt_model, disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+        except (OSError, IOError) as e:
+            print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_tgt}: {e}")
+            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
         # pymorphy3 only needed for Russian, not used in our experiments
         # self.ru_morph = pymorphy3.MorphAnalyzer()
         self.ru_morph = None
@@ -624,30 +639,43 @@ Translated term: """
 
     def _normalize_word(self, word, lang):
         """
-        language-specific word normalization (stanza for most languages, PyMorphy for Russian, no lemmatization for Chinese).
+        language-specific word normalization (spaCy for most languages, PyMorphy for Russian, no lemmatization for Chinese).
 
         Parameters:
         :param word: str, The word to be normalized.
         :param lang: str, language code representing the language of the provided word. Supported
-            values include 'ru', 'en', 'de', 'es', and 'zh'.
+            values include 'ru', 'en', 'de', 'es', 'fr', 'it', and 'zh'.
 
         :return: str, normalized form of the input word.
         """
         if lang == 'ru':
             if self.ru_morph is None:
                 # pymorphy3 not available (not needed for our experiments)
-                return word  # Return word as-is if Russian normalization not available
+                return word.lower()  # Return lowercase if Russian normalization not available
             return self.ru_morph.parse(word)[0].normal_form
-        elif lang in ['en', 'de', 'es']:
+        elif lang in ['en', 'de', 'es', 'fr', 'it']:
+            # Use spaCy for lemmatization
+            nlp = None
             if lang == self.lang_src:
-                doc = self.stanza_src(word)
+                nlp = self.spacy_src
             elif lang == self.lang_tgt:
-                doc = self.stanza_tgt(word)
-            # print(f'output{doc}, type: {type(doc)}')
-            lemmas = [word.lemma for sent in doc.sentences for word in sent.words]
-            return lemmas[0].lower()
-        elif lang == 'zh':
-            return word
+                nlp = self.spacy_tgt
+            
+            if nlp is not None:
+                try:
+                    doc = nlp(word)
+                    if len(doc) > 0:
+                        return doc[0].lemma_.lower()
+                except Exception:
+                    pass  # Fall through to lowercase fallback
+            
+            # Fallback to lowercase if spaCy not available or fails
+            return word.lower()
+        elif lang in ['zh', 'zht']:
+            return word  # Chinese: no lemmatization, return as-is
+        else:
+            # Unknown language: just lowercase
+            return word.lower()
 
     def _normalize_pseudoreference_candidates(self, src_terms, alg_dict):
         """

@@ -16,26 +16,23 @@ from polyfuzz import PolyFuzz
 from polyfuzz.models import Embeddings
 from flair.embeddings import TransformerWordEmbeddings
 from flair.embeddings import SentenceTransformerDocumentEmbeddings
-import stanza
+import spacy
 from nltk.tokenize import word_tokenize
 
 # Set environment variables to prevent HuggingFace connections
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-# Set STANZA_RESOURCES_DIR if not already set (for offline use)
-# Users can set this to point to a local directory with downloaded Stanza models
-if "STANZA_RESOURCES_DIR" not in os.environ:
-    # Try common locations for SageMaker EFS
-    possible_paths = [
-        Path.home() / "user-default-efs" / "stanza_resources",
-        Path("/mnt/custom-file-systems/efs") / "stanza_resources",
-        Path.home() / "stanza_resources",
-    ]
-    for path in possible_paths:
-        if path.exists():
-            os.environ["STANZA_RESOURCES_DIR"] = str(path)
-            break
+# Map language codes to spaCy model names
+SPACY_MODEL_MAP = {
+    'en': 'en_core_web_sm',
+    'de': 'de_core_news_sm',
+    'es': 'es_core_news_sm',
+    'fr': 'fr_core_news_sm',
+    'it': 'it_core_news_sm',
+    'zh': 'zh_core_web_sm',
+    'zht': 'zh_core_web_sm',  # Traditional Chinese uses same model
+}
 
 # Global cache for loaded models and embeddings (loaded once, reused everywhere)
 _loaded_models_cache = {}
@@ -280,11 +277,14 @@ class DocPreprocessor:
         
         _log_with_time("  ✓ DocPreprocessor initialized with cached models")
         
-        # Initialize stanza for English normalization (if needed)
+        # Initialize spaCy for English normalization (if needed)
+        self.spacy_en = None
         if src_lang == 'en':
-            self.stanza_en = stanza.Pipeline('en', processors='tokenize,lemma', lemma_pretagged=True, tokenize_pretokenized=False)
-        else:
-            self.stanza_en = None
+            try:
+                self.spacy_en = spacy.load('en_core_web_sm', disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+            except (OSError, IOError) as e:
+                _log_with_time(f"  ⚠ Warning: Could not load spaCy English model: {e}")
+                _log_with_time(f"  ⚠ English normalization will use lowercase fallback")
 
     def process_documents(
         self,
