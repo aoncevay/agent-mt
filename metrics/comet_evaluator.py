@@ -8,6 +8,7 @@ Works with cloned COMET repository (no pip install needed).
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 import sys
+import yaml
 
 
 def _find_comet_repo() -> Optional[Path]:
@@ -174,8 +175,42 @@ def compute_comet_scores(
     # Load COMET model
     print(f"  Loading COMET-DA model from {comet_model_path}...")
     try:
-        # Try to load from local path
-        model = load_from_checkpoint(str(comet_model_path))
+        # Check if model uses sparsemax (which requires entmax)
+        # If entmax is not available, we'll use softmax as fallback
+        hparams_file = Path(comet_model_path).parent.parent / "hparams.yaml"
+        use_softmax_fallback = False
+        
+        if hparams_file.exists():
+            try:
+                with open(hparams_file, encoding='utf-8') as f:
+                    hparams = yaml.safe_load(f)
+                if hparams.get("layer_transformation") == "sparsemax":
+                    # Check if entmax is available
+                    try:
+                        import entmax  # noqa: F401
+                        # entmax is available, no fallback needed
+                    except ImportError:
+                        # entmax not available, use softmax fallback
+                        print(f"  ⚠ Model uses sparsemax but entmax not available, using softmax fallback")
+                        use_softmax_fallback = True
+            except Exception:
+                # If we can't read hparams, proceed normally
+                pass
+        
+        if use_softmax_fallback:
+            # Load with softmax override
+            from comet.models import str2model
+            model_class = str2model[hparams["class_identifier"]]
+            model = model_class.load_from_checkpoint(
+                str(comet_model_path),
+                layer_transformation="softmax",
+                load_pretrained_weights=False,
+                strict=False,
+                local_files_only=True
+            )
+        else:
+            # Normal loading (model uses softmax or entmax is available)
+            model = load_from_checkpoint(str(comet_model_path))
         
         # Check GPU availability and inform user
         import torch

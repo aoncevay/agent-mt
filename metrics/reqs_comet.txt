@@ -12,7 +12,8 @@ jsonargparse==3.13.1  # Required by COMET
 torchmetrics>=0.10.2  # Required by COMET
 sacrebleu>=2.0.0  # Required by COMET
 scipy>=1.5.4  # Required by COMET
-entmax>=1.1  # Required by COMET
+# entmax>=1.1  # Optional: Only needed if model uses sparsemax (most models use softmax)
+                # If not available, code will automatically use softmax fallback
 huggingface-hub>=0.19.3,<1.0  # Required by COMET
 protobuf>=4.24.4  # Required by COMET
 pyyaml  # Required by COMET (for loading hparams.yaml)
