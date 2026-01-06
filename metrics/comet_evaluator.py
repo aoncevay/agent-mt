@@ -13,7 +13,7 @@ import sys
 def _find_comet_repo() -> Optional[Path]:
     """
     Find the cloned COMET repository.
-    Checks both local (other_repos/COMET) and SageMaker (~/user-default-efs/tools) paths.
+    Checks both local (other_repos/COMET) and SageMaker paths (EFS mount and home directory).
     
     Returns:
         Path to COMET repository, or None if not found
@@ -23,7 +23,16 @@ def _find_comet_repo() -> Optional[Path]:
     if local_path.exists():
         return local_path
     
-    # Try SageMaker path
+    # Try EFS mount path (SageMaker)
+    efs_paths = [
+        Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/tools/COMET"),
+        Path("/mnt/custom-file-systems/efs/tools/COMET"),
+    ]
+    for efs_path in efs_paths:
+        if efs_path.exists():
+            return efs_path
+    
+    # Try SageMaker home directory path
     sagemaker_path = Path.home() / "user-default-efs" / "tools" / "COMET"
     if sagemaker_path.exists():
         return sagemaker_path
@@ -63,16 +72,38 @@ def _load_comet_module():
         # Try the main import path (from comet/__init__.py)
         from comet import load_from_checkpoint, download_model
         return load_from_checkpoint, download_model
-    except ImportError:
+    except ImportError as e:
+        # Check if it's a missing dependency issue
+        error_msg = str(e)
+        if "pytorch_lightning" in error_msg or "pytorch-lightning" in error_msg:
+            raise ImportError(
+                f"COMET requires 'pytorch_lightning' but it's not installed.\n"
+                f"Please install it with: pip install pytorch-lightning\n"
+                f"Or add it to your requirements.txt.\n"
+                f"COMET repo found at: {comet_repo_str}\n"
+                f"Original error: {error_msg}"
+            )
         # Try alternative import path (from comet.models)
         try:
             from comet.models import load_from_checkpoint, download_model
             return load_from_checkpoint, download_model
-        except ImportError:
+        except ImportError as e2:
+            error_msg2 = str(e2)
+            if "pytorch_lightning" in error_msg2 or "pytorch-lightning" in error_msg2:
+                raise ImportError(
+                    f"COMET requires 'pytorch_lightning' but it's not installed.\n"
+                    f"Please install it with: pip install pytorch-lightning\n"
+                    f"Or add it to your requirements.txt.\n"
+                    f"COMET repo found at: {comet_repo_str}\n"
+                    f"Original error: {error_msg2}"
+                )
             raise ImportError(
                 f"Could not import COMET from {comet_repo}. "
                 f"Please ensure the repository is properly cloned and dependencies are installed.\n"
-                f"Path checked: {comet_repo_str}"
+                f"Path checked: {comet_repo_str}\n"
+                f"Original error: {error_msg2}\n"
+                f"Required dependencies: pytorch-lightning, torch, transformers, pandas, numpy, etc.\n"
+                f"See other_repos/COMET/pyproject.toml for full list."
             )
 
 
