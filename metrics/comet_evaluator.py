@@ -449,21 +449,58 @@ def compute_comet_scores(
     translations = [seg[1] for seg in segments]
     references = [seg[2] for seg in segments]
     
+    # Handle over-translation (empty source): assign worst possible score (0.0 for COMET)
+    # Per SEGALE paper: "For each null alignment, the worst possible score is assigned:
+    # 0 for COMET, 25 for MetricX"
+    over_translation_indices = []
+    valid_segments = []
+    valid_indices = []
+    
+    for idx, (src, tgt, ref) in enumerate(zip(sources, translations, references)):
+        if not src or not src.strip():
+            # Over-translation: empty source, target exists
+            # Assign worst possible score (0.0 for COMET, where higher is better)
+            over_translation_indices.append(idx)
+        else:
+            valid_segments.append((src, tgt, ref))
+            valid_indices.append(idx)
+    
     # Compute scores
     import time
     print(f"  Computing COMET scores for {len(segments)} segments...")
+    if over_translation_indices:
+        print(f"  ⚠ {len(over_translation_indices)} over-translated segments will receive penalty score (0.0)")
     _log_with_time = lambda msg: print(f"[{time.strftime('%H:%M:%S')}] {msg}")
     
-    _log_with_time("  Preparing data for COMET...")
-    data = [
-        {"src": src, "mt": mt, "ref": ref}
-        for src, mt, ref in zip(sources, translations, references)
-    ]
+    all_scores = [None] * len(segments)  # Pre-allocate with None
     
-    _log_with_time(f"  Running COMET prediction (batch_size=8, gpus=1)...")
-    predict_start = time.time()
-    scores, _ = model.predict(data, batch_size=8, gpus=1)
-    _log_with_time(f"  ✓ COMET prediction completed in {time.time() - predict_start:.2f}s")
+    if valid_segments:
+        _log_with_time("  Preparing data for COMET...")
+        data = [
+            {"src": src, "mt": mt, "ref": ref}
+            for src, mt, ref in valid_segments
+        ]
+        
+        _log_with_time(f"  Running COMET prediction (batch_size=8, gpus=1)...")
+        predict_start = time.time()
+        valid_scores, _ = model.predict(data, batch_size=8, gpus=1)
+        _log_with_time(f"  ✓ COMET prediction completed in {time.time() - predict_start:.2f}s")
+        
+        # Convert to list if needed (COMET may return numpy array)
+        if hasattr(valid_scores, 'tolist'):
+            valid_scores = valid_scores.tolist()
+        else:
+            valid_scores = list(valid_scores)
+        
+        # Assign valid scores to their positions
+        for valid_idx, score in zip(valid_indices, valid_scores):
+            all_scores[valid_idx] = score
+    
+    # Assign penalty scores (0.0) for over-translated segments
+    for over_idx in over_translation_indices:
+        all_scores[over_idx] = 0.0
+    
+    scores = all_scores
     
     # Convert to list if needed (COMET may return numpy array)
     if hasattr(scores, 'tolist'):

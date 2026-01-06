@@ -199,10 +199,21 @@ def compute_metricx_scores(
         references = [seg[2] for seg in segments]
         
         # Format inputs for MetricX-24 (same format as metricx24.predict expects)
-        inputs = [
-            f"source: {src} target: {tgt} reference: {ref}"
-            for src, tgt, ref in zip(sources, translations, references)
-        ]
+        # Handle over-translation (empty source): assign penalty score of 0.0
+        # Handle under-translation (empty target): MetricX will naturally penalize (low score)
+        inputs = []
+        over_translation_indices = []  # Track indices with empty source (over-translation)
+        
+        for idx, (src, tgt, ref) in enumerate(zip(sources, translations, references)):
+            if not src or not src.strip():
+                # Over-translation: empty source, target exists
+                # Per SEGALE paper: assign worst possible score (25 for MetricX, 0 for COMET)
+                # MetricX range is [0, 25] where 25 is worst (higher = worse quality)
+                over_translation_indices.append(idx)
+                # Still create input for consistency, but we'll replace the score
+                inputs.append(f"source:  target: {tgt} reference: {ref}")
+            else:
+                inputs.append(f"source: {src} target: {tgt} reference: {ref}")
         
         # Process in batches to avoid GPU OOM
         # MetricX-24 can handle large batches, but we'll use smaller batches for safety
@@ -238,7 +249,19 @@ def compute_metricx_scores(
             
             # Parse scores from generated text
             import re
-            for text in generated_texts:
+            batch_start_idx = i
+            for batch_idx, text in enumerate(generated_texts):
+                global_idx = batch_start_idx + batch_idx
+                
+                # Check if this is an over-translation segment (empty source)
+                if global_idx in over_translation_indices:
+                    # Over-translation: assign worst possible score (25 for MetricX)
+                    # Per SEGALE paper: "For each null alignment, the worst possible score is assigned:
+                    # 0 for COMET, 25 for MetricX"
+                    # MetricX range is [0, 25] where 25 is worst (higher = worse quality)
+                    all_scores.append(25.0)
+                    continue
+                
                 try:
                     # Extract the first number from the generated text
                     numbers = re.findall(r'\d+\.?\d*', text.strip())

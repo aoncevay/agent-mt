@@ -650,6 +650,8 @@ def process_experiment(
                     
                     # Only add segments that have at least source or target
                     # (we need at least one to compute MetricX)
+                    # For over-translation (empty src, tgt exists): we include it but MetricX might handle it
+                    # For under-translation (src exists, empty tgt): we include it to penalize (MetricX will give low score)
                     if src or tgt:
                         segments.append((src, tgt, ref))
                 
