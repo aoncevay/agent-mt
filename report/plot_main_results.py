@@ -497,10 +497,13 @@ def create_flat_workflow_legend(workflows: Set[str], output_path: Path):
     ordered_workflows = []
     for workflow in WORKFLOW_ORDER:
         if workflow in workflows and workflow in WORKFLOW_COLORS:
+            # Exclude ADT
+            if workflow == "ADT":
+                continue
             ordered_workflows.append(workflow)
     
     # Add any remaining workflows not in WORKFLOW_ORDER (sorted alphabetically)
-    remaining = sorted([w for w in workflows if w not in WORKFLOW_ORDER and w in WORKFLOW_COLORS])
+    remaining = sorted([w for w in workflows if w not in WORKFLOW_ORDER and w in WORKFLOW_COLORS and w != "ADT"])
     ordered_workflows.extend(remaining)
     
     for workflow in ordered_workflows:
@@ -1462,6 +1465,10 @@ def create_workflow_shape_legend(output_path: Path):
     
     for workflow in WORKFLOW_ORDER:
         if workflow not in WORKFLOW_SHAPES:
+            continue
+        
+        # Exclude ADT
+        if workflow == "ADT":
             continue
         
         shape = WORKFLOW_SHAPES[workflow]
