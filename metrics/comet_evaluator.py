@@ -233,6 +233,88 @@ def compute_comet_scores(
                 # If we can't read hparams, proceed normally
                 pass
         
+        # The tokenizer needs to be loaded from xlm-roberta-large, but those files
+        # are not in wmt22-comet-da directory. The issue is that COMET tries to load
+        # the tokenizer with local_files_only=True, but can't find the vocab files.
+        #
+        # Solution: Check if xlm-roberta-large exists locally, and if so, set
+        # environment variables to help transformers find it. If not found, we'll
+        # need to allow network access just for the tokenizer (but user blocks this).
+        pretrained_model_name = hparams.get("pretrained_model", "xlm-roberta-large")
+        local_pretrained_path = None
+        
+        # Check common locations for xlm-roberta-large
+        possible_xlmr_paths = [
+            Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models") / pretrained_model_name,
+            Path.home() / "user-default-efs" / "HF_models" / pretrained_model_name,
+            Path.home() / ".cache" / "huggingface" / "hub" / f"models--{pretrained_model_name.replace('/', '--')}",
+        ]
+        
+        for xlmr_path in possible_xlmr_paths:
+            if xlmr_path.exists():
+                # Check for tokenizer files
+                # XLM-RoBERTa uses SentencePiece, so we need:
+                # - sentencepiece.bpe.model (required)
+                # - tokenizer.json (required for fast tokenizer)
+                # - tokenizer_config.json (required)
+                tokenizer_files = [
+                    xlmr_path / "tokenizer.json",
+                    xlmr_path / "sentencepiece.bpe.model",  # SentencePiece model (not vocab.json/merges.txt)
+                    xlmr_path / "tokenizer_config.json",
+                ]
+                # Also check in snapshots subdirectory (HF cache structure)
+                if (xlmr_path / "snapshots").exists():
+                    for snapshot_dir in (xlmr_path / "snapshots").iterdir():
+                        if snapshot_dir.is_dir():
+                            snapshot_tokenizer_files = [
+                                snapshot_dir / "tokenizer.json",
+                                snapshot_dir / "sentencepiece.bpe.model",
+                                snapshot_dir / "tokenizer_config.json",
+                            ]
+                            if any(f.exists() for f in snapshot_tokenizer_files):
+                                local_pretrained_path = str(snapshot_dir)
+                                break
+                else:
+                    # Direct model directory - check if critical files exist
+                    critical_files = [
+                        xlmr_path / "sentencepiece.bpe.model",
+                        xlmr_path / "tokenizer.json",
+                    ]
+                    if any(f.exists() for f in critical_files):
+                        local_pretrained_path = str(xlmr_path)
+                
+                if local_pretrained_path:
+                    print(f"  ✓ Found {pretrained_model_name} tokenizer at: {local_pretrained_path}")
+                    # Set environment variables so transformers can find it
+                    import os
+                    # Transformers looks for models in:
+                    # 1. HF_HOME/hub/models--{model_name}/snapshots/{hash}/
+                    # 2. Or directly if passed as a path
+                    # Since COMET uses the model name, we need to make sure transformers can find it
+                    # Set HF_HOME to point to the directory containing HF_models
+                    hf_models_dir = Path(local_pretrained_path).parent.parent
+                    os.environ["HF_HOME"] = str(hf_models_dir)
+                    # Also set TRANSFORMERS_CACHE
+                    os.environ["TRANSFORMERS_CACHE"] = str(hf_models_dir)
+                    # Most importantly: if the model is directly in HF_models/xlm-roberta-large,
+                    # transformers might not find it automatically. We'll need to patch the encoder
+                    # to use the local path, or create a symlink structure.
+                    # For now, try setting the path directly in the environment
+                    print(f"  ✓ Set HF_HOME={hf_models_dir}")
+                    print(f"  ✓ Set TRANSFORMERS_CACHE={hf_models_dir}")
+                    print(f"  Note: If tokenizer still fails to load, you may need to create a symlink:")
+                    print(f"    ln -s {local_pretrained_path} ~/.cache/huggingface/hub/models--xlm-roberta-large/snapshots/main")
+                    break
+        
+        if not local_pretrained_path:
+            print(f"  ⚠ Warning: Could not find {pretrained_model_name} tokenizer files locally.")
+            print(f"  The tokenizer needs sentencepiece.bpe.model, tokenizer.json, and tokenizer_config.json files.")
+            print(f"  These should be in the {pretrained_model_name} model directory.")
+            print(f"  Searched in:")
+            for p in possible_xlmr_paths:
+                print(f"    - {p}")
+            print(f"  Will attempt to load anyway (may fail if tokenizer files are missing)...")
+        
         if use_softmax_fallback:
             # Load with softmax override
             from comet.models import str2model
@@ -246,7 +328,7 @@ def compute_comet_scores(
             )
         else:
             # Normal loading (model uses softmax or entmax is available)
-            model = load_from_checkpoint(str(comet_model_path))
+            model = load_from_checkpoint(str(comet_model_path), local_files_only=True)
         
         # Check GPU availability and inform user
         import torch
