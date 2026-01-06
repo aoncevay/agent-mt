@@ -266,7 +266,8 @@ def process_experiment(
     workflows: List[str],
     models: List[str],
     labse_model=None,  # Optional pre-loaded SentenceTransformer model
-    polyfuzz_model=None  # Optional pre-loaded PolyFuzz model
+    polyfuzz_model=None,  # Optional pre-loaded PolyFuzz model
+    comet_only: bool = False  # If True, skip TBM computation
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single experiment and compute metrics.
@@ -417,14 +418,17 @@ def process_experiment(
     )
     print(f"    ✓ Aligned {len(aligned_df)} segments")
     
-    # 2. Run termbasedmetric (WMT25-Term only)
+    # 2. Run termbasedmetric (WMT25-Term only, and only if not comet_only)
     tbm_results = {
         'first': {'micro': None, 'macro': None},
         'frequent': {'micro': None, 'macro': None},
         'predefined': {'micro': None, 'macro': None}
     }
     
-    if dataset == "wmt25" and terminology:
+    # Skip TBM for DOLFIN (no terminology) or if --comet-only flag is set
+    should_compute_tbm = (dataset == "wmt25" and terminology and not comet_only)
+    
+    if should_compute_tbm:
         print(f"  Step 2: Computing term-based metrics...")
         try:
             from metrics.termbasedmetric import TermBasedMetric
@@ -442,6 +446,10 @@ def process_experiment(
             
         except Exception as e:
             print(f"    ⚠ Warning: Could not compute term-based metrics: {e}")
+    elif dataset == "dolfin":
+        print(f"  Step 2: Skipping term-based metrics (DOLFIN has no terminology)")
+    elif comet_only:
+        print(f"  Step 2: Skipping term-based metrics (--comet-only flag set)")
     
     # 3. Run comet_evaluator (all datasets) - per sample
     import time
@@ -660,7 +668,8 @@ def get_metrics_file_path(
 
 def has_complete_metrics(
     metrics_file: Path,
-    dataset: str
+    dataset: str,
+    comet_only: bool = False
 ) -> bool:
     """
     Check if a metrics.json file exists and contains all required metrics.
@@ -689,8 +698,8 @@ def has_complete_metrics(
     if not comet or comet.get('avg_comet') is None:
         return False
     
-    # For WMT25, also check for TBM metrics
-    if dataset == "wmt25":
+    # For WMT25, also check for TBM metrics (unless comet_only mode)
+    if dataset == "wmt25" and not comet_only:
         first = metrics_data.get('first', {})
         frequent = metrics_data.get('frequent', {})
         predefined = metrics_data.get('predefined', {})
@@ -829,6 +838,13 @@ def main():
              "For WMT25: requires TBM (first/frequent/predefined) and COMET. "
              "For DOLFIN: requires COMET only."
     )
+    parser.add_argument(
+        "--comet-only",
+        action="store_true",
+        help="Compute only COMET scores, skip term-based metrics (TBM). "
+             "Useful for faster evaluation or when TBM dependencies are unavailable. "
+             "For DOLFIN, this is the default behavior."
+    )
     
     args = parser.parse_args()
     
@@ -860,6 +876,8 @@ def main():
         print(f"Workflow filter: {args.workflow}")
     if args.model:
         print(f"Model filter: {args.model}")
+    if args.comet_only:
+        print(f"Mode: COMET-only (skipping term-based metrics)")
     print(f"Output directories: {[str(d) for d in outputs_dirs]}")
     print(f"Metrics output: {metrics_dir}")
     print("="*80)
@@ -888,7 +906,7 @@ def main():
         if args.resume:
             try:
                 metrics_file = get_metrics_file_path(output_dir, metrics_dir)
-                if has_complete_metrics(metrics_file, args.dataset):
+                if has_complete_metrics(metrics_file, args.dataset, comet_only=args.comet_only):
                     skipped_resume += 1
                     continue
             except (ValueError, Exception):
@@ -957,7 +975,8 @@ def main():
                     workflows,
                     models,
                     labse_model=labse_model,  # Pass the pre-loaded model
-                    polyfuzz_model=polyfuzz_model  # Pass the pre-loaded PolyFuzz model
+                    polyfuzz_model=polyfuzz_model,  # Pass the pre-loaded PolyFuzz model
+                    comet_only=args.comet_only  # Pass the comet_only flag
                 )
                 
                 if results:
