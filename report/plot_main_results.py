@@ -25,6 +25,10 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from scipy.spatial import ConvexHull
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
 
 # Language ID to name mapping
 LANGUAGE_ID2NAME = {
@@ -1760,6 +1764,277 @@ def plot_dataset_avg_price_pareto_simplified(
     print(f"Created simplified Pareto plot: {output_path}")
 
 
+def plot_dataset_avg_price_pareto_simplified_with_cluster(
+    dataset: str,
+    reports_by_lang_pair: Dict[str, List[Dict]],
+    output_dir: Path,
+    metric: str = "termacc",  # Only for TermAcc
+    use_batch: bool = False,
+    is_term: bool = False,
+    connect_points: bool = False
+):
+    """
+    Create simplified Pareto optimality plot for TermAcc with clustering analysis.
+    Uses capacity tier shapes (triangles for GPT-4.1/Qwen3-235B, squares for others),
+    workflow colors, and k-means clustering visualization.
+    Only shows Rank 1 Pareto stars (no labels).
+    """
+    # Import table module to use its data extraction functions
+    import importlib.util
+    table_script_path = Path(__file__).parent / "write_tables_paper.py"
+    spec = importlib.util.spec_from_file_location("write_tables_paper", table_script_path)
+    table_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(table_module)
+    
+    # Convert reports_by_lang_pair to the format expected by table functions
+    reports_by_dataset_lang = {}
+    reports_by_dataset_lang_term = {}
+    
+    for lang_pair, reports in reports_by_lang_pair.items():
+        if is_term:
+            reports_by_dataset_lang_term[(dataset, lang_pair)] = reports
+        else:
+            reports_by_dataset_lang[(dataset, lang_pair)] = reports
+    
+    # Use table's data collection function
+    data = table_module.collect_data_by_workflow_model(
+        reports_by_dataset_lang,
+        reports_by_dataset_lang_term
+    )
+    
+    # Determine dataset key and lang pairs
+    if dataset == "dolfin":
+        dataset_key = "dolfin"
+        lang_pairs = table_module.DOLFIN_LANG_PAIRS
+    elif dataset == "wmt25" and is_term:
+        dataset_key = "wmt25_term"
+        lang_pairs = table_module.WMT25_LANG_PAIRS
+    else:
+        return  # Unknown dataset
+    
+    # Use table's compute functions
+    if metric == "termacc":
+        metric_key = "termacc"
+        averages = table_module.compute_averages(data, dataset_key, metric_key, lang_pairs)
+    else:
+        return  # Only for TermAcc
+    
+    total_costs = table_module.compute_total_costs(data, dataset_key, lang_pairs)
+    
+    # Build data points using table's exact values
+    data_points = []
+    workflows = set()
+    models = set()
+    
+    for workflow in table_module.WORKFLOW_ORDER:
+        for model in table_module.MODEL_ORDER:
+            key = (workflow, model)
+            avg_value = averages.get(key)
+            total_cost = total_costs.get(key)
+            
+            if avg_value is not None and total_cost is not None:
+                workflows.add(workflow)
+                models.add(model)
+                data_points.append({
+                    "workflow": workflow,
+                    "model": model,
+                    "value": avg_value,
+                    "cost": total_cost
+                })
+    
+    if not data_points:
+        return
+    
+    # Extract costs and values for Pareto analysis
+    costs = [d["cost"] for d in data_points]
+    values = [d["value"] for d in data_points]
+    
+    # Compute Pareto ranks with percentile-based quality threshold (75th percentile)
+    min_value = np.percentile(values, 75) if len(values) > 1 else None
+    pareto_ranks = compute_pareto_ranks(costs, values, min_value=min_value)
+    
+    # Prepare data for k-means clustering (standardized cost and TermAcc)
+    # For log scale cost, use log(cost) for clustering
+    log_costs = np.log10(costs)
+    termacc_values = np.array(values)
+    
+    # Standardize features
+    X = np.column_stack([log_costs, termacc_values])
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Perform k-means clustering (k=2)
+    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+    cluster_labels = kmeans.fit_predict(X_scaled)
+    
+    # Calculate silhouette score
+    silhouette_avg = silhouette_score(X_scaled, cluster_labels)
+    
+    # Create figure
+    figsize = (3.5, 2.0)
+    _fig, ax = plt.subplots(figsize=figsize)
+    
+    # Set log scale for x-axis
+    ax.set_xscale('log')
+    
+    # Set fixed y-axis limits for TermAcc
+    y_min, y_max = 0.5, 0.75
+    ax.set_ylim(y_min, y_max)
+    
+    # Define capacity tier shapes
+    CAPACITY_TIER_SHAPES = {
+        "gpt-4-1": "^",           # triangle
+        "qwen3-235b": "^",        # triangle
+        "gpt-4-1-nano": "s",      # square
+        "qwen3-32b": "s",         # square
+    }
+    
+    # Draw convex hulls for clusters
+    cluster_colors = ['lightblue', 'lightcoral']
+    cluster_alphas = [0.2, 0.2]
+    
+    for cluster_id in range(2):
+        cluster_points = np.array([[costs[i], values[i]] for i in range(len(data_points)) if cluster_labels[i] == cluster_id])
+        
+        if len(cluster_points) >= 3:  # Need at least 3 points for convex hull
+            # For log scale, compute hull in log space
+            log_cluster_costs = np.log10(cluster_points[:, 0])
+            cluster_values = cluster_points[:, 1]
+            hull_points = np.column_stack([log_cluster_costs, cluster_values])
+            
+            try:
+                hull = ConvexHull(hull_points)
+                # Convert back to original scale for plotting
+                hull_x = 10 ** hull_points[hull.vertices, 0]
+                hull_y = hull_points[hull.vertices, 1]
+                
+                # Close the hull
+                hull_x = np.append(hull_x, hull_x[0])
+                hull_y = np.append(hull_y, hull_y[0])
+                
+                ax.fill(hull_x, hull_y, color=cluster_colors[cluster_id], alpha=cluster_alphas[cluster_id], zorder=0)
+            except:
+                # If convex hull fails, skip
+                pass
+    
+    # Collect workflow points
+    workflow_points_dict = {}
+    
+    for workflow in sorted(workflows):
+        workflow_data = [d for d in data_points if d["workflow"] == workflow]
+        
+        if not workflow_data:
+            continue
+        
+        color = WORKFLOW_COLORS.get(workflow, "#000000")
+        
+        # Collect all points for this workflow
+        workflow_points = []
+        for model in models:
+            model_data = [d for d in workflow_data if d["model"] == model]
+            if model_data:
+                point = model_data[0]
+                # Find index in data_points to check if it has a star
+                point_idx = None
+                for idx, dp in enumerate(data_points):
+                    if dp["workflow"] == workflow and dp["model"] == model:
+                        point_idx = idx
+                        break
+                
+                # Check if this point has Rank 1 star
+                has_rank1_star = False
+                if point_idx is not None:
+                    if 1 in pareto_ranks and point_idx in pareto_ranks[1]:
+                        has_rank1_star = True
+                
+                workflow_points.append((point["cost"], point["value"], model, has_rank1_star, point_idx))
+        
+        # Sort by cost (cheapest to most expensive) for connecting lines
+        workflow_points_sorted = sorted(workflow_points, key=lambda x: x[0])
+        workflow_points_dict[workflow] = (workflow_points_sorted, color)
+        
+        # Draw dotted lines if requested
+        if connect_points and len(workflow_points_sorted) > 1:
+            costs_line = [p[0] for p in workflow_points_sorted]
+            values_line = [p[1] for p in workflow_points_sorted]
+            ax.plot(costs_line, values_line, color=color, linestyle=':', linewidth=1.5, alpha=0.6, zorder=1)
+    
+    # Plot all markers with capacity tier shapes
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        # Plot each model for this workflow with capacity tier shapes
+        for cost, value, model, has_rank1_star, point_idx in workflow_points_sorted:
+            shape = CAPACITY_TIER_SHAPES.get(model, 'o')  # Default to circle if not found
+            
+            ax.scatter(cost, value, c=color, marker=shape, s=63,
+                      edgecolors='black', linewidths=0.5, alpha=0.7, zorder=5)
+    
+    # Labels
+    ax.set_xlabel('Cost ($, log scale)', fontsize=10)
+    ax.set_ylabel('Term. Accuracy', fontsize=10)
+    
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, zorder=0)
+    
+    # Add Rank 1 Pareto stars only (no labels)
+    for workflow in sorted(workflows):
+        if workflow not in workflow_points_dict:
+            continue
+        workflow_points_sorted, color = workflow_points_dict[workflow]
+        
+        for cost, value, model, has_rank1_star, point_idx in workflow_points_sorted:
+            if not has_rank1_star:
+                continue
+            
+            # Position star at upper-left corner of marker
+            x_lim = ax.get_xlim()
+            y_lim = ax.get_ylim()
+            
+            # For log scale x-axis: marker radius in data coordinates
+            marker_size_points = 7  # Approximate radius of s=63 marker
+            fig_width_points = 3.5 * 72  # 3.5 inches * 72 points/inch
+            marker_fraction_of_fig = marker_size_points / fig_width_points
+            
+            # For log scale: move left by full marker radius
+            x_offset_factor = marker_fraction_of_fig * 1.2
+            star_x = cost / (1 + x_offset_factor)
+            
+            # For linear y-axis: move up by full marker radius
+            y_range = y_lim[1] - y_lim[0]
+            marker_height_data = y_range * marker_fraction_of_fig * 1.2
+            star_y = value + marker_height_data
+            
+            # Add gold star for rank 1 (no label)
+            ax.scatter(star_x, star_y, marker='*', s=100, c='gold', 
+                      edgecolors='none', linewidths=0, alpha=0.6, zorder=6)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    safe_dataset = dataset.replace("/", "_")
+    if is_term:
+        output_path = output_dir / f"{safe_dataset}+T_AVG_TAcc_x_price_pareto_simplified_with_cluster.pdf"
+    else:
+        output_path = output_dir / f"{safe_dataset}_AVG_TAcc_x_price_pareto_simplified_with_cluster.pdf"
+    
+    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=300)
+    plt.close()
+    
+    # Print clustering info and caption text
+    print(f"Created simplified Pareto plot with clustering: {output_path}")
+    print(f"  Silhouette score: {silhouette_avg:.3f}")
+    print(f"  Cluster 0 size: {np.sum(cluster_labels == 0)}, Cluster 1 size: {np.sum(cluster_labels == 1)}")
+    print(f"\n  Caption text:")
+    print(f"  Shapes indicate capacity tiers (triangles: GPT-4.1/Qwen3-235B; squares: GPT-4.1 nano/Qwen3-32B).")
+    print(f"  Colors indicate workflows. k-means (k=2) on standardized cost and TermAcc recovers the two")
+    print(f"  capacity clusters (silhouette = {silhouette_avg:.2f}). Pareto ranks computed on systems above")
+    print(f"  the 75th percentile by TermAcc.")
+
+
 def plot_per_model(
     dataset: str,
     reports_by_lang_pair: Dict[str, List[Dict]],
@@ -2129,6 +2404,8 @@ def main():
         if wmt25_term_reports:
             plot_dataset_avg_price_pareto_simplified("wmt25", wmt25_term_reports, simplified_dir, metric="chrf", use_batch=False, is_term=True, connect_points=args.connect_points)
             plot_dataset_avg_price_pareto_simplified("wmt25", wmt25_term_reports, simplified_dir, metric="termacc", use_batch=False, is_term=True, connect_points=args.connect_points)
+            # TermAcc plot with clustering
+            plot_dataset_avg_price_pareto_simplified_with_cluster("wmt25", wmt25_term_reports, simplified_dir, metric="termacc", use_batch=False, is_term=True, connect_points=args.connect_points)
     
     # Create per-model plots if requested
     if args.per_model:
