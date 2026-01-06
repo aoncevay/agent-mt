@@ -39,6 +39,35 @@ SPACY_MODEL_MAP = {
     'zht': 'zh_core_web_sm',  # Traditional Chinese uses same model
 }
 
+def find_spacy_model(model_name: str) -> Optional[Path]:
+    """
+    Find spaCy model in local directories (metrics/models/spacy/) or default location.
+    
+    Checks in order:
+    1. metrics/models/spacy/{model_name} (local repo)
+    2. Default spaCy location
+    """
+    # Check local metrics/models directory first
+    local_paths = [
+        Path(__file__).parent / "models" / "spacy" / model_name,
+        Path(__file__).parent.parent / "metrics" / "models" / "spacy" / model_name,
+    ]
+    
+    for path in local_paths:
+        if path.exists():
+            return path
+    
+    # Try default spaCy location
+    try:
+        import spacy.util
+        default_path = spacy.util.find_model(model_name)
+        if default_path and Path(default_path).exists():
+            return Path(default_path)
+    except Exception:
+        pass
+    
+    return None
+
 
 class TermBasedMetric():
     """
@@ -86,17 +115,33 @@ class TermBasedMetric():
         try:
             src_model = SPACY_MODEL_MAP.get(self.lang_src)
             if src_model:
-                self.spacy_src = spacy.load(src_model, disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+                # Try to find model in local directory first
+                model_path = find_spacy_model(src_model)
+                if model_path:
+                    self.spacy_src = spacy.load(str(model_path), disable=['parser', 'ner'])
+                else:
+                    self.spacy_src = spacy.load(src_model, disable=['parser', 'ner'])
         except (OSError, IOError) as e:
             print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_src}: {e}")
+            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
+        except Exception as e:
+            print(f"  ⚠ Warning: Error loading spaCy model for {self.lang_src}: {e}")
             print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
         
         try:
             tgt_model = SPACY_MODEL_MAP.get(self.lang_tgt)
             if tgt_model:
-                self.spacy_tgt = spacy.load(tgt_model, disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+                # Try to find model in local directory first
+                model_path = find_spacy_model(tgt_model)
+                if model_path:
+                    self.spacy_tgt = spacy.load(str(model_path), disable=['parser', 'ner'])
+                else:
+                    self.spacy_tgt = spacy.load(tgt_model, disable=['parser', 'ner'])
         except (OSError, IOError) as e:
             print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_tgt}: {e}")
+            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
+        except Exception as e:
+            print(f"  ⚠ Warning: Error loading spaCy model for {self.lang_tgt}: {e}")
             print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
         # pymorphy3 only needed for Russian, not used in our experiments
         # self.ru_morph = pymorphy3.MorphAnalyzer()

@@ -34,6 +34,35 @@ SPACY_MODEL_MAP = {
     'zht': 'zh_core_web_sm',  # Traditional Chinese uses same model
 }
 
+def find_spacy_model(model_name: str) -> Optional[Path]:
+    """
+    Find spaCy model in local directories (metrics/models/spacy/) or default location.
+    
+    Checks in order:
+    1. metrics/models/spacy/{model_name} (local repo)
+    2. Default spaCy location
+    """
+    # Check local metrics/models directory first
+    local_paths = [
+        Path(__file__).parent / "models" / "spacy" / model_name,
+        Path(__file__).parent.parent / "metrics" / "models" / "spacy" / model_name,
+    ]
+    
+    for path in local_paths:
+        if path.exists():
+            return path
+    
+    # Try default spaCy location
+    try:
+        import spacy.util
+        default_path = spacy.util.find_model(model_name)
+        if default_path and Path(default_path).exists():
+            return Path(default_path)
+    except Exception:
+        pass
+    
+    return None
+
 # Global cache for loaded models and embeddings (loaded once, reused everywhere)
 _loaded_models_cache = {}
 _loaded_embeddings_cache = {}
@@ -281,9 +310,17 @@ class DocPreprocessor:
         self.spacy_en = None
         if src_lang == 'en':
             try:
-                self.spacy_en = spacy.load('en_core_web_sm', disable=['parser', 'ner'])  # Only need tokenizer and lemmatizer
+                # Try to find model in local directory first
+                model_path = find_spacy_model('en_core_web_sm')
+                if model_path:
+                    self.spacy_en = spacy.load(str(model_path), disable=['parser', 'ner'])
+                else:
+                    self.spacy_en = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
             except (OSError, IOError) as e:
                 _log_with_time(f"  ⚠ Warning: Could not load spaCy English model: {e}")
+                _log_with_time(f"  ⚠ English normalization will use lowercase fallback")
+            except Exception as e:
+                _log_with_time(f"  ⚠ Warning: Error loading spaCy English model: {e}")
                 _log_with_time(f"  ⚠ English normalization will use lowercase fallback")
 
     def process_documents(

@@ -498,8 +498,9 @@ def process_experiment(
             # Prepare segments for this sample: (source, translation, reference)
             segments = []
             for idx, row in sample_segments_df.iterrows():
-                src = row[src_lang]
-                tgt = row[tgt_lang]
+                # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
+                src = row['src_segment']
+                tgt = row['tgt_segment']
                 # Use reference for this specific sample
                 ref = sample_info['reference_text']
                 segments.append((src, tgt, ref))
@@ -527,8 +528,9 @@ def process_experiment(
             
             # For each aligned segment, find which source/target paragraph it belongs to
             for _, row in sample_segments_df.iterrows():
-                src_seg = str(row[src_lang]).strip()
-                tgt_seg = str(row[tgt_lang]).strip()
+                # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
+                src_seg = str(row['src_segment']).strip()
+                tgt_seg = str(row['tgt_segment']).strip()
                 
                 # Find which source paragraph contains this segment
                 for para_idx, src_para in enumerate(src_paragraphs):

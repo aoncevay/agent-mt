@@ -33,6 +33,9 @@ def clear_pytorch_cache():
 
 def get_gpu_processes():
     """Get list of processes using GPU memory."""
+    processes = []
+    
+    # Method 1: nvidia-smi query
     try:
         result = subprocess.run(
             ['nvidia-smi', '--query-compute-apps=pid,process_name,used_memory', '--format=csv,noheader'],
@@ -40,7 +43,6 @@ def get_gpu_processes():
             text=True,
             check=True
         )
-        processes = []
         for line in result.stdout.strip().split('\n'):
             if line.strip():
                 parts = line.split(',')
@@ -49,9 +51,41 @@ def get_gpu_processes():
                     name = parts[1].strip()
                     memory = parts[2].strip()
                     processes.append((pid, name, memory))
-        return processes
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return []
+        pass
+    
+    # Method 2: Find processes using GPU device files (more aggressive)
+    try:
+        # Find processes using /dev/nvidia* devices
+        result = subprocess.run(
+            ['fuser', '/dev/nvidia*', '2>/dev/null'],
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        if result.stdout.strip():
+            pids = set()
+            for line in result.stdout.strip().split():
+                # Extract PIDs (fuser output format: /dev/nvidia0: 1234 5678)
+                for part in line.split(':'):
+                    try:
+                        pid = int(part.strip())
+                        pids.add(pid)
+                    except ValueError:
+                        continue
+            
+            for pid in pids:
+                try:
+                    # Get process name
+                    with open(f'/proc/{pid}/comm', 'r') as f:
+                        name = f.read().strip()
+                    processes.append((str(pid), name, 'unknown'))
+                except (IOError, OSError):
+                    pass
+    except Exception:
+        pass
+    
+    return processes
 
 
 def kill_gpu_processes(force=False):
@@ -86,6 +120,26 @@ def kill_gpu_processes(force=False):
     clear_pytorch_cache()
 
 
+def reset_gpu():
+    """Reset GPU using nvidia-smi (requires root/admin)."""
+    try:
+        result = subprocess.run(
+            ['sudo', 'nvidia-smi', '--gpu-reset', '-i', '0'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print("✓ GPU reset successful")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"⚠ GPU reset failed: {e}")
+        print("  Note: GPU reset requires sudo/admin privileges")
+        return False
+    except FileNotFoundError:
+        print("⚠ nvidia-smi not found")
+        return False
+
+
 def show_gpu_status():
     """Show current GPU memory status."""
     try:
@@ -115,6 +169,11 @@ def main():
         action="store_true",
         help="Show GPU status only (don't clean)"
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset GPU using nvidia-smi (requires sudo/admin privileges)"
+    )
     
     args = parser.parse_args()
     
@@ -137,12 +196,18 @@ def main():
     else:
         kill_gpu_processes(force=False)
     
+    # Reset GPU if requested
+    if args.reset:
+        print("\n" + "="*60)
+        reset_gpu()
+    
     print("\n" + "="*60)
     print("Done!")
     print("\nIf memory is still full, try:")
     print("  1. Restart Python kernel/process")
     print("  2. Run with --force to kill GPU processes (use with caution)")
-    print("  3. Check for zombie processes: nvidia-smi")
+    print("  3. Run with --reset to reset GPU (requires sudo)")
+    print("  4. Use bash commands (see GPU_CLEANUP.md)")
 
 
 if __name__ == "__main__":
