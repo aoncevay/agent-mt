@@ -323,13 +323,32 @@ class DocPreprocessor:
                 _log_with_time(f"  ⚠ Warning: Error loading spaCy English model: {e}")
                 _log_with_time(f"  ⚠ English normalization will use lowercase fallback")
 
+    def _filter_empty_lines(self, text: str) -> str:
+        """
+        Filter out empty lines from text (for markdown documents).
+        Empty lines are lines that contain only whitespace.
+        
+        Args:
+            text: Input text (may contain empty lines)
+        
+        Returns:
+            Text with empty lines removed
+        """
+        if not text:
+            return text
+        
+        lines = text.split('\n')
+        # Filter out lines that are empty or contain only whitespace
+        filtered_lines = [line for line in lines if line.strip()]
+        return '\n'.join(filtered_lines)
+    
     def process_documents(
         self,
         documents: List[Tuple[str, str]],
         references: Optional[List[str]] = None,
         terminology: Optional[Dict[str, list]] = None,
         similarity_threshold: float = 0.4,
-        separator: str = '\n\n'
+        separator: str = '\n'  # Single newline after filtering empty lines
     ) -> pd.DataFrame:
         """
         Process a list of document pairs (source, target) and return aligned segments.
@@ -351,6 +370,12 @@ class DocPreprocessor:
         
         _log_with_time(f"  Processing {len(documents)} document(s)...")
         start_time = time.time()
+        
+        # Preprocess: filter empty lines from all documents (for markdown format)
+        _log_with_time("  Preprocessing: filtering empty lines from documents...")
+        documents = [(self._filter_empty_lines(src), self._filter_empty_lines(tgt)) for src, tgt in documents]
+        if references:
+            references = [self._filter_empty_lines(ref) if ref else ref for ref in references]
         
         # Add progress bar for document processing
         try:
@@ -393,126 +418,61 @@ class DocPreprocessor:
             _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs" + 
                           (f", Reference: {len(ref_paragraphs)} paragraphs" if ref_paragraphs else ""))
             
-            # Align paragraphs (source -> translation)
-            for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
-                # Split into sentences
-                src_sentences = self._split_sentences(src_para, self.src_lang)
-                tgt_sentences = self._split_sentences(tgt_para, self.tgt_lang)
+            # Align paragraphs (source -> translation) using LaBSE
+            # No sentence-level segmentation - work at paragraph level only
+            paragraph_alignments = self._align_paragraphs(
+                src_paragraphs, tgt_paragraphs, similarity_threshold
+            )
+            
+            # Extract terms if terminology is provided (at paragraph level)
+            terms_dict = {}
+            if terminology:
+                for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
+                    para_terms = self._extract_terms(src_para, tgt_para, terminology)
+                    if para_terms:
+                        terms_dict[para_idx] = para_terms
+            
+            # Process aligned paragraph pairs
+            for align_idx, (src_seg, tgt_seg, score, src_para_idx) in enumerate(paragraph_alignments):
+                # Get reference segment for this source paragraph
+                ref_seg = ""
+                has_ref_seg = False
                 
-                if not src_sentences or not tgt_sentences:
+                if ref_paragraphs and ref_para_alignment and src_para_idx is not None:
+                    # Find the reference paragraph that aligns with this source paragraph
+                    if src_para_idx < len(ref_para_alignment):
+                        ref_para_idx = ref_para_alignment[src_para_idx]
+                        if ref_para_idx is not None and ref_para_idx < len(ref_paragraphs):
+                            ref_seg = ref_paragraphs[ref_para_idx]
+                            has_ref_seg = True
+                
+                # If src_para_idx is None AND src_seg is empty, this is an unaligned target paragraph (over-translation)
+                # For over-translation, we don't have a source, so we can't get a reference
+                # This is correct - over-translated segments will be counted but won't have reference
+                
+                # IMPORTANT: Skip segments without src-ref correspondence (can't evaluate)
+                # BUT: Always include src-tgt segments (even if tgt is empty) to penalize under-translation
+                if src_seg and not has_ref_seg:
+                    # Source segment without reference alignment - skip this segment
+                    # (We'll count these and report them)
+                    skipped_segments_count += 1
                     continue
                 
-                # Get aligned reference paragraph for this source paragraph
-                ref_para = None
-                ref_sentences = None
-                ref_sent_alignment = None  # Maps src_sent_idx -> ref_sent_idx (or None if unaligned)
-                has_ref_alignment = False
+                # Get terms for this paragraph if available
+                terms = terms_dict.get(src_para_idx) if src_para_idx is not None else None
                 
-                if ref_paragraphs and ref_para_alignment and para_idx < len(ref_para_alignment):
-                    ref_para_idx = ref_para_alignment[para_idx]
-                    if ref_para_idx is not None and ref_para_idx < len(ref_paragraphs):
-                        ref_para = ref_paragraphs[ref_para_idx]
-                        has_ref_alignment = True
-                    else:
-                        _log_with_time(f"      ⚠ WARNING: Source paragraph {para_idx} has no aligned reference paragraph")
-                
-                # Split and align reference sentences with source sentences
-                # Default: If same count, use 1-to-1. Else: align using LaBSE
-                if ref_para:
-                    ref_sentences_raw = self._split_sentences(ref_para, self.tgt_lang)
-                    if ref_sentences_raw:
-                        if len(ref_sentences_raw) == len(src_sentences):
-                            # Same count: use 1-to-1 correspondence (no alignment needed)
-                            ref_sentences = ref_sentences_raw
-                            ref_sent_alignment = list(range(len(ref_sentences_raw)))
-                        else:
-                            # Different counts: align using LaBSE
-                            _log_with_time(f"      Aligning {len(ref_sentences_raw)} reference sentences with {len(src_sentences)} source sentences in paragraph {para_idx} (counts differ)...")
-                            ref_sentences, ref_sent_alignment = self._align_reference_sentences(
-                                src_sentences, ref_sentences_raw, similarity_threshold
-                            )
-                            # Check alignment quality
-                            unaligned_src_sents = sum(1 for align in ref_sent_alignment if align is None)
-                            if unaligned_src_sents > 0:
-                                _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: {unaligned_src_sents}/{len(src_sentences)} source sentences have no aligned reference sentence")
-                    else:
-                        _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: Reference paragraph has no sentences after splitting")
-                        ref_sentences = []
-                        ref_sent_alignment = [None] * len(src_sentences)
-                else:
-                    _log_with_time(f"      ⚠ WARNING: Paragraph {para_idx}: No reference paragraph available")
-                    ref_sentences = []
-                    ref_sent_alignment = [None] * len(src_sentences)
-                
-                # Align sentences using LaBSE (source -> translation)
-                alignment = self._align_sentences(src_sentences, tgt_sentences, similarity_threshold)
-                
-                # Extract terms if terminology is provided
-                terms = None
-                if terminology:
-                    terms = self._extract_terms(src_para, tgt_para, terminology)
-                
-                # Store aligned segments
-                # Since reference should match source structure exactly, we use the source sentence index
-                # from the alignment result
-                for align_idx, alignment_item in enumerate(alignment):
-                    # Unpack alignment item (now includes src_sentence_idx)
-                    if len(alignment_item) == 4:
-                        src_seg, tgt_seg, score, src_sentence_idx = alignment_item
-                    else:
-                        # Backward compatibility: if old format, extract index from text
-                        src_seg, tgt_seg, score = alignment_item
-                        src_sentence_idx = None
-                        if src_seg:
-                            for idx, src_sent in enumerate(src_sentences):
-                                if src_seg == src_sent:
-                                    src_sentence_idx = idx
-                                    break
-                    
-                    # Get corresponding reference segment using alignment mapping
-                    # IMPORTANT: Every source segment MUST have a reference segment
-                    # (even if target is empty - this represents under-translation and will be penalized)
-                    ref_seg = None
-                    has_ref_seg = False
-                    
-                    if ref_sent_alignment and src_sentence_idx is not None:
-                        # Use the alignment mapping to get the reference sentence index
-                        if src_sentence_idx < len(ref_sent_alignment):
-                            ref_sent_idx = ref_sent_alignment[src_sentence_idx]
-                            if ref_sent_idx is not None and ref_sent_idx < len(ref_sentences):
-                                ref_seg = ref_sentences[ref_sent_idx]
-                                has_ref_seg = True
-                            else:
-                                # Source sentence has no aligned reference sentence
-                                _log_with_time(f"      ⚠ WARNING: Source sentence {src_sentence_idx} in paragraph {para_idx} has no aligned reference sentence")
-                        else:
-                            _log_with_time(f"      ⚠ WARNING: Source sentence index {src_sentence_idx} >= alignment mapping length ({len(ref_sent_alignment)})")
-                    elif src_seg and not has_ref_seg:
-                        # Fallback: try to find by text matching (shouldn't happen if alignment worked)
-                        for idx, src_sent in enumerate(src_sentences):
-                            if src_seg == src_sent or (len(src_seg) > 10 and (src_seg in src_sent or src_sent in src_seg)):
-                                if ref_sent_alignment and idx < len(ref_sent_alignment):
-                                    ref_sent_idx = ref_sent_alignment[idx]
-                                    if ref_sent_idx is not None and ref_sent_idx < len(ref_sentences):
-                                        ref_seg = ref_sentences[ref_sent_idx]
-                                        has_ref_seg = True
-                                        break
-                    
-                    # If src_sentence_idx is None AND src_seg is empty, this is an unaligned target sentence (over-translation)
-                    # For over-translation, we don't have a source, so we can't get a reference
-                    # This is correct - over-translated segments will be counted but won't have reference
-                    
-                    df_data.append({
-                        'document': doc_idx,  # Document/sample index
-                        'paragraph': para_idx,  # Paragraph index within document
-                        'sentence': align_idx,
-                        'alignment': 'labse',
-                        'src_segment': src_seg,
-                        'tgt_segment': tgt_seg,
-                        'ref_segment': ref_seg,  # Reference segment (same position as source)
-                        'score': score,
-                        'terms': terms
-                    })
+                df_data.append({
+                    'document': doc_idx,  # Document/sample index
+                    'paragraph': align_idx,  # Alignment index (replaces paragraph/sentence hierarchy)
+                    'sentence': 0,  # Not used anymore, kept for compatibility
+                    'alignment': 'labse',
+                    'src_segment': src_seg,
+                    'tgt_segment': tgt_seg,  # Can be empty (under-translation) - this is OK, will be penalized
+                    'ref_segment': ref_seg,  # Reference segment (aligned with source)
+                    'has_ref_alignment': has_ref_seg,  # Flag: True if reference was successfully aligned
+                    'score': score,
+                    'terms': terms
+                })
             
             doc_time = time.time() - doc_start
             _log_with_time(f"    Document {doc_idx+1} processed in {doc_time:.2f}s")
@@ -715,52 +675,81 @@ class DocPreprocessor:
             return aligned_ref, alignment_mapping
     
     def _split_sentences(self, text: str, lang: str) -> List[str]:
-        """Split text into sentences."""
-        if not text.strip():
+        """
+        Split text into sentences using spaCy if available, otherwise fallback to pysbd.
+        Filters out empty sentences (whitespace-only).
+        
+        Args:
+            text: Text to split (empty lines already filtered in preprocessing)
+            lang: Language code (e.g., 'en', 'fr', 'it', 'zh')
+        
+        Returns:
+            List of sentences (non-empty strings, filtered)
+        """
+        # Filter empty lines first (for markdown documents)
+        text = self._filter_empty_lines(text)
+        
+        if not text or not text.strip():
             return []
         
-        # Use pysbd for sentence splitting
+        # Try spaCy first (as used in SEGALE)
+        try:
+            # Check if spaCy model is available for this language
+            spacy_model_name = SPACY_MODEL_MAP.get(lang)
+            if spacy_model_name:
+                spacy_model = _load_spacy_model_once(lang)
+                if spacy_model:
+                    doc = spacy_model(text)
+                    sentences = [sent.text.strip() for sent in doc.sents]
+                    # Filter out empty sentences
+                    return [s for s in sentences if s.strip()]
+        except Exception:
+            # spaCy not available or failed, try pysbd
+            pass
+        
+        # Fallback to pysbd for sentence splitting
         try:
             import pysbd
             seg = pysbd.Segmenter(language=lang, clean=False)
             sentences = seg.segment(text)
+            # Filter out empty sentences
             return [s.strip() for s in sentences if s.strip()]
-        except:
-            # Fallback: simple splitting
+        except Exception:
+            # Final fallback: simple splitting
             sentences = re.split(r'[.!?]\s+', text)
+            # Filter out empty sentences
             return [s.strip() for s in sentences if s.strip()]
     
-    def _align_sentences(self, src_sentences: List[str], tgt_sentences: List[str], similarity_threshold: float = 0.4) -> List[Tuple[str, str, float, Optional[int]]]:
+    def _align_paragraphs(self, src_paragraphs: List[str], tgt_paragraphs: List[str], similarity_threshold: float = 0.4) -> List[Tuple[str, str, float, Optional[int]]]:
         """
-        Align sentences using LaBSE embeddings.
+        Align paragraphs using LaBSE embeddings.
         
         Returns:
-            List of tuples: (src_segment, tgt_segment, score, src_sentence_idx)
-            src_sentence_idx is None for unaligned target sentences (empty source)
+            List of tuples: (src_segment, tgt_segment, score, src_para_idx)
+            src_para_idx is None for unaligned target paragraphs (empty source)
         """
-        if not src_sentences or not tgt_sentences:
+        if not src_paragraphs or not tgt_paragraphs:
             return []
         
-        # Use PolyFuzz to align sentences
+        # Use PolyFuzz to align paragraphs
         try:
-            matches = self.model.match(src_sentences, tgt_sentences)
+            matches = self.model.match(src_paragraphs, tgt_paragraphs)
             
             # Extract aligned pairs with scores
             alignment = []
             used_tgt_indices = set()
             
-            for src_idx, src_sent in enumerate(src_sentences):
+            for src_idx, src_para in enumerate(src_paragraphs):
                 best_tgt_idx = None
                 best_score = 0.0
                 
-                for tgt_idx, tgt_sent in enumerate(tgt_sentences):
+                for tgt_idx, tgt_para in enumerate(tgt_paragraphs):
                     if tgt_idx in used_tgt_indices:
                         continue
                     
-                    # Get similarity score (simplified - PolyFuzz returns DataFrame)
-                    # For now, use a simple approach
+                    # Get similarity score from PolyFuzz
                     try:
-                        score = float(matches['Similarity'].iloc[src_idx * len(tgt_sentences) + tgt_idx]) if hasattr(matches, 'iloc') else 0.0
+                        score = float(matches['Similarity'].iloc[src_idx * len(tgt_paragraphs) + tgt_idx]) if hasattr(matches, 'iloc') else 0.0
                     except:
                         score = 0.0
                     
@@ -769,24 +758,24 @@ class DocPreprocessor:
                         best_tgt_idx = tgt_idx
                 
                 if best_tgt_idx is not None:
-                    alignment.append((src_sent, tgt_sentences[best_tgt_idx], best_score, src_idx))
+                    alignment.append((src_para, tgt_paragraphs[best_tgt_idx], best_score, src_idx))
                     used_tgt_indices.add(best_tgt_idx)
                 else:
-                    # Unaligned source sentence
-                    alignment.append((src_sent, "", 0.0, src_idx))
+                    # Unaligned source paragraph
+                    alignment.append((src_para, "", 0.0, src_idx))
             
-            # Add unaligned target sentences (no corresponding source)
-            for tgt_idx, tgt_sent in enumerate(tgt_sentences):
+            # Add unaligned target paragraphs (no corresponding source)
+            for tgt_idx, tgt_para in enumerate(tgt_paragraphs):
                 if tgt_idx not in used_tgt_indices:
-                    alignment.append(("", tgt_sent, 0.0, None))
+                    alignment.append(("", tgt_para, 0.0, None))
             
             return alignment
             
         except Exception as e:
-            _log_with_time(f"      ⚠ Sentence alignment failed: {e}")
+            _log_with_time(f"      ⚠ Paragraph alignment failed: {e}")
             # Fallback: simple 1-to-1 alignment
-            min_len = min(len(src_sentences), len(tgt_sentences))
-            return [(src_sentences[i], tgt_sentences[i] if i < len(tgt_sentences) else "", 1.0, i) for i in range(min_len)]
+            min_len = min(len(src_paragraphs), len(tgt_paragraphs))
+            return [(src_paragraphs[i], tgt_paragraphs[i] if i < len(tgt_paragraphs) else "", 1.0, i) for i in range(min_len)]
     
     def _extract_terms(self, src_text: str, tgt_text: str, terminology: Dict[str, list]) -> Optional[Dict[str, list]]:
         """

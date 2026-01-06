@@ -437,7 +437,7 @@ def process_experiment(
             references=references,  # Pass references for alignment
             terminology=terminology,
             similarity_threshold=0.4,
-            separator='\n\n'
+            separator='\n'  # Single newline after filtering empty lines
         )
         skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
         print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
@@ -496,7 +496,7 @@ def process_experiment(
             references=references,  # Pass references for alignment
             terminology=terminology,
             similarity_threshold=0.4,
-            separator='\n\n'
+            separator='\n'  # Single newline after filtering empty lines
         )
         skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
         print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
