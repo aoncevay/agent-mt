@@ -398,6 +398,24 @@ def compute_comet_scores(
             else:
                 # Normal loading (model uses softmax or entmax is available)
                 model = load_from_checkpoint(str(comet_model_path), local_files_only=True)
+            
+            # CRITICAL FIX: The checkpoint contains a BertTokenizer, but we need XLMRobertaTokenizer
+            # After loading, manually replace the tokenizer with the correct one from local path
+            if local_pretrained_path and hasattr(model, 'encoder') and hasattr(model.encoder, 'tokenizer'):
+                print(f"  ⚠ Replacing tokenizer with correct XLMRobertaTokenizer from local path...")
+                try:
+                    from transformers import XLMRobertaTokenizerFast
+                    # Load the correct tokenizer from local path
+                    correct_tokenizer = XLMRobertaTokenizerFast.from_pretrained(
+                        local_pretrained_path,
+                        local_files_only=True
+                    )
+                    # Replace the encoder's tokenizer
+                    model.encoder.tokenizer = correct_tokenizer
+                    print(f"  ✓ Successfully replaced tokenizer with XLMRobertaTokenizer from {local_pretrained_path}")
+                except Exception as e:
+                    print(f"  ⚠ Warning: Could not replace tokenizer: {e}")
+                    print(f"  Model may still work, but tokenization might be incorrect")
         finally:
             # Restore original hparams if we modified it
             if hparams_modified and hparams_file.exists() and 'original_pretrained' in locals():
