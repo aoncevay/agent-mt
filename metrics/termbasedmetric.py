@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import os
 from pathlib import Path
+from typing import Optional
 from nltk.tokenize import word_tokenize
 # OpenAI removed - using CDAO instead
 import ast
@@ -15,7 +16,6 @@ except ImportError:
 from transformers import AutoModel, AutoTokenizer
 import itertools
 import torch
-import spacy
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import f1_score # TODO: generalize to input other metrics
@@ -28,43 +28,62 @@ import jieba
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-# Map language codes to spaCy model names
-SPACY_MODEL_MAP = {
-    'en': 'en_core_web_sm',
-    'de': 'de_core_news_sm',
-    'es': 'es_core_news_sm',
-    'fr': 'fr_core_news_sm',
-    'it': 'it_core_news_sm',
-    'zh': 'zh_core_web_sm',
-    'zht': 'zh_core_web_sm',  # Traditional Chinese uses same model
+# Try to import Stanza
+try:
+    import stanza
+    STANZA_AVAILABLE = True
+except ImportError:
+    STANZA_AVAILABLE = False
+    print("  ⚠ Warning: Stanza not available. Install with: pip install stanza")
+
+# Map language codes to Stanza language codes
+STANZA_LANG_MAP = {
+    'en': 'en',
+    'de': 'de',
+    'es': 'es',
+    'fr': 'fr',
+    'it': 'it',
+    'zh': 'zh',
+    'zht': 'zh',  # Traditional Chinese uses 'zh' in Stanza
 }
 
-def find_spacy_model(model_name: str) -> Optional[Path]:
+def find_stanza_resources_dir() -> Optional[Path]:
     """
-    Find spaCy model in local directories (metrics/models/spacy/) or default location.
+    Find Stanza resources directory in local directories or environment variable.
     
     Checks in order:
-    1. metrics/models/spacy/{model_name} (local repo)
-    2. Default spaCy location
+    1. STANZA_RESOURCES_DIR environment variable
+    2. metrics/models/stanza/ (local repo)
+    3. ~/user-default-efs/stanza_resources (SageMaker EFS)
+    4. ~/stanza_resources (home directory)
     """
-    # Check local metrics/models directory first
+    # Check environment variable first
+    env_dir = os.environ.get('STANZA_RESOURCES_DIR')
+    if env_dir:
+        path = Path(env_dir).expanduser().resolve()
+        if path.exists():
+            return path
+    
+    # Check local metrics/models/stanza directory
     local_paths = [
-        Path(__file__).parent / "models" / "spacy" / model_name,
-        Path(__file__).parent.parent / "metrics" / "models" / "spacy" / model_name,
+        Path(__file__).parent / "models" / "stanza",
+        Path(__file__).parent.parent / "metrics" / "models" / "stanza",
     ]
     
     for path in local_paths:
         if path.exists():
-            return path
+            return path.resolve()
     
-    # Try default spaCy location
-    try:
-        import spacy.util
-        default_path = spacy.util.find_model(model_name)
-        if default_path and Path(default_path).exists():
-            return Path(default_path)
-    except Exception:
-        pass
+    # Check common SageMaker/EFS paths
+    efs_paths = [
+        Path.home() / "user-default-efs" / "stanza_resources",
+        Path("/mnt/custom-file-systems/efs") / "stanza_resources",
+        Path.home() / "stanza_resources",
+    ]
+    
+    for path in efs_paths:
+        if path.exists():
+            return path.resolve()
     
     return None
 
@@ -83,8 +102,8 @@ class TermBasedMetric():
     Attributes:
         lang_src (str): Source language code (e.g., 'en').
         lang_tgt (str): Target language code (e.g., 'cs').
-        spacy_src: A spaCy nlp object for processing the source language.
-        spacy_tgt: A spaCy nlp object for processing the target language.
+        stanza_src: A Stanza Pipeline object for processing the source language.
+        stanza_tgt: A Stanza Pipeline object for processing the target language.
         ru_morph: A pymorphy3 MorphAnalyzer object for Russian text analysis.
         keyword_extractor (str): Specifies the keyword extraction method.
         aligner (str): Specifies the alignment algorithm.
@@ -108,41 +127,72 @@ class TermBasedMetric():
         '''
         self.lang_src, self.lang_tgt = src_lang, tgt_lang
         
-        # Initialize spaCy models for lemmatization
-        self.spacy_src = None
-        self.spacy_tgt = None
+        # Initialize Stanza pipelines for lemmatization
+        self.stanza_src = None
+        self.stanza_tgt = None
         
-        try:
-            src_model = SPACY_MODEL_MAP.get(self.lang_src)
-            if src_model:
-                # Try to find model in local directory first
-                model_path = find_spacy_model(src_model)
-                if model_path:
-                    self.spacy_src = spacy.load(str(model_path), disable=['parser', 'ner'])
-                else:
-                    self.spacy_src = spacy.load(src_model, disable=['parser', 'ner'])
-        except (OSError, IOError) as e:
-            print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_src}: {e}")
-            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
-        except Exception as e:
-            print(f"  ⚠ Warning: Error loading spaCy model for {self.lang_src}: {e}")
-            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
-        
-        try:
-            tgt_model = SPACY_MODEL_MAP.get(self.lang_tgt)
-            if tgt_model:
-                # Try to find model in local directory first
-                model_path = find_spacy_model(tgt_model)
-                if model_path:
-                    self.spacy_tgt = spacy.load(str(model_path), disable=['parser', 'ner'])
-                else:
-                    self.spacy_tgt = spacy.load(tgt_model, disable=['parser', 'ner'])
-        except (OSError, IOError) as e:
-            print(f"  ⚠ Warning: Could not load spaCy model for {self.lang_tgt}: {e}")
-            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
-        except Exception as e:
-            print(f"  ⚠ Warning: Error loading spaCy model for {self.lang_tgt}: {e}")
-            print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
+        if not STANZA_AVAILABLE:
+            print("  ⚠ Warning: Stanza not available. Word normalization will use lowercase fallback.")
+        else:
+            # Find Stanza resources directory
+            stanza_dir = find_stanza_resources_dir()
+            if stanza_dir:
+                # Set environment variable so Stanza uses local models
+                os.environ['STANZA_RESOURCES_DIR'] = str(stanza_dir)
+                print(f"  ✓ Using Stanza models from: {stanza_dir}")
+            else:
+                print(f"  ⚠ Warning: Could not find Stanza resources directory. Stanza will try default location.")
+            
+            # Check GPU availability
+            use_gpu = False
+            try:
+                use_gpu = torch.cuda.is_available()
+            except Exception:
+                pass  # torch not available or CUDA not available
+            
+            # Load source language pipeline
+            try:
+                src_stanza_lang = STANZA_LANG_MAP.get(self.lang_src, self.lang_src)
+                if src_stanza_lang and src_stanza_lang not in ['zh', 'zht']:  # Chinese doesn't use lemmatization
+                    if stanza_dir:
+                        self.stanza_src = stanza.Pipeline(
+                            lang=src_stanza_lang,
+                            processors='tokenize,lemma',
+                            model_dir=str(stanza_dir),
+                            use_gpu=use_gpu
+                        )
+                    else:
+                        self.stanza_src = stanza.Pipeline(
+                            lang=src_stanza_lang,
+                            processors='tokenize,lemma',
+                            use_gpu=use_gpu
+                        )
+                    print(f"  ✓ Loaded Stanza pipeline for {self.lang_src}")
+            except Exception as e:
+                print(f"  ⚠ Warning: Could not load Stanza model for {self.lang_src}: {e}")
+                print(f"  ⚠ Falling back to lowercase normalization for {self.lang_src}")
+            
+            # Load target language pipeline
+            try:
+                tgt_stanza_lang = STANZA_LANG_MAP.get(self.lang_tgt, self.lang_tgt)
+                if tgt_stanza_lang and tgt_stanza_lang not in ['zh', 'zht']:  # Chinese doesn't use lemmatization
+                    if stanza_dir:
+                        self.stanza_tgt = stanza.Pipeline(
+                            lang=tgt_stanza_lang,
+                            processors='tokenize,lemma',
+                            model_dir=str(stanza_dir),
+                            use_gpu=use_gpu
+                        )
+                    else:
+                        self.stanza_tgt = stanza.Pipeline(
+                            lang=tgt_stanza_lang,
+                            processors='tokenize,lemma',
+                            use_gpu=use_gpu
+                        )
+                    print(f"  ✓ Loaded Stanza pipeline for {self.lang_tgt}")
+            except Exception as e:
+                print(f"  ⚠ Warning: Could not load Stanza model for {self.lang_tgt}: {e}")
+                print(f"  ⚠ Falling back to lowercase normalization for {self.lang_tgt}")
         # pymorphy3 only needed for Russian, not used in our experiments
         # self.ru_morph = pymorphy3.MorphAnalyzer()
         self.ru_morph = None
@@ -684,7 +734,7 @@ Translated term: """
 
     def _normalize_word(self, word, lang):
         """
-        language-specific word normalization (spaCy for most languages, PyMorphy for Russian, no lemmatization for Chinese).
+        language-specific word normalization (Stanza for most languages, PyMorphy for Russian, no lemmatization for Chinese).
 
         Parameters:
         :param word: str, The word to be normalized.
@@ -699,22 +749,25 @@ Translated term: """
                 return word.lower()  # Return lowercase if Russian normalization not available
             return self.ru_morph.parse(word)[0].normal_form
         elif lang in ['en', 'de', 'es', 'fr', 'it']:
-            # Use spaCy for lemmatization
-            nlp = None
+            # Use Stanza for lemmatization
+            pipeline = None
             if lang == self.lang_src:
-                nlp = self.spacy_src
+                pipeline = self.stanza_src
             elif lang == self.lang_tgt:
-                nlp = self.spacy_tgt
+                pipeline = self.stanza_tgt
             
-            if nlp is not None:
+            if pipeline is not None:
                 try:
-                    doc = nlp(word)
-                    if len(doc) > 0:
-                        return doc[0].lemma_.lower()
+                    doc = pipeline(word)
+                    if len(doc.sentences) > 0 and len(doc.sentences[0].words) > 0:
+                        # Get lemma from first word
+                        lemma = doc.sentences[0].words[0].lemma
+                        if lemma:
+                            return lemma.lower()
                 except Exception:
                     pass  # Fall through to lowercase fallback
             
-            # Fallback to lowercase if spaCy not available or fails
+            # Fallback to lowercase if Stanza not available or fails
             return word.lower()
         elif lang in ['zh', 'zht']:
             return word  # Chinese: no lemmatization, return as-is
