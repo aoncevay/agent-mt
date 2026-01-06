@@ -421,7 +421,8 @@ class DocPreprocessor:
                             src_paragraphs, ref_paragraphs_raw
                         )
                         # Check alignment quality (only warn if counts differed and alignment failed)
-                        unaligned_src = sum(1 for align in ref_para_alignment if align is None)
+                        # Note: ref_para_alignment should never have None when counts match (1-to-1 case)
+                        unaligned_src = sum(1 for align in ref_para_alignment if align is None) if ref_para_alignment else 0
                         if unaligned_src > 0:
                             _log_with_time(f"      ⚠ WARNING: {unaligned_src} source paragraphs have no aligned reference paragraph")
                 else:
