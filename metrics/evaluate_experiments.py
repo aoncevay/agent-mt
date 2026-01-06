@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 import time
+import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
@@ -430,6 +431,7 @@ def process_experiment(
         )
         aligned_df = preprocessor.process_documents(
             documents,
+            references=references,  # Pass references for alignment
             terminology=terminology,
             similarity_threshold=0.4,
             separator='\n\n'
@@ -487,6 +489,7 @@ def process_experiment(
         )
         aligned_df = preprocessor.process_documents(
             documents,
+            references=references,  # Pass references for alignment
             terminology=terminology,
             similarity_threshold=0.4,
             separator='\n\n'
@@ -611,11 +614,15 @@ def process_experiment(
                 # Prepare segments for this sample: (source, translation, reference)
                 segments = []
                 for idx, row in sample_segments_df.iterrows():
-                    # DataFrame columns are 'src_segment' and 'tgt_segment', not language codes
+                    # DataFrame columns are 'src_segment', 'tgt_segment', and 'ref_segment'
                     src = row['src_segment']
                     tgt = row['tgt_segment']
-                    # Use reference for this specific sample
-                    ref = sample_info['reference_text']
+                    # Use aligned reference segment if available, otherwise fall back to full reference
+                    ref = row.get('ref_segment')
+                    if ref is None or (isinstance(ref, float) and pd.isna(ref)):
+                        # Fallback: use full reference text (shouldn't happen if alignment worked)
+                        ref = sample_info['reference_text']
+                        print(f"      ⚠ Warning: No aligned reference segment for sample {sample_idx}, using full reference")
                     segments.append((src, tgt, ref))
                 
                 # Compute metric scores for this sample's segments

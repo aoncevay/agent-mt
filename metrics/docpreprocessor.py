@@ -326,21 +326,25 @@ class DocPreprocessor:
     def process_documents(
         self,
         documents: List[Tuple[str, str]],
+        references: Optional[List[str]] = None,
         terminology: Optional[Dict[str, list]] = None,
         similarity_threshold: float = 0.4,
         separator: str = '\n\n'
     ) -> pd.DataFrame:
         """
         Process a list of document pairs (source, target) and return aligned segments.
+        Optionally also aligns references if provided.
         
         Args:
             documents: List of (source_text, target_text) tuples
+            references: Optional list of reference_text strings (same order as documents)
             terminology: Optional terminology dictionary (for WMT25-Term)
             similarity_threshold: Threshold for LaBSE similarity (default: 0.4)
             separator: Paragraph separator (default: '\n\n')
         
         Returns:
-            DataFrame with columns: [paragraph, sentence, alignment, src_segment, tgt_segment, score, terms]
+            DataFrame with columns: [paragraph, sentence, alignment, src_segment, tgt_segment, ref_segment, score, terms]
+            (ref_segment is None if references not provided)
         """
         df_data = []
         
