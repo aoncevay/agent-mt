@@ -360,13 +360,29 @@ class DocPreprocessor:
         
         for doc_idx, (src_text, tgt_text) in doc_iterator:
             doc_start = time.time()
+            # Get reference text if provided (should have same structure as source)
+            ref_text = references[doc_idx] if references and doc_idx < len(references) else None
+            
             # Split into paragraphs
             _log_with_time(f"    Document {doc_idx+1}/{len(documents)}: Splitting paragraphs...")
             src_paragraphs, tgt_paragraphs = self._paragraph_aligner(
                 src_text, tgt_text, separator=separator
             )
             
-            _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs")
+            # Split reference paragraphs using same separator (reference should match source structure)
+            ref_paragraphs = None
+            if ref_text:
+                ref_paragraphs = [p.strip() for p in ref_text.split(separator) if p.strip()]
+                # If paragraph counts don't match, try to align them
+                if len(ref_paragraphs) != len(src_paragraphs):
+                    # For now, pad or truncate to match (reference should match source structure)
+                    if len(ref_paragraphs) < len(src_paragraphs):
+                        ref_paragraphs.extend([''] * (len(src_paragraphs) - len(ref_paragraphs)))
+                    else:
+                        ref_paragraphs = ref_paragraphs[:len(src_paragraphs)]
+            
+            _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs" + 
+                          (f", Reference: {len(ref_paragraphs)} paragraphs" if ref_paragraphs else ""))
             
             # Align paragraphs
             for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
@@ -377,7 +393,14 @@ class DocPreprocessor:
                 if not src_sentences or not tgt_sentences:
                     continue
                 
-                # Align sentences using LaBSE
+                # Split reference sentences using same method (reference should match source structure)
+                ref_sentences = None
+                if ref_paragraphs and para_idx < len(ref_paragraphs):
+                    ref_para = ref_paragraphs[para_idx]
+                    if ref_para:
+                        ref_sentences = self._split_sentences(ref_para, self.tgt_lang)
+                
+                # Align sentences using LaBSE (source -> translation)
                 alignment = self._align_sentences(src_sentences, tgt_sentences, similarity_threshold)
                 
                 # Extract terms if terminology is provided
@@ -387,6 +410,25 @@ class DocPreprocessor:
                 
                 # Store aligned segments
                 for align_idx, (src_seg, tgt_seg, score) in enumerate(alignment):
+                    # Find corresponding reference segment by matching source segment position
+                    # Reference should have same structure as source, so match by index
+                    ref_seg = None
+                    if ref_sentences:
+                        # Find which source sentence this segment corresponds to
+                        src_seg_idx = None
+                        for idx, src_sent in enumerate(src_sentences):
+                            # Check if this segment matches the source sentence (exact or substring)
+                            if src_seg == src_sent or (len(src_seg) > 10 and (src_seg in src_sent or src_sent in src_seg)):
+                                src_seg_idx = idx
+                                break
+                        
+                        # Get the corresponding reference sentence by index
+                        if src_seg_idx is not None and src_seg_idx < len(ref_sentences):
+                            ref_seg = ref_sentences[src_seg_idx]
+                        elif align_idx < len(ref_sentences):
+                            # Fallback: use position-based matching (same index)
+                            ref_seg = ref_sentences[align_idx]
+                    
                     df_data.append({
                         'document': doc_idx,  # Document/sample index
                         'paragraph': para_idx,  # Paragraph index within document
@@ -394,6 +436,7 @@ class DocPreprocessor:
                         'alignment': 'labse',
                         'src_segment': src_seg,
                         'tgt_segment': tgt_seg,
+                        'ref_segment': ref_seg,  # Reference segment (same position as source)
                         'score': score,
                         'terms': terms
                     })

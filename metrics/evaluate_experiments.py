@@ -617,12 +617,13 @@ def process_experiment(
                     # DataFrame columns are 'src_segment', 'tgt_segment', and 'ref_segment'
                     src = row['src_segment']
                     tgt = row['tgt_segment']
-                    # Use aligned reference segment if available, otherwise fall back to full reference
+                    # Use reference segment from alignment (should be available if reference was provided)
                     ref = row.get('ref_segment')
                     if ref is None or (isinstance(ref, float) and pd.isna(ref)):
-                        # Fallback: use full reference text (shouldn't happen if alignment worked)
-                        ref = sample_info['reference_text']
-                        print(f"      ⚠ Warning: No aligned reference segment for sample {sample_idx}, using full reference")
+                        # Fallback: use full reference text (should only happen if no reference was provided)
+                        ref = sample_info.get('reference_text', '')
+                        if ref:
+                            print(f"      ⚠ Warning: No aligned reference segment for sample {sample_idx}, segment {idx}, using full reference")
                     segments.append((src, tgt, ref))
                 
                 # Compute metric scores for this sample's segments
