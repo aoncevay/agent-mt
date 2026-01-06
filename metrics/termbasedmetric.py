@@ -205,7 +205,6 @@ class TermBasedMetric():
             
             # Load awesome-align model from local path (if available) to avoid HF connection
             # Default: try to use local model, fallback to HF if not found
-            import os
             # Try multiple possible paths for EFS mount
             possible_paths = [
                 # EFS mount path (SageMaker)
