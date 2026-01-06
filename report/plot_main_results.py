@@ -1179,114 +1179,74 @@ def plot_dataset_avg_price_pareto(
     """
     Create Pareto optimality plot for AVG dataset results.
     Shows rank 1 and rank 2 Pareto optimal points with gold/silver stars.
+    Uses the same data extraction logic as the table generation.
     """
-    # Filter lang pairs to match table logic (use same lang pairs as tables)
-    # Import lang pair lists from write_tables_paper to ensure consistency
+    # Import table module to use its data extraction functions
     import importlib.util
     table_script_path = Path(__file__).parent / "write_tables_paper.py"
     spec = importlib.util.spec_from_file_location("write_tables_paper", table_script_path)
     table_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(table_module)
     
-    # Normalize language pair format: convert dashes to underscores to match table format
-    def normalize_lang_pair(lp: str) -> str:
-        """Normalize language pair format (en-de -> en_de) to match table format."""
-        return lp.replace('-', '_')
+    # Convert reports_by_lang_pair to the format expected by table functions
+    # Table expects: reports_by_dataset_lang = {(dataset, lang_pair): [reports]}
+    reports_by_dataset_lang = {}
+    reports_by_dataset_lang_term = {}
     
+    for lang_pair, reports in reports_by_lang_pair.items():
+        if is_term:
+            reports_by_dataset_lang_term[(dataset, lang_pair)] = reports
+        else:
+            reports_by_dataset_lang[(dataset, lang_pair)] = reports
+    
+    # Use table's data collection function
+    data = table_module.collect_data_by_workflow_model(
+        reports_by_dataset_lang,
+        reports_by_dataset_lang_term
+    )
+    
+    # Determine dataset key and lang pairs
     if dataset == "dolfin":
-        valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
-        # Also create normalized version for matching
-        valid_lang_pairs_normalized = {normalize_lang_pair(lp) for lp in valid_lang_pairs}
+        dataset_key = "dolfin"
+        lang_pairs = table_module.DOLFIN_LANG_PAIRS
     elif dataset == "wmt25" and is_term:
-        valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
-        # WMT25 uses dashes, so no normalization needed
-        valid_lang_pairs_normalized = valid_lang_pairs
+        dataset_key = "wmt25_term"
+        lang_pairs = table_module.WMT25_LANG_PAIRS
     else:
-        valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
-        valid_lang_pairs_normalized = valid_lang_pairs
+        return  # Unknown dataset
     
-    # Filter reports_by_lang_pair to only include valid lang pairs
-    # Match either original format or normalized format
-    filtered_reports_by_lang_pair = {}
-    for lp, reports in reports_by_lang_pair.items():
-        # Check if lp matches directly or after normalization
-        if lp in valid_lang_pairs or normalize_lang_pair(lp) in valid_lang_pairs_normalized:
-            filtered_reports_by_lang_pair[lp] = reports
+    # Use table's compute functions
+    if metric == "chrf":
+        metric_key = "chrf"
+        averages = table_module.compute_averages(data, dataset_key, metric_key, lang_pairs)
+    elif metric == "termacc":
+        metric_key = "termacc"
+        averages = table_module.compute_averages(data, dataset_key, metric_key, lang_pairs)
+    else:
+        return
     
-    # Aggregate data across language pairs (same logic as plot_dataset_avg_price)
-    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    total_costs = table_module.compute_total_costs(data, dataset_key, lang_pairs)
     
-    for lang_pair, reports in filtered_reports_by_lang_pair.items():
-        for report in reports:
-            workflow_name = report.get("workflow", "")
-            workflow = get_workflow_acronym(workflow_name)
-            model = report["model"]
-            key = (workflow, model)
-            
-            # Get metric value
-            if metric == "chrf":
-                value = report.get("chrf")
-            elif metric == "termacc":
-                value = report.get("term_acc")
-            else:
-                continue
-            
-            if value is None:
-                continue
-            
-            # Calculate cost for this lang pair
-            tokens_input = report.get("tokens_input", 0)
-            tokens_output = report.get("tokens_output", 0)
-            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
-            
-            if cost is None:
-                continue
-            
-            aggregated_data[key]["values"].append(value)
-            aggregated_data[key]["costs"].append(cost)
-    
+    # Build data points using table's exact values
+    data_points = []
     workflows = set()
     models = set()
-    data_points = []
     
-    # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
-    # Tables iterate through WORKFLOW_ORDER × MODEL_ORDER when computing pareto ranks
-    # Use same order for consistency to ensure the same set of points is included
-    # This ensures the 75th percentile threshold and pareto ranking are identical
-    # Use MODEL_ORDER from table module to ensure exact same iteration order
-    MODEL_ORDER_FOR_PARETO = table_module.MODEL_ORDER
-    
-    for workflow in WORKFLOW_ORDER:
-        for model in MODEL_ORDER_FOR_PARETO:
-            # Filter by MODEL_MARKERS (same as tables)
-            if model not in MODEL_MARKERS:
-                continue
-            
+    for workflow in table_module.WORKFLOW_ORDER:
+        for model in table_module.MODEL_ORDER:
             key = (workflow, model)
-            if key not in aggregated_data:
-                continue
+            avg_value = averages.get(key)
+            total_cost = total_costs.get(key)
             
-            data = aggregated_data[key]
-            
-            # Exclude gpt-5
-            if model == "gpt-5":
-                continue
-            
-            if not data["values"] or not data["costs"]:
-                continue
-            
-            avg_value = sum(data["values"]) / len(data["values"])
-            total_cost = sum(data["costs"])  # Total cost across all lang pairs
-            
-            workflows.add(workflow)
-            models.add(model)
-            
-            data_points.append({
-                "workflow": workflow,
-                "model": model,
-                "value": avg_value,
-                "cost": total_cost
-            })
+            if avg_value is not None and total_cost is not None:
+                workflows.add(workflow)
+                models.add(model)
+                data_points.append({
+                    "workflow": workflow,
+                    "model": model,
+                    "value": avg_value,
+                    "cost": total_cost
+                })
     
     if not data_points:
         return
@@ -1540,110 +1500,74 @@ def plot_dataset_avg_price_pareto_simplified(
     Create simplified Pareto optimality plot for AVG dataset results.
     Uses workflow colors, circle markers for all points, and labels model names
     for points with Pareto stars.
+    Uses the same data extraction logic as the table generation.
     """
-    # Filter lang pairs to match table logic (use same lang pairs as tables)
+    # Import table module to use its data extraction functions
     import importlib.util
     table_script_path = Path(__file__).parent / "write_tables_paper.py"
     spec = importlib.util.spec_from_file_location("write_tables_paper", table_script_path)
     table_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(table_module)
     
-    # Normalize language pair format: convert dashes to underscores to match table format
-    def normalize_lang_pair(lp: str) -> str:
-        """Normalize language pair format (en-de -> en_de) to match table format."""
-        return lp.replace('-', '_')
+    # Convert reports_by_lang_pair to the format expected by table functions
+    # Table expects: reports_by_dataset_lang = {(dataset, lang_pair): [reports]}
+    reports_by_dataset_lang = {}
+    reports_by_dataset_lang_term = {}
     
+    for lang_pair, reports in reports_by_lang_pair.items():
+        if is_term:
+            reports_by_dataset_lang_term[(dataset, lang_pair)] = reports
+        else:
+            reports_by_dataset_lang[(dataset, lang_pair)] = reports
+    
+    # Use table's data collection function
+    data = table_module.collect_data_by_workflow_model(
+        reports_by_dataset_lang,
+        reports_by_dataset_lang_term
+    )
+    
+    # Determine dataset key and lang pairs
     if dataset == "dolfin":
-        valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
-        # Also create normalized version for matching
-        valid_lang_pairs_normalized = {normalize_lang_pair(lp) for lp in valid_lang_pairs}
+        dataset_key = "dolfin"
+        lang_pairs = table_module.DOLFIN_LANG_PAIRS
     elif dataset == "wmt25" and is_term:
-        valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
-        # WMT25 uses dashes, so no normalization needed
-        valid_lang_pairs_normalized = valid_lang_pairs
+        dataset_key = "wmt25_term"
+        lang_pairs = table_module.WMT25_LANG_PAIRS
     else:
-        valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
-        valid_lang_pairs_normalized = valid_lang_pairs
+        return  # Unknown dataset
     
-    # Filter reports_by_lang_pair to only include valid lang pairs
-    # Match either original format or normalized format
-    filtered_reports_by_lang_pair = {}
-    for lp, reports in reports_by_lang_pair.items():
-        # Check if lp matches directly or after normalization
-        if lp in valid_lang_pairs or normalize_lang_pair(lp) in valid_lang_pairs_normalized:
-            filtered_reports_by_lang_pair[lp] = reports
+    # Use table's compute functions
+    if metric == "chrf":
+        metric_key = "chrf"
+        averages = table_module.compute_averages(data, dataset_key, metric_key, lang_pairs)
+    elif metric == "termacc":
+        metric_key = "termacc"
+        averages = table_module.compute_averages(data, dataset_key, metric_key, lang_pairs)
+    else:
+        return
     
-    # Aggregate data across language pairs
-    aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
+    total_costs = table_module.compute_total_costs(data, dataset_key, lang_pairs)
     
-    for lang_pair, reports in filtered_reports_by_lang_pair.items():
-        for report in reports:
-            workflow_name = report.get("workflow", "")
-            workflow = get_workflow_acronym(workflow_name)
-            model = report["model"]
-            key = (workflow, model)
-            
-            # Get metric value
-            if metric == "chrf":
-                value = report.get("chrf")
-            elif metric == "termacc":
-                value = report.get("term_acc")
-            else:
-                continue
-            
-            if value is None:
-                continue
-            
-            # Calculate cost for this lang pair
-            tokens_input = report.get("tokens_input", 0)
-            tokens_output = report.get("tokens_output", 0)
-            cost = calculate_cost(tokens_input, tokens_output, model, use_batch)
-            
-            if cost is None:
-                continue
-            
-            aggregated_data[key]["values"].append(value)
-            aggregated_data[key]["costs"].append(cost)
-    
+    # Build data points using table's exact values
+    data_points = []
     workflows = set()
     models = set()
-    data_points = []
     
-    # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
-    # Use MODEL_ORDER from table module to ensure exact same iteration order
-    MODEL_ORDER_FOR_PARETO = table_module.MODEL_ORDER
-    
-    for workflow in WORKFLOW_ORDER:
-        for model in MODEL_ORDER_FOR_PARETO:
-            # Filter by MODEL_MARKERS (same as tables)
-            if model not in MODEL_MARKERS:
-                continue
-            
+    for workflow in table_module.WORKFLOW_ORDER:
+        for model in table_module.MODEL_ORDER:
             key = (workflow, model)
-            if key not in aggregated_data:
-                continue
+            avg_value = averages.get(key)
+            total_cost = total_costs.get(key)
             
-            data = aggregated_data[key]
-            
-            # Exclude gpt-5
-            if model == "gpt-5":
-                continue
-            
-            if not data["values"] or not data["costs"]:
-                continue
-            
-            avg_value = sum(data["values"]) / len(data["values"])
-            total_cost = sum(data["costs"])  # Total cost across all lang pairs
-            
-            workflows.add(workflow)
-            models.add(model)
-            
-            data_points.append({
-                "workflow": workflow,
-                "model": model,
-                "value": avg_value,
-                "cost": total_cost
-            })
+            if avg_value is not None and total_cost is not None:
+                workflows.add(workflow)
+                models.add(model)
+                data_points.append({
+                    "workflow": workflow,
+                    "model": model,
+                    "value": avg_value,
+                    "cost": total_cost
+                })
     
     if not data_points:
         return
