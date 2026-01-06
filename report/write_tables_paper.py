@@ -112,7 +112,7 @@ def get_color_for_value(value: float, min_val: float, max_val: float, metric_typ
         else:
             return "\\cellcolor{red!25}"
     else:
-        # For chrF++ and COMET, high is good (green), low is bad (red)
+        # For chrF++ and MetricX-24, high is good (green), low is bad (red)
         if normalized >= 0.7:
             return "\\cellcolor{green!25}"
         elif normalized >= 0.5:
@@ -359,20 +359,24 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("% \\usepackage{booktabs}        % For \\toprule, \\midrule, \\bottomrule, \\cmidrule")
     lines.append("% \\usepackage{multirow}        % For \\multirow command")
     lines.append("% \\usepackage{graphicx}        % For \\scalebox command (for star sizing)")
+    lines.append("%")
+    lines.append("% Color definitions for Pareto ranks:")
+    lines.append("% \\definecolor{rank1}{RGB}{255,215,0}  % Gold for rank 1")
+    lines.append("% \\definecolor{rank2}{RGB}{192,192,192}  % Silver for rank 2")
     lines.append("")
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
     lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
-    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + COMET (5: Avg + 4 lang pairs) + Cost (1: Total) = 13
+    # Columns: System (2: workflow + model) + chrF++ (5: Avg + 4 lang pairs) + MetricX-24 (5: Avg + 4 lang pairs) + Cost (1: Total) = 13
     lines.append("\\begin{tabular}{ll" + "c" * 11 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | COMET | Cost ($)
+    # First header row: chrF++ | MetricX-24 | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{5}{c}{\\textbf{chrF++}} & "
-    header1 += "\\multicolumn{5}{c}{\\textbf{COMET}} & "
+    header1 += "\\multicolumn{5}{c}{\\textbf{MetricX-24}} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
     lines.append("\\cmidrule(lr){3-7} \\cmidrule(lr){8-12} \\cmidrule(lr){13-13}")
@@ -422,7 +426,7 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("dolfin", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # COMET columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It) - empty for now
+            # MetricX-24 columns (5 columns: Avg, En-De, En-Es, En-Fr, En-It) - empty for now
             row_parts.append("---")  # Avg column (empty)
             for _ in DOLFIN_LANG_PAIRS:
                 row_parts.append("---")  # Individual lang pair columns (empty)
@@ -455,7 +459,7 @@ def generate_latex_table_dolfin(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for DOLFIN dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ performance vs. cost trade-off. Only systems above the 75th percentile in performance are considered for Pareto ranking.}")
+    lines.append("\\caption{Main results for DOLFIN dataset. Top-performing systems are labelled as rank 1\\textcolor{rank1}{$\\bigstar$} and rank 2\\textcolor{rank2}{$\\bigstar$} according to Pareto optimality (only systems above the 75th percentile in performance are considered for Pareto ranking).}")
     lines.append("\\label{tab:main_results_dolfin}")
     lines.append("\\end{table*}")
     
@@ -544,20 +548,24 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("% \\usepackage{booktabs}        % For \\toprule, \\midrule, \\bottomrule, \\cmidrule")
     lines.append("% \\usepackage{multirow}        % For \\multirow command")
     lines.append("% \\usepackage{graphicx}        % For \\scalebox command (for star sizing)")
+    lines.append("%")
+    lines.append("% Color definitions for Pareto ranks:")
+    lines.append("% \\definecolor{rank1}{RGB}{255,215,0}  % Gold for rank 1")
+    lines.append("% \\definecolor{rank2}{RGB}{192,192,192}  % Silver for rank 2")
     lines.append("")
     lines.append("\\begin{table*}[t]")
     lines.append("\\centering")
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{3pt}")  # Reduce column spacing
     lines.append("\\resizebox{\\textwidth}{!}{")  # Scale to fit textwidth
-    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + COMET (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) + Cost (1: Total) = 12
+    # Columns: System (2: workflow + model) + chrF++ (3: Avg + 2 lang pairs) + MetricX-24 (3: Avg + 2 lang pairs) + TermAcc (3: Avg + 2 lang pairs) + Cost (1: Total) = 12
     lines.append("\\begin{tabular}{ll" + "c" * 10 + "}")
     lines.append("\\toprule")
     
-    # First header row: chrF++ | COMET | TermAcc | Cost ($)
+    # First header row: chrF++ | MetricX-24 | TermAcc | Cost ($)
     header1 = "\\multirow{2}{*}{\\textbf{System}} & \\multirow{2}{*}{} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{chrF++}} & "
-    header1 += "\\multicolumn{3}{c}{\\textbf{COMET}} & "
+    header1 += "\\multicolumn{3}{c}{\\textbf{MetricX-24}} & "
     header1 += "\\multicolumn{3}{c}{\\textbf{TermAcc}} & "
     header1 += "\\multicolumn{1}{c}{\\textbf{Cost (\\$)}} \\\\"
     lines.append(header1)
@@ -608,7 +616,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
                 val = data.get(workflow, {}).get(model, {}).get("wmt25_term", {}).get(lang_pair, {}).get("chrf")
                 row_parts.append(format_value(val, "chrf"))
             
-            # COMET columns (3 columns: Avg, En-Zht, Zht-En) - empty for now
+            # MetricX-24 columns (3 columns: Avg, En-Zht, Zht-En) - empty for now
             row_parts.append("---")  # Avg column (empty)
             for _ in WMT25_LANG_PAIRS:
                 row_parts.append("---")  # Individual lang pair columns (empty)
@@ -652,7 +660,7 @@ def generate_latex_table_wmt25(data: Dict, output_path: Path) -> None:
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     lines.append("}")  # End resizebox
-    lines.append("\\caption{Main results for WMT25+Term dataset. Gold stars ($\\star$) indicate Rank 1 (Pareto optimal) systems, and silver stars indicate Rank 2 (dominated only by Rank 1) systems, based on chrF++ and TermAcc performance vs. cost trade-offs. Only systems above the 75th percentile in performance are considered for Pareto ranking.}")
+    lines.append("\\caption{Main results for WMT25+Term dataset. Top-performing systems are labelled as rank 1\\textcolor{rank1}{$\\bigstar$} and rank 2\\textcolor{rank2}{$\\bigstar$} according to Pareto optimality (only systems above the 75th percentile in performance are considered for Pareto ranking).}")
     lines.append("\\label{tab:main_results_wmt25}")
     lines.append("\\end{table*}")
     
