@@ -612,19 +612,36 @@ def process_experiment(
                     continue
                 
                 # Prepare segments for this sample: (source, translation, reference)
+                # IMPORTANT: Every source segment should have a reference segment
+                # - Under-translation (empty target): (src, "", ref) → MetricX will penalize (low score)
+                # - Over-translation (empty source): ("", tgt, None) → May not have reference, but we still compute
                 segments = []
                 for idx, row in sample_segments_df.iterrows():
                     # DataFrame columns are 'src_segment', 'tgt_segment', and 'ref_segment'
-                    src = row['src_segment']
-                    tgt = row['tgt_segment']
-                    # Use reference segment from alignment (should be available if reference was provided)
+                    src = str(row['src_segment']) if pd.notna(row['src_segment']) else ""
+                    tgt = str(row['tgt_segment']) if pd.notna(row['tgt_segment']) else ""
                     ref = row.get('ref_segment')
+                    
+                    # Handle reference segment
                     if ref is None or (isinstance(ref, float) and pd.isna(ref)):
-                        # Fallback: use full reference text (should only happen if no reference was provided)
-                        ref = sample_info.get('reference_text', '')
-                        if ref:
-                            print(f"      ⚠ Warning: No aligned reference segment for sample {sample_idx}, segment {idx}, using full reference")
-                    segments.append((src, tgt, ref))
+                        # If we have a source segment but no reference, this is a problem
+                        # (every source should have a reference)
+                        if src:  # Source exists but no reference
+                            # Fallback: use full reference text (shouldn't happen if alignment worked)
+                            ref = sample_info.get('reference_text', '')
+                            if ref:
+                                print(f"      ⚠ Warning: Source segment has no reference for sample {sample_idx}, segment {idx}, using full reference")
+                            else:
+                                print(f"      ⚠ Warning: Source segment has no reference and no reference_text for sample {sample_idx}, segment {idx}")
+                        # If no source (over-translation), ref can be None - this is OK
+                        ref = ref if ref else ""
+                    else:
+                        ref = str(ref)
+                    
+                    # Only add segments that have at least source or target
+                    # (we need at least one to compute MetricX)
+                    if src or tgt:
+                        segments.append((src, tgt, ref))
                 
                 # Compute metric scores for this sample's segments
                 _log_with_time(f"    Sample {sample_idx+1}/{len(sample_data)}: Computing {metric_name} for {len(segments)} segments...")

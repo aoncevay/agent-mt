@@ -1188,18 +1188,30 @@ def plot_dataset_avg_price_pareto(
     table_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(table_module)
     
+    # Normalize language pair format: convert dashes to underscores to match table format
+    def normalize_lang_pair(lp: str) -> str:
+        """Normalize language pair format (en-de -> en_de) to match table format."""
+        return lp.replace('-', '_')
+    
     if dataset == "dolfin":
         valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
+        # Also create normalized version for matching
+        valid_lang_pairs_normalized = {normalize_lang_pair(lp) for lp in valid_lang_pairs}
     elif dataset == "wmt25" and is_term:
         valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
+        # WMT25 uses dashes, so no normalization needed
+        valid_lang_pairs_normalized = valid_lang_pairs
     else:
         valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
+        valid_lang_pairs_normalized = valid_lang_pairs
     
     # Filter reports_by_lang_pair to only include valid lang pairs
-    filtered_reports_by_lang_pair = {
-        lp: reports for lp, reports in reports_by_lang_pair.items() 
-        if lp in valid_lang_pairs
-    }
+    # Match either original format or normalized format
+    filtered_reports_by_lang_pair = {}
+    for lp, reports in reports_by_lang_pair.items():
+        # Check if lp matches directly or after normalization
+        if lp in valid_lang_pairs or normalize_lang_pair(lp) in valid_lang_pairs_normalized:
+            filtered_reports_by_lang_pair[lp] = reports
     
     # Aggregate data across language pairs (same logic as plot_dataset_avg_price)
     aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
@@ -1241,7 +1253,8 @@ def plot_dataset_avg_price_pareto(
     # Tables iterate through WORKFLOW_ORDER × MODEL_ORDER when computing pareto ranks
     # Use same order for consistency to ensure the same set of points is included
     # This ensures the 75th percentile threshold and pareto ranking are identical
-    MODEL_ORDER_FOR_PARETO = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    # Use MODEL_ORDER from table module to ensure exact same iteration order
+    MODEL_ORDER_FOR_PARETO = table_module.MODEL_ORDER
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER_FOR_PARETO:
@@ -1535,18 +1548,30 @@ def plot_dataset_avg_price_pareto_simplified(
     table_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(table_module)
     
+    # Normalize language pair format: convert dashes to underscores to match table format
+    def normalize_lang_pair(lp: str) -> str:
+        """Normalize language pair format (en-de -> en_de) to match table format."""
+        return lp.replace('-', '_')
+    
     if dataset == "dolfin":
         valid_lang_pairs = set(table_module.DOLFIN_LANG_PAIRS)
+        # Also create normalized version for matching
+        valid_lang_pairs_normalized = {normalize_lang_pair(lp) for lp in valid_lang_pairs}
     elif dataset == "wmt25" and is_term:
         valid_lang_pairs = set(table_module.WMT25_LANG_PAIRS)
+        # WMT25 uses dashes, so no normalization needed
+        valid_lang_pairs_normalized = valid_lang_pairs
     else:
         valid_lang_pairs = set(reports_by_lang_pair.keys())  # Use all if unknown
+        valid_lang_pairs_normalized = valid_lang_pairs
     
     # Filter reports_by_lang_pair to only include valid lang pairs
-    filtered_reports_by_lang_pair = {
-        lp: reports for lp, reports in reports_by_lang_pair.items() 
-        if lp in valid_lang_pairs
-    }
+    # Match either original format or normalized format
+    filtered_reports_by_lang_pair = {}
+    for lp, reports in reports_by_lang_pair.items():
+        # Check if lp matches directly or after normalization
+        if lp in valid_lang_pairs or normalize_lang_pair(lp) in valid_lang_pairs_normalized:
+            filtered_reports_by_lang_pair[lp] = reports
     
     # Aggregate data across language pairs
     aggregated_data = defaultdict(lambda: {"values": [], "costs": []})
@@ -1585,7 +1610,8 @@ def plot_dataset_avg_price_pareto_simplified(
     data_points = []
     
     # Filter by MODEL_MARKERS and WORKFLOW_ORDER to match table logic
-    MODEL_ORDER_FOR_PARETO = ["gpt-4-1", "qwen3-235b", "qwen3-32b", "gpt-4-1-nano"]
+    # Use MODEL_ORDER from table module to ensure exact same iteration order
+    MODEL_ORDER_FOR_PARETO = table_module.MODEL_ORDER
     
     for workflow in WORKFLOW_ORDER:
         for model in MODEL_ORDER_FOR_PARETO:

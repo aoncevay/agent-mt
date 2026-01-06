@@ -400,6 +400,10 @@ class DocPreprocessor:
                     if ref_para:
                         ref_sentences = self._split_sentences(ref_para, self.tgt_lang)
                 
+                # Check if source and reference have same number of sentences
+                if ref_sentences and len(ref_sentences) != len(src_sentences):
+                    _log_with_time(f"      ⚠ Warning: Paragraph {para_idx}: Source has {len(src_sentences)} sentences, Reference has {len(ref_sentences)} sentences")
+                
                 # Align sentences using LaBSE (source -> translation)
                 alignment = self._align_sentences(src_sentences, tgt_sentences, similarity_threshold)
                 
@@ -409,25 +413,38 @@ class DocPreprocessor:
                     terms = self._extract_terms(src_para, tgt_para, terminology)
                 
                 # Store aligned segments
-                for align_idx, (src_seg, tgt_seg, score) in enumerate(alignment):
-                    # Find corresponding reference segment by matching source segment position
-                    # Reference should have same structure as source, so match by index
+                # Since reference should match source structure exactly, we use the source sentence index
+                # from the alignment result
+                for align_idx, alignment_item in enumerate(alignment):
+                    # Unpack alignment item (now includes src_sentence_idx)
+                    if len(alignment_item) == 4:
+                        src_seg, tgt_seg, score, src_sentence_idx = alignment_item
+                    else:
+                        # Backward compatibility: if old format, extract index from text
+                        src_seg, tgt_seg, score = alignment_item
+                        src_sentence_idx = None
+                        if src_seg:
+                            for idx, src_sent in enumerate(src_sentences):
+                                if src_seg == src_sent:
+                                    src_sentence_idx = idx
+                                    break
+                    
+                    # Get corresponding reference segment using source sentence index
+                    # IMPORTANT: Every source segment MUST have a reference segment
+                    # (even if target is empty - this represents under-translation and will be penalized)
                     ref_seg = None
                     if ref_sentences:
-                        # Find which source sentence this segment corresponds to
-                        src_seg_idx = None
-                        for idx, src_sent in enumerate(src_sentences):
-                            # Check if this segment matches the source sentence (exact or substring)
-                            if src_seg == src_sent or (len(src_seg) > 10 and (src_seg in src_sent or src_sent in src_seg)):
-                                src_seg_idx = idx
-                                break
-                        
-                        # Get the corresponding reference sentence by index
-                        if src_seg_idx is not None and src_seg_idx < len(ref_sentences):
-                            ref_seg = ref_sentences[src_seg_idx]
-                        elif align_idx < len(ref_sentences):
-                            # Fallback: use position-based matching (same index)
-                            ref_seg = ref_sentences[align_idx]
+                        if src_sentence_idx is not None:
+                            # We have a source sentence index - get the corresponding reference
+                            if src_sentence_idx < len(ref_sentences):
+                                ref_seg = ref_sentences[src_sentence_idx]
+                            else:
+                                # This shouldn't happen if source and reference have same structure
+                                _log_with_time(f"      ⚠ Warning: Source sentence index {src_sentence_idx} >= reference sentences ({len(ref_sentences)})")
+                        # If src_sentence_idx is None, this is an unaligned target sentence (over-translation)
+                        # For over-translation, we don't have a source, so we can't get a reference
+                        # This is correct - over-translated segments will be counted but won't have reference
+                        # (MetricX might handle this differently, but typically we compare source->target vs source->reference)
                     
                     df_data.append({
                         'document': doc_idx,  # Document/sample index
@@ -528,8 +545,14 @@ class DocPreprocessor:
             sentences = re.split(r'[.!?]\s+', text)
             return [s.strip() for s in sentences if s.strip()]
     
-    def _align_sentences(self, src_sentences: List[str], tgt_sentences: List[str], similarity_threshold: float = 0.4) -> List[Tuple[str, str, float]]:
-        """Align sentences using LaBSE embeddings."""
+    def _align_sentences(self, src_sentences: List[str], tgt_sentences: List[str], similarity_threshold: float = 0.4) -> List[Tuple[str, str, float, Optional[int]]]:
+        """
+        Align sentences using LaBSE embeddings.
+        
+        Returns:
+            List of tuples: (src_segment, tgt_segment, score, src_sentence_idx)
+            src_sentence_idx is None for unaligned target sentences (empty source)
+        """
         if not src_sentences or not tgt_sentences:
             return []
         
@@ -561,16 +584,16 @@ class DocPreprocessor:
                         best_tgt_idx = tgt_idx
                 
                 if best_tgt_idx is not None:
-                    alignment.append((src_sent, tgt_sentences[best_tgt_idx], best_score))
+                    alignment.append((src_sent, tgt_sentences[best_tgt_idx], best_score, src_idx))
                     used_tgt_indices.add(best_tgt_idx)
                 else:
                     # Unaligned source sentence
-                    alignment.append((src_sent, "", 0.0))
+                    alignment.append((src_sent, "", 0.0, src_idx))
             
-            # Add unaligned target sentences
+            # Add unaligned target sentences (no corresponding source)
             for tgt_idx, tgt_sent in enumerate(tgt_sentences):
                 if tgt_idx not in used_tgt_indices:
-                    alignment.append(("", tgt_sent, 0.0))
+                    alignment.append(("", tgt_sent, 0.0, None))
             
             return alignment
             
@@ -578,7 +601,7 @@ class DocPreprocessor:
             _log_with_time(f"      ⚠ Sentence alignment failed: {e}")
             # Fallback: simple 1-to-1 alignment
             min_len = min(len(src_sentences), len(tgt_sentences))
-            return [(src_sentences[i], tgt_sentences[i] if i < len(tgt_sentences) else "", 1.0) for i in range(min_len)]
+            return [(src_sentences[i], tgt_sentences[i] if i < len(tgt_sentences) else "", 1.0, i) for i in range(min_len)]
     
     def _extract_terms(self, src_text: str, tgt_text: str, terminology: Dict[str, list]) -> Optional[Dict[str, list]]:
         """
