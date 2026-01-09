@@ -1,7 +1,8 @@
 """
 Document preprocessor for splitting and aligning documents using LaBSE embeddings.
 
-Adapted from WMT25-Term term-consistency approach to work with our data format.
+Adapted from WMT25-Term term-consistency approach and SEGALE's VecAlign methodology.
+Uses dynamic programming for proper many-to-many alignment.
 """
 
 import pandas as pd
@@ -12,16 +13,22 @@ import time
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 from sentence_transformers import SentenceTransformer
-from polyfuzz import PolyFuzz
-from polyfuzz.models import Embeddings
-from flair.embeddings import TransformerWordEmbeddings
-from flair.embeddings import SentenceTransformerDocumentEmbeddings
 import spacy
 from nltk.tokenize import word_tokenize
 
+# Import centralized configuration
+from metrics.config import get_config, setup_offline_environment
+
+# Import alignment module (supports VecAlign and simple DP)
+from metrics.dp_alignment import (
+    align_with_reference, 
+    align_segments_dp, 
+    align_segments,
+    is_vecalign_available
+)
+
 # Set environment variables to prevent HuggingFace connections
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
+setup_offline_environment()
 
 # Map language codes to spaCy model names
 SPACY_MODEL_MAP = {
@@ -76,23 +83,33 @@ def _log_with_time(message: str):
 
 
 def find_labse_model_path(labse_model_path: Optional[Path] = None) -> Path:
-    """Find LaBSE model path from common locations."""
+    """Find LaBSE model path using centralized config."""
     if labse_model_path is not None:
         return Path(labse_model_path).resolve()
     
-    possible_paths = [
+    # Use centralized config
+    config = get_config()
+    labse_path = config.get_labse_path()
+    
+    if labse_path and labse_path.exists():
+        return labse_path.resolve()
+    
+    # Fallback to hardcoded paths for backward compatibility
+    fallback_paths = [
         Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/LaBSE"),
         Path.home() / "user-default-efs" / "HF_models" / "LaBSE",
         Path("/mnt/custom-file-systems/efs") / "HF_models" / "LaBSE",
-        Path.home() / "Documents" / "Code" / "HF_models" / "LaBSE",  # Local path
+        Path.home() / "Documents" / "Code" / "HF_models" / "LaBSE",
+        Path.home() / "HF_models" / "LaBSE",
     ]
     
-    for path in possible_paths:
+    for path in fallback_paths:
         if path.exists():
             return Path(path).resolve()
     
     raise FileNotFoundError(
-        f"LaBSE model not found. Tried paths:\n" + "\n".join(f"  - {p}" for p in possible_paths)
+        f"LaBSE model not found. Please set HF_MODELS_DIR or LABSE_MODEL_PATH in metrics/.env\n"
+        f"Run 'python metrics/config.py' to verify your configuration."
     )
 
 
@@ -169,90 +186,36 @@ def load_labse_model_once(
 def load_embeddings_wrapper_once(
     labse_model_path: Optional[Path] = None,
     labse_model: Optional[SentenceTransformer] = None
-) -> SentenceTransformerDocumentEmbeddings:
+):
     """
-    Load embeddings wrapper once and cache it. Reuses the same instance.
+    DEPRECATED: This function is no longer needed with DP alignment.
+    Kept for backward compatibility - returns None.
     
-    Args:
-        labse_model_path: Path to LaBSE model directory (used if labse_model not provided)
-        labse_model: Optional pre-loaded SentenceTransformer model
-        
-    Returns:
-        SentenceTransformerDocumentEmbeddings instance
+    The new DP alignment uses LaBSE model directly without Flair embeddings wrapper.
     """
-    # Check cache first
-    cache_key = str(labse_model_path) if labse_model_path else "default"
-    if cache_key in _loaded_embeddings_cache:
-        _log_with_time(f"  Using cached embeddings wrapper from {cache_key}")
-        return _loaded_embeddings_cache[cache_key]
-    
-    # Get model path (needed for SentenceTransformerDocumentEmbeddings)
-    if labse_model_path is None:
-        labse_model_path = find_labse_model_path()
-    
-    labse_model_path = Path(labse_model_path).resolve()
-    
-    _log_with_time("  Creating embeddings wrapper for PolyFuzz...")
-    
-    # SentenceTransformerDocumentEmbeddings needs a path, not a model object
-    # So we use the path even if we have the model loaded
-    try:
-        embeddings = SentenceTransformerDocumentEmbeddings(str(labse_model_path))
-        _log_with_time("  ✓ Created SentenceTransformerDocumentEmbeddings from path")
-    except Exception as e:
-        _log_with_time(f"  ✗ Could not create embeddings wrapper: {e}")
-        raise RuntimeError(
-            f"Could not create SentenceTransformerDocumentEmbeddings from {labse_model_path}\n"
-            f"Error: {e}"
-        ) from e
-    
-    # Cache it
-    _loaded_embeddings_cache[cache_key] = embeddings
-    _log_with_time("  ✓ Embeddings wrapper cached for reuse")
-    
-    return embeddings
+    _log_with_time("  ⚠ Warning: load_embeddings_wrapper_once is DEPRECATED (using DP alignment)")
+    return None
 
 
 def load_polyfuzz_model_once(
     labse_model_path: Optional[Path] = None,
-    embeddings: Optional[SentenceTransformerDocumentEmbeddings] = None
-) -> PolyFuzz:
+    embeddings=None
+):
     """
-    Load PolyFuzz model once and cache it. Reuses the same instance.
+    DEPRECATED: This function is no longer needed with DP alignment.
+    Kept for backward compatibility - returns None.
     
-    Args:
-        labse_model_path: Path to LaBSE model directory (used if embeddings not provided)
-        embeddings: Optional pre-loaded SentenceTransformerDocumentEmbeddings
-        
-    Returns:
-        PolyFuzz instance
+    The new DP alignment uses dynamic programming with LaBSE embeddings directly.
     """
-    # Check cache first
-    cache_key = str(labse_model_path) if labse_model_path else "default"
-    if cache_key in _loaded_polyfuzz_cache:
-        _log_with_time(f"  Using cached PolyFuzz model from {cache_key}")
-        return _loaded_polyfuzz_cache[cache_key]
-    
-    # Load embeddings if not provided
-    if embeddings is None:
-        embeddings = load_embeddings_wrapper_once(labse_model_path)
-    
-    _log_with_time("  Creating PolyFuzz model...")
-    LaBSE_embeddings = Embeddings(embeddings, min_similarity=0, model_id="LaBSE")
-    polyfuzz_model = PolyFuzz([LaBSE_embeddings])
-    _log_with_time("  ✓ PolyFuzz model created")
-    
-    # Cache it
-    _loaded_polyfuzz_cache[cache_key] = polyfuzz_model
-    _log_with_time("  ✓ PolyFuzz model cached for reuse")
-    
-    return polyfuzz_model
+    _log_with_time("  ⚠ Warning: load_polyfuzz_model_once is DEPRECATED (using DP alignment)")
+    return None
 
 
 class DocPreprocessor:
     """
     Document preprocessor that splits and aligns documents using LaBSE embeddings.
     
+    Uses dynamic programming for proper many-to-many alignment (inspired by VecAlign/SEGALE).
     Adapted to work with our data format (accepts documents directly, not from files).
     """
 
@@ -262,9 +225,12 @@ class DocPreprocessor:
         tgt_lang: str, 
         labse_model_path: Optional[Path] = None,
         labse_model: Optional[SentenceTransformer] = None,
-        embeddings: Optional[SentenceTransformerDocumentEmbeddings] = None,
-        polyfuzz_model: Optional[PolyFuzz] = None,
-        use_gpu: bool = True
+        polyfuzz_model=None,  # DEPRECATED: kept for backward compatibility, ignored
+        use_gpu: bool = True,
+        aligner: str = "vecalign",  # "vecalign" (default) or "dp"
+        max_alignment_size: int = 4,  # Max segments to align together
+        deletion_cost: float = 0.2,   # Cost for under-translation (VecAlign uses percentile)
+        insertion_cost: float = 0.2   # Cost for over-translation
     ):
         """
         Initialize the document preprocessor.
@@ -274,12 +240,28 @@ class DocPreprocessor:
             tgt_lang: Target language code (e.g., 'zht', 'es')
             labse_model_path: Optional path to local LaBSE model (default: auto-detect)
             labse_model: Optional pre-loaded SentenceTransformer model (reuses if provided)
-            embeddings: Optional pre-loaded SentenceTransformerDocumentEmbeddings (reuses if provided)
-            polyfuzz_model: Optional pre-loaded PolyFuzz model (reuses if provided)
+            polyfuzz_model: DEPRECATED - kept for backward compatibility, ignored
             use_gpu: Whether to use GPU if available
+            aligner: Alignment algorithm - "vecalign" (default, recommended) or "dp" (fallback)
+            max_alignment_size: Maximum segments to align together (default: 4)
+            deletion_cost: Cost penalty for under-translation (default: 0.2)
+            insertion_cost: Cost penalty for over-translation (default: 0.2)
         """
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        
+        # Alignment parameters
+        self.aligner = aligner
+        self.max_alignment_size = max_alignment_size
+        self.deletion_cost = deletion_cost
+        self.insertion_cost = insertion_cost
+        
+        # Check VecAlign availability
+        vecalign_available = is_vecalign_available()
+        if aligner == "vecalign" and not vecalign_available:
+            _log_with_time("  ⚠ Warning: VecAlign not available, falling back to 'dp' aligner")
+            _log_with_time("  ⚠ To use VecAlign, clone it to: other_repos/vecalign")
+            self.aligner = "dp"
         
         # Load or reuse LaBSE model (use centralized loader to avoid multiple loads)
         if labse_model is not None:
@@ -289,22 +271,13 @@ class DocPreprocessor:
             # Load once using the centralized loader (cached, reused across instances)
             self.labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
-        # Load or reuse PolyFuzz model (use centralized loader)
+        # Note: PolyFuzz is no longer used
         if polyfuzz_model is not None:
-            _log_with_time("  Using provided PolyFuzz model (reusing existing, no reload)")
-            self.model = polyfuzz_model
-        else:
-            # Load embeddings wrapper if not provided
-            if embeddings is None:
-                # Get model path for embeddings wrapper (needs path, not model object)
-                if labse_model_path is None:
-                    labse_model_path = find_labse_model_path()
-                embeddings = load_embeddings_wrapper_once(labse_model_path, self.labse_model)
-            
-            # Load PolyFuzz model using centralized loader
-            self.model = load_polyfuzz_model_once(labse_model_path, embeddings)
+            _log_with_time("  ⚠ Warning: polyfuzz_model parameter is deprecated and will be ignored")
         
-        _log_with_time("  ✓ DocPreprocessor initialized with cached models")
+        _log_with_time("  ✓ DocPreprocessor initialized with {} alignment (max_size={}, del_cost={})".format(
+            self.aligner.upper(), max_alignment_size, deletion_cost
+        ))
         
         # Initialize spaCy for English normalization (if needed)
         self.spacy_en = None
@@ -352,23 +325,26 @@ class DocPreprocessor:
     ) -> pd.DataFrame:
         """
         Process a list of document pairs (source, target) and return aligned segments.
-        Optionally also aligns references if provided.
+        Uses DP alignment for proper many-to-many alignment handling.
         
         Args:
             documents: List of (source_text, target_text) tuples
             references: Optional list of reference_text strings (same order as documents)
             terminology: Optional terminology dictionary (for WMT25-Term)
-            similarity_threshold: Threshold for LaBSE similarity (default: 0.4)
-            separator: Paragraph separator (default: '\n\n')
+            similarity_threshold: Not used in DP alignment (kept for API compatibility)
+            separator: Paragraph separator (default: '\n')
         
         Returns:
-            DataFrame with columns: [paragraph, sentence, alignment, src_segment, tgt_segment, ref_segment, score, terms]
-            (ref_segment is None if references not provided)
+            DataFrame with columns: [document, paragraph, alignment, alignment_type, 
+                                    src_segment, tgt_segment, ref_segment, score, terms]
         """
         df_data = []
         skipped_segments_count = 0  # Track segments skipped due to missing src-ref alignment
+        under_translated_count = 0
+        over_translated_count = 0
         
-        _log_with_time(f"  Processing {len(documents)} document(s)...")
+        _log_with_time(f"  Processing {len(documents)} document(s) with DP alignment...")
+        _log_with_time(f"    Parameters: max_align_size={self.max_alignment_size}, del_cost={self.deletion_cost}, ins_cost={self.insertion_cost}")
         start_time = time.time()
         
         # Preprocess: filter empty lines from all documents (for markdown format)
@@ -386,105 +362,115 @@ class DocPreprocessor:
         
         for doc_idx, (src_text, tgt_text) in doc_iterator:
             doc_start = time.time()
-            # Get reference text if provided (should have same structure as source)
+            # Get reference text if provided
             ref_text = references[doc_idx] if references and doc_idx < len(references) else None
             
             # Split into paragraphs
-            _log_with_time(f"    Document {doc_idx+1}/{len(documents)}: Splitting paragraphs...")
-            src_paragraphs, tgt_paragraphs = self._paragraph_aligner(
-                src_text, tgt_text, separator=separator
-            )
+            src_paragraphs = [p.strip() for p in src_text.split(separator) if p.strip()]
+            tgt_paragraphs = [p.strip() for p in tgt_text.split(separator) if p.strip()]
+            ref_paragraphs = [p.strip() for p in ref_text.split(separator) if p.strip()] if ref_text else []
             
-            # Filter out any empty paragraphs (shouldn't happen after filtering, but safety check)
-            # This prevents "empty Sentence" warnings from Flair/PolyFuzz
+            # Filter out any empty paragraphs
             src_paragraphs = [p for p in src_paragraphs if p and p.strip()]
             tgt_paragraphs = [p for p in tgt_paragraphs if p and p.strip()]
+            ref_paragraphs = [p for p in ref_paragraphs if p and p.strip()]
             
-            # Align reference paragraphs with source paragraphs using LaBSE
-            # Default: If same count, use 1-to-1. Else: align using LaBSE
-            ref_paragraphs = None
-            ref_para_alignment = None  # Track which ref para aligns with which src para
-            if ref_text:
-                ref_paragraphs_raw = [p.strip() for p in ref_text.split(separator) if p.strip()]
-                # Filter out empty paragraphs
-                ref_paragraphs_raw = [p for p in ref_paragraphs_raw if p and p.strip()]
-                if ref_paragraphs_raw:
-                    if len(ref_paragraphs_raw) == len(src_paragraphs):
-                        # Same count: use 1-to-1 correspondence (no alignment needed)
-                        ref_paragraphs = ref_paragraphs_raw
-                        ref_para_alignment = list(range(len(ref_paragraphs_raw)))
-                        _log_with_time(f"      Source and reference have same paragraph count ({len(src_paragraphs)}), using 1-to-1 correspondence")
+            _log_with_time(f"    Document {doc_idx+1}/{len(documents)}: src={len(src_paragraphs)}, tgt={len(tgt_paragraphs)}, ref={len(ref_paragraphs)} paragraphs")
+            
+            # Use DP alignment with reference
+            if ref_paragraphs:
+                # Full alignment: src -> tgt with reference
+                alignments = align_with_reference(
+                    src_paragraphs,
+                    tgt_paragraphs,
+                    ref_paragraphs,
+                    self.labse_model,
+                    aligner=self.aligner,
+                    max_alignment_size=self.max_alignment_size,
+                    deletion_cost=self.deletion_cost,
+                    insertion_cost=self.insertion_cost
+                )
+            else:
+                # No reference: just align src -> tgt
+                raw_alignments = align_segments(
+                    src_paragraphs,
+                    tgt_paragraphs,
+                    self.labse_model,
+                    aligner=self.aligner,
+                    max_alignment_size=self.max_alignment_size,
+                    deletion_cost=self.deletion_cost,
+                    insertion_cost=self.insertion_cost
+                )
+                # Convert to dict format
+                alignments = []
+                for src_text_seg, tgt_text_seg, score, src_indices, tgt_indices in raw_alignments:
+                    if src_indices and tgt_indices:
+                        alignment_type = 'aligned'
+                    elif src_indices and not tgt_indices:
+                        alignment_type = 'under_translated'
                     else:
-                        # Different counts: align using LaBSE
-                        _log_with_time(f"      Aligning {len(ref_paragraphs_raw)} reference paragraphs with {len(src_paragraphs)} source paragraphs (counts differ)...")
-                        ref_paragraphs, ref_para_alignment = self._align_reference_paragraphs(
-                            src_paragraphs, ref_paragraphs_raw
-                        )
-                        # Check alignment quality (only warn if counts differed and alignment failed)
-                        # Note: ref_para_alignment should never have None when counts match (1-to-1 case)
-                        unaligned_src = sum(1 for align in ref_para_alignment if align is None) if ref_para_alignment else 0
-                        if unaligned_src > 0:
-                            _log_with_time(f"      ⚠ WARNING: {unaligned_src} source paragraphs have no aligned reference paragraph")
-                else:
-                    _log_with_time(f"      ⚠ WARNING: Reference text has no paragraphs after splitting")
-                    ref_paragraphs = []
-                    ref_para_alignment = [None] * len(src_paragraphs)
-            
-            _log_with_time(f"      Source: {len(src_paragraphs)} paragraphs, Target: {len(tgt_paragraphs)} paragraphs" + 
-                          (f", Reference: {len(ref_paragraphs)} paragraphs" if ref_paragraphs else ""))
-            
-            # Align paragraphs (source -> translation) using LaBSE
-            # No sentence-level segmentation - work at paragraph level only
-            paragraph_alignments = self._align_paragraphs(
-                src_paragraphs, tgt_paragraphs, similarity_threshold
-            )
+                        alignment_type = 'over_translated'
+                    alignments.append({
+                        'src': src_text_seg,
+                        'tgt': tgt_text_seg,
+                        'ref': '',  # No reference
+                        'score': score,
+                        'src_indices': src_indices,
+                        'tgt_indices': tgt_indices,
+                        'alignment_type': alignment_type
+                    })
             
             # Extract terms if terminology is provided (at paragraph level)
+            # We'll check which source paragraphs are in the alignment
             terms_dict = {}
             if terminology:
-                for para_idx, (src_para, tgt_para) in enumerate(zip(src_paragraphs, tgt_paragraphs)):
+                for para_idx, src_para in enumerate(src_paragraphs):
+                    # Find a target paragraph that might align with this source
+                    tgt_para = tgt_paragraphs[para_idx] if para_idx < len(tgt_paragraphs) else ""
                     para_terms = self._extract_terms(src_para, tgt_para, terminology)
                     if para_terms:
                         terms_dict[para_idx] = para_terms
             
-            # Process aligned paragraph pairs
-            for align_idx, (src_seg, tgt_seg, score, src_para_idx) in enumerate(paragraph_alignments):
-                # Get reference segment for this source paragraph
-                ref_seg = ""
-                has_ref_seg = False
+            # Process alignments
+            for align_idx, alignment in enumerate(alignments):
+                src_seg = alignment['src']
+                tgt_seg = alignment['tgt']
+                ref_seg = alignment['ref']
+                score = alignment['score']
+                src_indices = alignment['src_indices']
+                alignment_type = alignment['alignment_type']
                 
-                if ref_paragraphs and ref_para_alignment and src_para_idx is not None:
-                    # Find the reference paragraph that aligns with this source paragraph
-                    if src_para_idx < len(ref_para_alignment):
-                        ref_para_idx = ref_para_alignment[src_para_idx]
-                        if ref_para_idx is not None and ref_para_idx < len(ref_paragraphs):
-                            ref_seg = ref_paragraphs[ref_para_idx]
-                            has_ref_seg = True
+                # Track alignment types
+                if alignment_type == 'under_translated':
+                    under_translated_count += 1
+                elif alignment_type == 'over_translated':
+                    over_translated_count += 1
                 
-                # If src_para_idx is None AND src_seg is empty, this is an unaligned target paragraph (over-translation)
-                # For over-translation, we don't have a source, so we can't get a reference
-                # This is correct - over-translated segments will be counted but won't have reference
-                
-                # IMPORTANT: Skip segments without src-ref correspondence (can't evaluate)
-                # BUT: Always include src-tgt segments (even if tgt is empty) to penalize under-translation
-                if src_seg and not has_ref_seg:
+                # For src-tgt alignment without reference, check if we should skip
+                has_ref_seg = bool(ref_seg and ref_seg.strip())
+                if src_seg and not has_ref_seg and ref_paragraphs:
                     # Source segment without reference alignment - skip this segment
-                    # (We'll count these and report them)
                     skipped_segments_count += 1
                     continue
                 
-                # Get terms for this paragraph if available
-                terms = terms_dict.get(src_para_idx) if src_para_idx is not None else None
+                # Get terms for aligned source paragraphs
+                terms = None
+                if terminology and src_indices:
+                    for idx in src_indices:
+                        if idx in terms_dict:
+                            terms = terms_dict[idx]
+                            break
                 
                 df_data.append({
-                    'document': doc_idx,  # Document/sample index
-                    'paragraph': align_idx,  # Alignment index (replaces paragraph/sentence hierarchy)
-                    'sentence': 0,  # Not used anymore, kept for compatibility
-                    'alignment': 'labse',
+                    'document': doc_idx,
+                    'paragraph': align_idx,
+                    'sentence': 0,  # Not used, kept for compatibility
+                    'alignment': self.aligner,  # 'vecalign' or 'dp'
+                    'alignment_type': alignment_type,  # 'aligned', 'under_translated', 'over_translated'
                     'src_segment': src_seg,
-                    'tgt_segment': tgt_seg,  # Can be empty (under-translation) - this is OK, will be penalized
-                    'ref_segment': ref_seg,  # Reference segment (aligned with source)
-                    'has_ref_alignment': has_ref_seg,  # Flag: True if reference was successfully aligned
+                    'tgt_segment': tgt_seg,
+                    'ref_segment': ref_seg,
+                    'has_ref_alignment': has_ref_seg,
                     'score': score,
                     'terms': terms
                 })
@@ -494,14 +480,18 @@ class DocPreprocessor:
         
         total_time = time.time() - start_time
         _log_with_time(f"  Processed {len(documents)} document(s) in {total_time:.2f}s")
+        _log_with_time(f"    Total aligned segments: {len(df_data)}")
+        _log_with_time(f"    Under-translated: {under_translated_count}, Over-translated: {over_translated_count}")
         
         if skipped_segments_count > 0:
             _log_with_time(f"  ⚠ WARNING: Skipped {skipped_segments_count} segments due to missing src-ref alignment")
         
         # Create DataFrame
         self.df = pd.DataFrame(df_data)
-        # Store skipped count as attribute for reporting
+        # Store stats as attributes for reporting
         self.skipped_segments_count = skipped_segments_count
+        self.under_translated_count = under_translated_count
+        self.over_translated_count = over_translated_count
         return self.df
     
     def _paragraph_aligner(self, src_text: str, tgt_text: str, separator: str = '\n\n') -> Tuple[List[str], List[str]]:

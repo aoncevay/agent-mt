@@ -24,9 +24,11 @@ from collections import defaultdict
 # import pymorphy3  # Only needed for Russian, not used in our experiments
 import jieba
 
+# Import centralized configuration
+from metrics.config import get_config, setup_offline_environment
+
 # Set environment variables to prevent HuggingFace connections
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
+setup_offline_environment()
 
 # Try to import Stanza
 try:
@@ -49,39 +51,35 @@ STANZA_LANG_MAP = {
 
 def find_stanza_resources_dir() -> Optional[Path]:
     """
-    Find Stanza resources directory in local directories or environment variable.
+    Find Stanza resources directory using centralized config.
     
     Checks in order:
-    1. STANZA_RESOURCES_DIR environment variable
-    2. metrics/models/stanza/ (local repo)
-    3. ~/user-default-efs/stanza_resources (SageMaker EFS)
-    4. ~/stanza_resources (home directory)
+    1. Centralized config (get_config().get_stanza_resources_dir())
+    2. STANZA_RESOURCES_DIR environment variable
+    3. Fallback paths for backward compatibility
     """
-    # Check environment variable first
+    # Use centralized config first
+    config = get_config()
+    stanza_dir = config.get_stanza_resources_dir()
+    if stanza_dir and stanza_dir.exists():
+        return stanza_dir
+    
+    # Check environment variable (may have been set manually)
     env_dir = os.environ.get('STANZA_RESOURCES_DIR')
     if env_dir:
         path = Path(env_dir).expanduser().resolve()
         if path.exists():
             return path
     
-    # Check local metrics/models/stanza directory
-    local_paths = [
+    # Fallback to hardcoded paths for backward compatibility
+    fallback_paths = [
         Path(__file__).parent / "models" / "stanza",
-        Path(__file__).parent.parent / "metrics" / "models" / "stanza",
-    ]
-    
-    for path in local_paths:
-        if path.exists():
-            return path.resolve()
-    
-    # Check common SageMaker/EFS paths
-    efs_paths = [
         Path.home() / "user-default-efs" / "stanza_resources",
         Path("/mnt/custom-file-systems/efs") / "stanza_resources",
         Path.home() / "stanza_resources",
     ]
     
-    for path in efs_paths:
+    for path in fallback_paths:
         if path.exists():
             return path.resolve()
     

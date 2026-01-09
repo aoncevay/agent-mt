@@ -276,14 +276,15 @@ def process_experiment(
     workflows: List[str],
     models: List[str],
     labse_model=None,  # Optional pre-loaded SentenceTransformer model
-    polyfuzz_model=None,  # Optional pre-loaded PolyFuzz model
+    polyfuzz_model=None,  # DEPRECATED: no longer used
     metric_model=None,  # Optional pre-loaded MetricX or COMET model
     metric_tokenizer=None,  # Optional pre-loaded tokenizer (for MetricX)
-    labse_only: bool = False,  # If True, only do alignment and save to tmp
+    align_only: bool = False,  # If True, only do alignment and save to tmp
     metricx_only: bool = False,  # If True, skip TBM, load from tmp if available
     tbm_only: bool = False,  # If True, only compute TBM, load from tmp
     comet_only: bool = False,  # If True, skip TBM computation
-    use_metric: str = "metricx"  # "metricx" or "comet"
+    use_metric: str = "metricx",  # "metricx" or "comet"
+    use_aligner: str = "vecalign"  # "vecalign" (default) or "dp"
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single experiment and compute metrics.
@@ -411,35 +412,30 @@ def process_experiment(
             print(f"    ✓ Loaded {len(aligned_df)} aligned segments from tmp")
             # Note: skipped_count is not available from tmp files (would need to save it separately)
         else:
-            print(f"    ✗ Could not load tmp file, need to run --labse-only first")
+            print(f"    ✗ Could not load tmp file, need to run --align-only first")
             return None
-    elif labse_only:
+    elif align_only:
         # Only do alignment and save to tmp
-        _log_with_time(f"  Step 1: Splitting and aligning documents (--labse-only mode)...")
+        _log_with_time(f"  Step 1: Splitting and aligning documents (--align-only mode)...")
         from metrics.docpreprocessor import DocPreprocessor
         
         use_gpu = torch.cuda.is_available()
-        if labse_model is None or polyfuzz_model is None:
+        if labse_model is None:
             from metrics.docpreprocessor import (
                 load_labse_model_once,
-                load_polyfuzz_model_once,
-                load_embeddings_wrapper_once,
                 find_labse_model_path
             )
-            _log_with_time("  Loading models (fallback - should be provided from main)...")
+            _log_with_time("  Loading LaBSE model (fallback - should be provided from main)...")
             labse_model_path = find_labse_model_path()
-            if labse_model is None:
-                labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
-            if polyfuzz_model is None:
-                embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
-                polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+            labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
+        # Create preprocessor with selected aligner
         preprocessor = DocPreprocessor(
             src_lang, 
             tgt_lang, 
             labse_model=labse_model,
-            polyfuzz_model=polyfuzz_model,
-            use_gpu=use_gpu
+            use_gpu=use_gpu,
+            aligner=use_aligner
         )
         aligned_df = preprocessor.process_documents(
             documents,
@@ -449,7 +445,10 @@ def process_experiment(
             separator='\n'  # Single newline after filtering empty lines
         )
         skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
-        print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
+        under_count = getattr(preprocessor, 'under_translated_count', 0)
+        over_count = getattr(preprocessor, 'over_translated_count', 0)
+        print(f"    ✓ Aligned {len(aligned_df)} segments using {use_aligner.upper()} (under: {under_count}, over: {over_count})" + 
+              (f", skipped {skipped_count} without src-ref alignment" if skipped_count > 0 else ""))
         
         # Save to tmp file
         tmp_file = save_aligned_df(aligned_df, output_dir, dataset, lang_pair, sample_data)
@@ -470,7 +469,7 @@ def process_experiment(
             'num_samples': len(sample_data),
             'num_segments': len(aligned_df),
             'tmp_file': str(tmp_file),
-            'labse_only': True
+            'align_only': True
         }
     else:
         # Normal flow: do alignment
@@ -478,27 +477,22 @@ def process_experiment(
         from metrics.docpreprocessor import DocPreprocessor
         
         use_gpu = torch.cuda.is_available()
-        if labse_model is None or polyfuzz_model is None:
+        if labse_model is None:
             from metrics.docpreprocessor import (
                 load_labse_model_once,
-                load_polyfuzz_model_once,
-                load_embeddings_wrapper_once,
                 find_labse_model_path
             )
-            _log_with_time("  Loading models (fallback - should be provided from main)...")
+            _log_with_time("  Loading LaBSE model (fallback - should be provided from main)...")
             labse_model_path = find_labse_model_path()
-            if labse_model is None:
-                labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
-            if polyfuzz_model is None:
-                embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
-                polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
+            labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
+        # Create preprocessor with selected aligner
         preprocessor = DocPreprocessor(
             src_lang, 
             tgt_lang, 
             labse_model=labse_model,
-            polyfuzz_model=polyfuzz_model,
-            use_gpu=use_gpu
+            use_gpu=use_gpu,
+            aligner=use_aligner
         )
         aligned_df = preprocessor.process_documents(
             documents,
@@ -508,7 +502,10 @@ def process_experiment(
             separator='\n'  # Single newline after filtering empty lines
         )
         skipped_count = getattr(preprocessor, 'skipped_segments_count', 0)
-        print(f"    ✓ Aligned {len(aligned_df)} segments" + (f" (skipped {skipped_count} segments without src-ref alignment)" if skipped_count > 0 else ""))
+        under_count = getattr(preprocessor, 'under_translated_count', 0)
+        over_count = getattr(preprocessor, 'over_translated_count', 0)
+        print(f"    ✓ Aligned {len(aligned_df)} segments using {use_aligner.upper()} (under: {under_count}, over: {over_count})" + 
+              (f", skipped {skipped_count} without src-ref alignment" if skipped_count > 0 else ""))
         
         # Clear GPU memory after LaBSE (before loading MetricX/COMET)
         if use_gpu:
@@ -1042,10 +1039,11 @@ def main():
              "For WMT25 only. Useful for faster evaluation."
     )
     parser.add_argument(
-        "--labse-only",
+        "--align-only",
         action="store_true",
-        help="Only perform LaBSE alignment and save to tmp files. "
-             "Useful for splitting GPU memory usage. Run this first, then use --metricx-only or --tbm-only."
+        help="Only perform alignment and save to tmp files. "
+             "Useful for splitting GPU memory usage. Run this first, then use --metricx-only or --tbm-only. "
+             "Supports different aligners (--aligner) and embedding models (currently LaBSE, future: LASER)."
     )
     parser.add_argument(
         "--tbm-only",
@@ -1053,6 +1051,15 @@ def main():
         help="Compute only term-based metrics (TBM), skip metric evaluation. "
              "Loads aligned segments from tmp files if available. "
              "For WMT25 only."
+    )
+    parser.add_argument(
+        "--aligner",
+        type=str,
+        choices=["vecalign", "dp"],
+        default="vecalign",
+        help="Alignment algorithm to use: 'vecalign' (default, recommended for reproducibility) "
+             "or 'dp' (simplified fallback). VecAlign is based on Thompson & Koehn (2019) and "
+             "is used by SEGALE for MT evaluation."
     )
     parser.add_argument(
         "--metric",
@@ -1096,11 +1103,12 @@ def main():
         print(f"Mode: COMET-only (skipping term-based metrics)")
     if args.metricx_only:
         print(f"Mode: MetricX-only (skipping term-based metrics)")
-    if args.labse_only:
-        print(f"Mode: LaBSE-only (alignment only, saving to tmp)")
+    if args.align_only:
+        print(f"Mode: Align-only (alignment only, saving to tmp)")
     if args.tbm_only:
         print(f"Mode: TBM-only (term-based metrics only, loading from tmp)")
     print(f"Using metric: {args.metric.upper()}")
+    print(f"Using aligner: {args.aligner.upper()} {'(recommended)' if args.aligner == 'vecalign' else '(fallback)'}")
     print(f"Output directories: {[str(d) for d in outputs_dirs]}")
     print(f"Metrics output: {metrics_dir}")
     print("="*80)
@@ -1156,17 +1164,14 @@ def main():
     
     # Load models ONCE at the start (reused for all experiments)
     labse_model = None
-    polyfuzz_model = None
     metric_model = None
     
-    # Load LaBSE models only if not in metricx_only or tbm_only mode (those load from tmp)
+    # Load LaBSE model only if not in metricx_only or tbm_only mode (those load from tmp)
     if not args.metricx_only and not args.tbm_only:
         _log_with_time("="*80)
-        _log_with_time("Loading LaBSE model and embeddings (once, will be reused for all experiments)...")
+        _log_with_time("Loading LaBSE model (once, will be reused for DP alignment in all experiments)...")
         from metrics.docpreprocessor import (
             load_labse_model_once,
-            load_embeddings_wrapper_once,
-            load_polyfuzz_model_once,
             find_labse_model_path
         )
         import torch
@@ -1175,21 +1180,15 @@ def main():
         # Find model path first
         labse_model_path = find_labse_model_path()
         
-        # Load LaBSE model
+        # Load LaBSE model (used directly by DP alignment, no need for PolyFuzz/Flair)
         labse_model = load_labse_model_once(labse_model_path, use_gpu=use_gpu)
         
-        # Load embeddings wrapper (needs path, not model object)
-        embeddings = load_embeddings_wrapper_once(labse_model_path, labse_model)
-        
-        # Load PolyFuzz model
-        polyfuzz_model = load_polyfuzz_model_once(labse_model_path, embeddings)
-        
-        _log_with_time("  ✓ All LaBSE models loaded and ready")
+        _log_with_time("  ✓ LaBSE model loaded for DP alignment")
         _log_with_time("="*80)
     
-    # Load MetricX/COMET model ONCE at the start (only if not labse_only or tbm_only mode)
+    # Load MetricX/COMET model ONCE at the start (only if not align_only or tbm_only mode)
     metric_tokenizer = None  # Store tokenizer separately
-    if not args.labse_only and not args.tbm_only and args.metric == "metricx":
+    if not args.align_only and not args.tbm_only and args.metric == "metricx":
         _log_with_time("="*80)
         _log_with_time("Loading MetricX-24 model and tokenizer (once, will be reused for all experiments)...")
         import torch
@@ -1253,15 +1252,15 @@ def main():
                     lang_pair,
                     workflows,
                     models,
-                    labse_model=labse_model,  # Pass the pre-loaded model
-                    polyfuzz_model=polyfuzz_model,  # Pass the pre-loaded PolyFuzz model
+                    labse_model=labse_model,  # Pass the pre-loaded LaBSE model
                     metric_model=metric_model,  # Pass the pre-loaded metric model
                     metric_tokenizer=metric_tokenizer,  # Pass the pre-loaded tokenizer
                     comet_only=args.comet_only,  # Pass the comet_only flag
                     metricx_only=args.metricx_only,  # Pass the metricx_only flag
                     tbm_only=args.tbm_only,  # Pass the tbm_only flag
-                    labse_only=args.labse_only,  # Pass the labse_only flag
-                    use_metric=args.metric  # Pass the metric choice
+                    align_only=args.align_only,  # Pass the align_only flag
+                    use_metric=args.metric,  # Pass the metric choice
+                    use_aligner=args.aligner  # Pass the aligner choice
                 )
                 
                 if results:

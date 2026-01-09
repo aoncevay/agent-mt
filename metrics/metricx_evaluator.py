@@ -20,26 +20,33 @@ import tempfile
 import subprocess
 import importlib.util
 
+# Import centralized configuration
+from metrics.config import get_config
+
 
 def _find_metricx_model() -> Optional[Path]:
     """
-    Find the MetricX-24 model directory.
+    Find the MetricX-24 model directory using centralized config.
     
     Returns:
         Path to MetricX-24 model directory, or None if not found
     """
-    possible_paths = [
-        # EFS mount path (SageMaker)
+    # Use centralized config first
+    config = get_config()
+    metricx_path = config.get_metricx_path()
+    if metricx_path and metricx_path.exists():
+        return metricx_path
+    
+    # Fallback to hardcoded paths for backward compatibility
+    fallback_paths = [
         Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/metricx-24-hybrid-large-v2p6-bfloat16"),
         Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/metricx-24-hybrid-large-v2p6"),
-        # Home directory path
         Path.home() / "user-default-efs" / "HF_models" / "metricx-24-hybrid-large-v2p6-bfloat16",
         Path.home() / "user-default-efs" / "HF_models" / "metricx-24-hybrid-large-v2p6",
-        # Alternative EFS path pattern
-        Path("/mnt/custom-file-systems/efs") / "HF_models" / "metricx-24-hybrid-large-v2p6-bfloat16",
+        Path.home() / "HF_models" / "metricx-24-hybrid-large-v2p6-bfloat16",
     ]
     
-    for path in possible_paths:
+    for path in fallback_paths:
         if path.exists():
             return path
     
@@ -48,27 +55,30 @@ def _find_metricx_model() -> Optional[Path]:
 
 def _find_mt5_tokenizer() -> Optional[Path]:
     """
-    Find the mT5 tokenizer files.
+    Find the mT5 tokenizer files using centralized config.
     MetricX-24 is based on mT5, so it needs mT5 tokenizer files.
     
     Returns:
         Path to mT5 tokenizer directory, or None if not found
     """
-    possible_paths = [
-        # EFS mount path (SageMaker)
+    # Use centralized config first
+    config = get_config()
+    mt5_path = config.get_mt5_tokenizer_path()
+    if mt5_path and mt5_path.exists():
+        return mt5_path
+    
+    # Fallback to hardcoded paths for backward compatibility
+    fallback_paths = [
         Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/mt5-base"),
         Path("/mnt/custom-file-systems/efs/fs-0ab0971a17be333d6_fsap-0266e37db01d3e76f/HF_models/mt5-large"),
-        # Home directory path
         Path.home() / "user-default-efs" / "HF_models" / "mt5-base",
         Path.home() / "user-default-efs" / "HF_models" / "mt5-large",
-        # Alternative EFS path pattern
+        Path.home() / "HF_models" / "mt5-base",
         Path("/mnt/custom-file-systems/efs") / "HF_models" / "mt5-base",
-        # HF cache
         Path.home() / ".cache" / "huggingface" / "hub" / "models--google--mt5-base",
-        Path.home() / ".cache" / "huggingface" / "hub" / "models--google--mt5-large",
     ]
     
-    for path in possible_paths:
+    for path in fallback_paths:
         if path.exists():
             # Check for tokenizer files
             # mT5 uses 'spiece.model' (not 'sentencepiece.model')
