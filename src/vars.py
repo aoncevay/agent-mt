@@ -4,6 +4,10 @@ model_name2bedrock_id = {
 
     "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
     "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
+
+    "llama3-1-8b" : "meta.llama3-1-8b-instruct-v1:0",
+    "gemma3-12b" : "google.gemma-3-12b-it",
+    "deepseek-r1-8b" : "deepseek-llm-r1-distill-llama-8b"
 }
 
 model_name2openai_id = {
