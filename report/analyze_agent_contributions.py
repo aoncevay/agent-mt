@@ -71,6 +71,7 @@ except ImportError:
 
 REPORT_SAMPLES_RE = re.compile(r"^report_(\d+)_samples\.json$")
 AGENT_FILE_RE = re.compile(r"^(sample_.+)_agent_(\d+)\.txt$")
+WMT25_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,6 +109,11 @@ def parse_args() -> argparse.Namespace:
         "--require_complete_reports",
         action="store_true",
         help="Only include reports where total_samples == successful_samples and > 0",
+    )
+    parser.add_argument(
+        "--data_dir",
+        default="data/raw",
+        help="Base data directory used to resolve source sample character length",
     )
     return parser.parse_args()
 
@@ -355,8 +361,134 @@ def summarize_transitions(df: pd.DataFrame, group_cols: List[str]) -> pd.DataFra
     return summary
 
 
+class SourceLengthResolver:
+    """
+    Resolve source (untranslated) sample character lengths from dataset files.
+    """
+
+    def __init__(self, base_data_dir: Path):
+        self.base_data_dir = base_data_dir.resolve()
+        self._cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    @staticmethod
+    def _norm_lang_pair(lang_pair: str) -> str:
+        return lang_pair.replace("-", "_")
+
+    @staticmethod
+    def _source_lang_from_pair(lang_pair: str) -> Optional[str]:
+        if "_" in lang_pair:
+            parts = lang_pair.split("_", 1)
+        elif "-" in lang_pair:
+            parts = lang_pair.split("-", 1)
+        else:
+            return None
+        if len(parts) != 2:
+            return None
+        return parts[0]
+
+    @staticmethod
+    def _lang_key_for_sample(source_lang: str) -> str:
+        # WMT25 files use "zh" key for traditional Chinese.
+        if source_lang == "zht":
+            return "zh"
+        return source_lang
+
+    def _build_cache(self, dataset: str, lang_pair: str) -> Dict[str, Any]:
+        key = (dataset, lang_pair)
+        if key in self._cache:
+            return self._cache[key]
+
+        by_sample_id: Dict[str, int] = {}
+        by_pair_index: Dict[int, int] = {}
+        source_lang = self._source_lang_from_pair(lang_pair)
+        if source_lang is None:
+            cache_obj = {"by_sample_id": by_sample_id, "by_pair_index": by_pair_index}
+            self._cache[key] = cache_obj
+            return cache_obj
+
+        source_key = self._lang_key_for_sample(source_lang)
+
+        if dataset == "dolfin":
+            norm_pair = self._norm_lang_pair(lang_pair)
+            file_path = self.base_data_dir / "dolfin" / f"dolfin_test_{norm_pair}.jsonl"
+            if file_path.exists():
+                with open(file_path, "r", encoding="utf-8") as f:
+                    pair_idx = 0
+                    for raw in f:
+                        line = raw.strip()
+                        if not line:
+                            continue
+                        sample = json.loads(line)
+                        source_text = sample.get(source_key, "")
+                        char_len = len(source_text) if isinstance(source_text, str) else 0
+                        sample_id = sample.get("id") or sample.get("_id")
+                        if sample_id is not None:
+                            by_sample_id[str(sample_id)] = char_len
+                        by_pair_index[pair_idx] = char_len
+                        pair_idx += 1
+
+        elif dataset == "wmt25":
+            data_dir = self.base_data_dir / "wmt25-terminology-track2"
+            # WMT25 direction by year:
+            # odd years: en->zht ; even years: zht->en
+            src = source_lang
+            years: List[int]
+            if src == "en":
+                years = [y for y in WMT25_YEARS if y % 2 == 1]
+            elif src in {"zh", "zht"}:
+                years = [y for y in WMT25_YEARS if y % 2 == 0]
+            else:
+                years = WMT25_YEARS
+
+            pair_idx = 0
+            for year in years:
+                file_path = data_dir / f"full_data_{year}.jsonl"
+                if not file_path.exists():
+                    continue
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for raw in f:
+                        line = raw.strip()
+                        if not line:
+                            continue
+                        sample = json.loads(line)
+                        source_text = sample.get(source_key, "")
+                        char_len = len(source_text) if isinstance(source_text, str) else 0
+                        sample_id = sample.get("id") or sample.get("_id")
+                        if sample_id is not None:
+                            by_sample_id[str(sample_id)] = char_len
+                        by_pair_index[pair_idx] = char_len
+                        pair_idx += 1
+
+        cache_obj = {"by_sample_id": by_sample_id, "by_pair_index": by_pair_index}
+        self._cache[key] = cache_obj
+        return cache_obj
+
+    def get_source_char_len(
+        self,
+        dataset: str,
+        lang_pair: str,
+        sample_id: Any,
+        sample_idx: Any,
+    ) -> Optional[int]:
+        cache = self._build_cache(dataset, lang_pair)
+        by_sample_id = cache["by_sample_id"]
+        by_pair_index = cache["by_pair_index"]
+
+        sample_id_key = str(sample_id) if sample_id is not None else None
+        if sample_id_key is not None and sample_id_key in by_sample_id:
+            return by_sample_id[sample_id_key]
+
+        idx = _safe_int(sample_idx, -1)
+        if idx >= 0 and idx in by_pair_index:
+            return by_pair_index[idx]
+
+        return None
+
+
 def build_workflow_agent_langpair_json(
-    steps_df: pd.DataFrame, transitions_df: pd.DataFrame
+    steps_df: pd.DataFrame,
+    transitions_df: pd.DataFrame,
+    source_len_resolver: SourceLengthResolver,
 ) -> Dict[str, Any]:
     """
     Build nested JSON structure:
@@ -439,6 +571,8 @@ def build_workflow_agent_langpair_json(
 
                     char_changes_by_sample = [
                         {
+                            "dataset": str(row["dataset"]),
+                            "lang_pair": str(row["lang_pair"]),
                             "sample_idx": int(row["sample_idx"]),
                             "sample_id": str(row["sample_id"]),
                             "char_change": int(row["edit_distance"]),
@@ -453,12 +587,11 @@ def build_workflow_agent_langpair_json(
                                 else None
                             ),
                             "sample_char_len": (
-                                int(row["curr_translation_len_chars"])
-                                if pd.notna(row["curr_translation_len_chars"])
-                                else (
-                                    int(row["prev_translation_len_chars"])
-                                    if pd.notna(row["prev_translation_len_chars"])
-                                    else None
+                                source_len_resolver.get_source_char_len(
+                                    dataset=str(row["dataset"]),
+                                    lang_pair=str(row["lang_pair"]),
+                                    sample_id=row["sample_id"],
+                                    sample_idx=row["sample_idx"],
                                 )
                             ),
                             "char_len_delta": (
@@ -701,7 +834,12 @@ def analyze(args: argparse.Namespace) -> int:
     summary_global.to_csv(output_dir / "summary_global_overall.csv", index=False)
 
     # Requested nested JSON artifact: workflow -> Agent N -> language pair.
-    nested_metrics = build_workflow_agent_langpair_json(steps_df, transitions_df)
+    source_len_resolver = SourceLengthResolver(base_data_dir=Path(args.data_dir))
+    nested_metrics = build_workflow_agent_langpair_json(
+        steps_df=steps_df,
+        transitions_df=transitions_df,
+        source_len_resolver=source_len_resolver,
+    )
     nested_json_file = output_dir / "workflow_agent_langpair_metrics.json"
     nested_json_file.write_text(
         json.dumps(nested_metrics, indent=2, ensure_ascii=False),
