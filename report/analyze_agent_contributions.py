@@ -442,6 +442,30 @@ def build_workflow_agent_langpair_json(
                             "sample_idx": int(row["sample_idx"]),
                             "sample_id": str(row["sample_id"]),
                             "char_change": int(row["edit_distance"]),
+                            "prev_char_len": (
+                                int(row["prev_translation_len_chars"])
+                                if pd.notna(row["prev_translation_len_chars"])
+                                else None
+                            ),
+                            "curr_char_len": (
+                                int(row["curr_translation_len_chars"])
+                                if pd.notna(row["curr_translation_len_chars"])
+                                else None
+                            ),
+                            "sample_char_len": (
+                                int(row["curr_translation_len_chars"])
+                                if pd.notna(row["curr_translation_len_chars"])
+                                else (
+                                    int(row["prev_translation_len_chars"])
+                                    if pd.notna(row["prev_translation_len_chars"])
+                                    else None
+                                )
+                            ),
+                            "char_len_delta": (
+                                int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
+                                if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
+                                else None
+                            ),
                         }
                         for _, row in subset.iterrows()
                         if pd.notna(row["edit_distance"])
