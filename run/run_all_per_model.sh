@@ -117,3 +117,12 @@ fi
 echo "=========================================="
 echo "All workflows finished!"
 echo "=========================================="
+
+if [ "${RUN_CONTRIBUTION_ANALYSIS:-false}" == "true" ]; then
+    echo ""
+    echo "=========================================="
+    echo "Running agent contribution analysis"
+    echo "=========================================="
+    ANALYSIS_OUTPUT_DIR="${CONTRIBUTION_ANALYSIS_OUTPUT_DIR:-report/contribution_analysis}"
+    python3 report/analyze_agent_contributions.py --outputs_dirs outputs --output_dir "$ANALYSIS_OUTPUT_DIR"
+fi

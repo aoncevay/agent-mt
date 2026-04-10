@@ -1,0 +1,238 @@
+{
+  "MaMT_translate_postedit_proofread": {
+    "Agent 1": {
+      "step_name": "translate",
+      "agent_type": "translate",
+      "step_order": 0,
+      "output_index": 0,
+      "translation_mode": "direct",
+      "language_pairs": {
+        "en_it": {
+          "comparable_samples": 0,
+          "changed_samples": 0,
+          "step_change_rate": null,
+          "avg_char_change": null,
+          "avg_char_change_when_changed": null,
+          "char_changes": [],
+          "char_changes_by_sample": []
+        }
+      }
+    },
+    "Agent 2": {
+      "step_name": "postedit",
+      "agent_type": "postedit",
+      "step_order": 1,
+      "output_index": 1,
+      "translation_mode": "direct",
+      "language_pairs": {
+        "en_it": {
+          "comparable_samples": 13,
+          "changed_samples": 12,
+          "step_change_rate": 0.9230769230769231,
+          "avg_char_change": 280.0,
+          "avg_char_change_when_changed": 303.3333333333333,
+          "char_changes": [
+            61,
+            56,
+            174,
+            0,
+            677,
+            230,
+            497,
+            94,
+            341,
+            668,
+            348,
+            336,
+            158
+          ],
+          "char_changes_by_sample": [
+            {
+              "sample_idx": 0,
+              "sample_id": "561",
+              "char_change": 61
+            },
+            {
+              "sample_idx": 1,
+              "sample_id": "1449",
+              "char_change": 56
+            },
+            {
+              "sample_idx": 2,
+              "sample_id": "1504",
+              "char_change": 174
+            },
+            {
+              "sample_idx": 3,
+              "sample_id": "758",
+              "char_change": 0
+            },
+            {
+              "sample_idx": 4,
+              "sample_id": "155",
+              "char_change": 677
+            },
+            {
+              "sample_idx": 5,
+              "sample_id": "109",
+              "char_change": 230
+            },
+            {
+              "sample_idx": 6,
+              "sample_id": "759",
+              "char_change": 497
+            },
+            {
+              "sample_idx": 7,
+              "sample_id": "424",
+              "char_change": 94
+            },
+            {
+              "sample_idx": 8,
+              "sample_id": "509",
+              "char_change": 341
+            },
+            {
+              "sample_idx": 9,
+              "sample_id": "810",
+              "char_change": 668
+            },
+            {
+              "sample_idx": 10,
+              "sample_id": "444",
+              "char_change": 348
+            },
+            {
+              "sample_idx": 11,
+              "sample_id": "760",
+              "char_change": 336
+            },
+            {
+              "sample_idx": 12,
+              "sample_id": "1519",
+              "char_change": 158
+            }
+          ]
+        }
+      }
+    },
+    "Agent 3": {
+      "step_name": "proofread",
+      "agent_type": "proofread",
+      "step_order": 2,
+      "output_index": 2,
+      "translation_mode": "direct",
+      "language_pairs": {
+        "en_it": {
+          "comparable_samples": 13,
+          "changed_samples": 13,
+          "step_change_rate": 1.0,
+          "avg_char_change": 198.76923076923077,
+          "avg_char_change_when_changed": 198.76923076923077,
+          "char_changes": [
+            88,
+            86,
+            131,
+            113,
+            528,
+            67,
+            260,
+            66,
+            91,
+            252,
+            252,
+            552,
+            98
+          ],
+          "char_changes_by_sample": [
+            {
+              "sample_idx": 0,
+              "sample_id": "561",
+              "char_change": 88
+            },
+            {
+              "sample_idx": 1,
+              "sample_id": "1449",
+              "char_change": 86
+            },
+            {
+              "sample_idx": 2,
+              "sample_id": "1504",
+              "char_change": 131
+            },
+            {
+              "sample_idx": 3,
+              "sample_id": "758",
+              "char_change": 113
+            },
+            {
+              "sample_idx": 4,
+              "sample_id": "155",
+              "char_change": 528
+            },
+            {
+              "sample_idx": 5,
+              "sample_id": "109",
+              "char_change": 67
+            },
+            {
+              "sample_idx": 6,
+              "sample_id": "759",
+              "char_change": 260
+            },
+            {
+              "sample_idx": 7,
+              "sample_id": "424",
+              "char_change": 66
+            },
+            {
+              "sample_idx": 8,
+              "sample_id": "509",
+              "char_change": 91
+            },
+            {
+              "sample_idx": 9,
+              "sample_id": "810",
+              "char_change": 252
+            },
+            {
+              "sample_idx": 10,
+              "sample_id": "444",
+              "char_change": 252
+            },
+            {
+              "sample_idx": 11,
+              "sample_id": "760",
+              "char_change": 552
+            },
+            {
+              "sample_idx": 12,
+              "sample_id": "1519",
+              "char_change": 98
+            }
+          ]
+        }
+      }
+    }
+  },
+  "zero_shot": {
+    "Agent 1": {
+      "step_name": "translate",
+      "agent_type": "translate",
+      "step_order": 0,
+      "output_index": 0,
+      "translation_mode": "direct",
+      "language_pairs": {
+        "en_es": {
+          "comparable_samples": 0,
+          "changed_samples": 0,
+          "step_change_rate": null,
+          "avg_char_change": null,
+          "avg_char_change_when_changed": null,
+          "char_changes": [],
+          "char_changes_by_sample": []
+        }
+      }
+    }
+  }
+}

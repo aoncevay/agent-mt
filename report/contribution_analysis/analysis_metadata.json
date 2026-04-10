@@ -1,0 +1,14 @@
+{
+  "edit_distance_impl": "rapidfuzz",
+  "reports_discovered": 2,
+  "reports_processed": 2,
+  "reports_skipped_incomplete": 0,
+  "samples_seen": 14,
+  "samples_processed": 14,
+  "samples_missing_outputs": 0,
+  "step_rows": 40,
+  "transition_rows": 26,
+  "comparable_transition_rows": 26,
+  "changed_transition_rows": 25,
+  "unchanged_transition_rows": 1
+}

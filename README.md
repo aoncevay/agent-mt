@@ -416,6 +416,49 @@ Each experiment computes:
 
 Metrics are computed per sample and aggregated in the report summary.
 
+## Agent Contribution Analysis
+
+To quantify when intermediate agents meaningfully change the translation, run:
+
+```bash
+python report/analyze_agent_contributions.py --outputs_dirs outputs
+```
+
+This script reads per-agent output files (`sample_*_agent_*.txt`) and writes:
+
+- `report/contribution_analysis/step_states_raw.csv`
+- `report/contribution_analysis/transitions_raw.csv`
+- `report/contribution_analysis/summary_by_setting.csv`
+- `report/contribution_analysis/summary_by_agent_type.csv`
+- `report/contribution_analysis/summary_by_step.csv`
+- `report/contribution_analysis/summary_global_by_agent_type.csv`
+- `report/contribution_analysis/summary_global_overall.csv`
+
+Key fields:
+- `pct_unchanged`: percentage of comparable workflow transitions with no translation change
+- `avg_edit_distance_when_changed`: average character-level edit distance for changed transitions
+
+Generate plots (optional):
+
+```bash
+python report/plot_agent_contributions.py --analysis_dir report/contribution_analysis
+```
+
+This now includes:
+- Global bars by agent type:
+  - `agent_type_pct_unchanged.png`
+  - `agent_type_avg_edit_distance_when_changed.png`
+- One figure per workflow with bars per step/agent:
+  - `workflow_<workflow_name>_step_contributions.png`
+- Plot-ready per-workflow-step summary:
+  - `summary_by_workflow_step_for_plots.csv`
+
+Auto-run after (optional) `run/run_all_per_model.sh`:
+
+```bash
+RUN_CONTRIBUTION_ANALYSIS=true ./run/run_all_per_model.sh
+```
+
 ## Configuration
 
 ### Temperature Setting
@@ -472,4 +515,3 @@ When adding new workflows or features:
 2. Add error handling and token counting
 3. Update this README
 4. Test with `run_samples_per_model.sh` first or create a specific script
-

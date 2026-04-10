@@ -1,0 +1,2 @@
+dataset,lang_pair,workflow,model,observed_transitions,analyzable_transitions,changed_steps,unchanged_steps,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed,non_comparable_transitions,pct_unchanged
+dolfin,en_it,MaMT_translate_postedit_proofread,gpt-4-1,26,26,25,1,248.96,174.0,0.028697242497441103,0,3.8461538461538463
