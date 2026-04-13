@@ -21,7 +21,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import subprocess
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -72,6 +75,8 @@ except ImportError:
 REPORT_SAMPLES_RE = re.compile(r"^report_(\d+)_samples\.json$")
 AGENT_FILE_RE = re.compile(r"^(sample_.+)_agent_(\d+)\.txt$")
 WMT25_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+SUPPORTED_GIT_DIFF_ALGORITHMS = {"myers", "patience", "histogram"}
+HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,6 +119,12 @@ def parse_args() -> argparse.Namespace:
         "--data_dir",
         default="data/raw",
         help="Base data directory used to resolve source sample character length",
+    )
+    parser.add_argument(
+        "--diff_algorithms",
+        nargs="+",
+        default=["myers", "patience", "histogram"],
+        help="Git diff algorithms used for localization (myers, patience, histogram)",
     )
     return parser.parse_args()
 
@@ -254,6 +265,219 @@ def derive_translation_state(
             return None
         return "\n\n".join(outputs[: output_index + 1]).strip()
     raise ValueError(f"Unknown translation mode: {mode}")
+
+
+def _line_offsets(text: str) -> Tuple[List[int], int]:
+    lines = text.splitlines(keepends=True)
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line))
+    return offsets, len(lines)
+
+
+def _line_range_to_char_span(
+    offsets: List[int],
+    num_lines: int,
+    total_len: int,
+    start_line_1b: int,
+    line_len: int,
+) -> Tuple[int, int]:
+    if start_line_1b <= 0:
+        start_idx = 0
+    elif start_line_1b > num_lines:
+        start_idx = total_len
+    else:
+        start_idx = offsets[start_line_1b - 1]
+
+    if line_len <= 0:
+        return start_idx, start_idx
+
+    if start_line_1b <= 0:
+        end_line = min(line_len, num_lines)
+    else:
+        end_line = min(start_line_1b - 1 + line_len, num_lines)
+    end_idx = offsets[end_line]
+    return start_idx, end_idx
+
+
+def _parse_git_unified_hunks(diff_text: str, old_text: str, new_text: str) -> List[Dict[str, Any]]:
+    old_offsets, old_num_lines = _line_offsets(old_text)
+    new_offsets, new_num_lines = _line_offsets(new_text)
+    old_total_len = len(old_text)
+    new_total_len = len(new_text)
+
+    hunks: List[Dict[str, Any]] = []
+    for line in diff_text.splitlines():
+        match = HUNK_HEADER_RE.match(line)
+        if not match:
+            continue
+        old_start = int(match.group(1))
+        old_len = int(match.group(2)) if match.group(2) is not None else 1
+        new_start = int(match.group(3))
+        new_len = int(match.group(4)) if match.group(4) is not None else 1
+
+        old_char_start, old_char_end = _line_range_to_char_span(
+            offsets=old_offsets,
+            num_lines=old_num_lines,
+            total_len=old_total_len,
+            start_line_1b=old_start,
+            line_len=old_len,
+        )
+        new_char_start, new_char_end = _line_range_to_char_span(
+            offsets=new_offsets,
+            num_lines=new_num_lines,
+            total_len=new_total_len,
+            start_line_1b=new_start,
+            line_len=new_len,
+        )
+
+        old_char_len = old_char_end - old_char_start
+        new_char_len = new_char_end - new_char_start
+        changed_chars = max(old_char_len, new_char_len)
+
+        hunks.append(
+            {
+                "old_line_start": old_start,
+                "old_line_len": old_len,
+                "new_line_start": new_start,
+                "new_line_len": new_len,
+                "old_char_start": old_char_start,
+                "old_char_end": old_char_end,
+                "old_char_len": old_char_len,
+                "new_char_start": new_char_start,
+                "new_char_end": new_char_end,
+                "new_char_len": new_char_len,
+                "changed_chars": changed_chars,
+                "char_len_delta": new_char_len - old_char_len,
+            }
+        )
+    return hunks
+
+
+def _run_git_diff(old_text: str, new_text: str, algorithm: str) -> Dict[str, Any]:
+    if old_text == new_text:
+        return {
+            "algorithm": algorithm,
+            "num_hunks": 0,
+            "total_changed_chars": 0,
+            "total_old_changed_chars": 0,
+            "total_new_changed_chars": 0,
+            "avg_hunk_size": 0.0,
+            "max_hunk_size": 0,
+            "changed_span_ratio_old": 0.0,
+            "changed_span_ratio_new": 0.0,
+            "hunk_internal_levenshtein_total": 0,
+            "hunk_internal_levenshtein_per_hunk": [],
+            "hunks": [],
+        }
+
+    old_tmp = None
+    new_tmp = None
+    try:
+        with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", suffix=".txt") as f_old:
+            old_tmp = f_old.name
+            f_old.write(old_text)
+        with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", suffix=".txt") as f_new:
+            new_tmp = f_new.name
+            f_new.write(new_text)
+
+        cmd = [
+            "git",
+            "diff",
+            "--no-index",
+            "--unified=0",
+            f"--diff-algorithm={algorithm}",
+            "--",
+            old_tmp,
+            new_tmp,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        # git diff returns:
+        # 0 = no differences, 1 = differences found, other = error
+        if proc.returncode not in (0, 1):
+            return {
+                "algorithm": algorithm,
+                "error": f"git diff failed with code {proc.returncode}",
+                "stderr": proc.stderr.strip(),
+                "hunks": [],
+                "num_hunks": 0,
+                "total_changed_chars": None,
+                "total_old_changed_chars": None,
+                "total_new_changed_chars": None,
+                "avg_hunk_size": None,
+                "max_hunk_size": None,
+                "changed_span_ratio_old": None,
+                "changed_span_ratio_new": None,
+                "hunk_internal_levenshtein_total": None,
+                "hunk_internal_levenshtein_per_hunk": None,
+            }
+
+        hunks = _parse_git_unified_hunks(proc.stdout, old_text, new_text)
+        hunk_levenshtein_values: List[int] = []
+        for h in hunks:
+            old_seg = old_text[h["old_char_start"] : h["old_char_end"]]
+            new_seg = new_text[h["new_char_start"] : h["new_char_end"]]
+            h_lev = int(char_edit_distance(old_seg, new_seg))
+            h["hunk_internal_levenshtein"] = h_lev
+            hunk_levenshtein_values.append(h_lev)
+
+        total_old = int(sum(h["old_char_len"] for h in hunks))
+        total_new = int(sum(h["new_char_len"] for h in hunks))
+        changed = [int(h["changed_chars"]) for h in hunks]
+        total_changed = int(sum(changed))
+        total_hunk_lev = int(sum(hunk_levenshtein_values))
+
+        return {
+            "algorithm": algorithm,
+            "num_hunks": len(hunks),
+            "total_changed_chars": total_changed,
+            "total_old_changed_chars": total_old,
+            "total_new_changed_chars": total_new,
+            "avg_hunk_size": float(np.mean(changed)) if changed else 0.0,
+            "max_hunk_size": int(max(changed)) if changed else 0,
+            "changed_span_ratio_old": float(total_old / max(len(old_text), 1)),
+            "changed_span_ratio_new": float(total_new / max(len(new_text), 1)),
+            "hunk_internal_levenshtein_total": total_hunk_lev,
+            "hunk_internal_levenshtein_per_hunk": hunk_levenshtein_values,
+            "hunks": hunks,
+        }
+    except FileNotFoundError:
+        return {
+            "algorithm": algorithm,
+            "error": "git executable not found",
+            "hunks": [],
+            "num_hunks": 0,
+            "total_changed_chars": None,
+            "total_old_changed_chars": None,
+            "total_new_changed_chars": None,
+            "avg_hunk_size": None,
+            "max_hunk_size": None,
+            "changed_span_ratio_old": None,
+            "changed_span_ratio_new": None,
+            "hunk_internal_levenshtein_total": None,
+            "hunk_internal_levenshtein_per_hunk": None,
+        }
+    finally:
+        for path in (old_tmp, new_tmp):
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+
+def compute_diff_localization(
+    old_text: str,
+    new_text: str,
+    algorithms: List[str],
+) -> Dict[str, Any]:
+    """
+    Compute Git-style localization for multiple diff algorithms.
+    """
+    output: Dict[str, Any] = {}
+    for algo in algorithms:
+        output[algo] = _run_git_diff(old_text, new_text, algo)
+    return output
 
 
 def summarize_transitions(df: pd.DataFrame, group_cols: List[str]) -> pd.DataFrame:
@@ -594,40 +818,46 @@ def build_workflow_agent_langpair_json(
                             float(np.mean(changed_values)) if changed_values else None
                         )
 
-                        char_changes_by_sample = [
-                            {
-                                "dataset": str(row["dataset"]),
-                                "lang_pair": str(row["lang_pair"]),
-                                "sample_idx": int(row["sample_idx"]),
-                                "sample_id": str(row["sample_id"]),
-                                "char_change": int(row["edit_distance"]),
-                                "prev_char_len": (
-                                    int(row["prev_translation_len_chars"])
-                                    if pd.notna(row["prev_translation_len_chars"])
-                                    else None
-                                ),
-                                "curr_char_len": (
-                                    int(row["curr_translation_len_chars"])
-                                    if pd.notna(row["curr_translation_len_chars"])
-                                    else None
-                                ),
-                                "sample_char_len": (
-                                    source_len_resolver.get_source_char_len(
-                                        dataset=str(row["dataset"]),
-                                        lang_pair=str(row["lang_pair"]),
-                                        sample_id=row["sample_id"],
-                                        sample_idx=row["sample_idx"],
-                                    )
-                                ),
-                                "char_len_delta": (
-                                    int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
-                                    if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
-                                    else None
-                                ),
-                            }
-                            for _, row in subset.iterrows()
-                            if pd.notna(row["edit_distance"])
-                        ]
+                        char_changes_by_sample: List[Dict[str, Any]] = []
+                        for _, row in subset.iterrows():
+                            if not pd.notna(row["edit_distance"]):
+                                continue
+                            diff_localization = row.get("diff_localization")
+                            if not isinstance(diff_localization, dict):
+                                diff_localization = None
+                            char_changes_by_sample.append(
+                                {
+                                    "dataset": str(row["dataset"]),
+                                    "lang_pair": str(row["lang_pair"]),
+                                    "sample_idx": int(row["sample_idx"]),
+                                    "sample_id": str(row["sample_id"]),
+                                    "char_change": int(row["edit_distance"]),
+                                    "prev_char_len": (
+                                        int(row["prev_translation_len_chars"])
+                                        if pd.notna(row["prev_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "curr_char_len": (
+                                        int(row["curr_translation_len_chars"])
+                                        if pd.notna(row["curr_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "sample_char_len": (
+                                        source_len_resolver.get_source_char_len(
+                                            dataset=str(row["dataset"]),
+                                            lang_pair=str(row["lang_pair"]),
+                                            sample_id=row["sample_id"],
+                                            sample_idx=row["sample_idx"],
+                                        )
+                                    ),
+                                    "char_len_delta": (
+                                        int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
+                                        if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "diff_localization": diff_localization,
+                                }
+                            )
                     else:
                         edit_values = []
                         comparable_samples = 0
@@ -663,9 +893,19 @@ def analyze(args: argparse.Namespace) -> int:
     datasets_filter = set(args.datasets) if args.datasets else None
     workflows_filter = set(args.workflows) if args.workflows else None
     models_filter = set(args.models) if args.models else None
+    diff_algorithms = [a.strip().lower() for a in args.diff_algorithms if str(a).strip()]
+    invalid_algos = sorted(set(diff_algorithms) - SUPPORTED_GIT_DIFF_ALGORITHMS)
+    if invalid_algos:
+        raise SystemExit(
+            f"Unsupported --diff_algorithms values: {invalid_algos}. "
+            f"Supported: {sorted(SUPPORTED_GIT_DIFF_ALGORITHMS)}"
+        )
+    if not diff_algorithms:
+        diff_algorithms = ["myers", "patience", "histogram"]
 
     stats: Dict[str, Any] = {
         "edit_distance_impl": EDIT_DISTANCE_IMPL,
+        "diff_algorithms": diff_algorithms,
         "reports_discovered": 0,
         "reports_processed": 0,
         "reports_skipped_incomplete": 0,
@@ -803,6 +1043,13 @@ def analyze(args: argparse.Namespace) -> int:
                         changed = edit_distance != 0
                         max_len = max(len(prev_state), len(curr_state), 1)
                         normalized_edit_distance = float(edit_distance) / float(max_len)
+                        diff_localization = compute_diff_localization(
+                            old_text=prev_state,
+                            new_text=curr_state,
+                            algorithms=diff_algorithms,
+                        )
+                    else:
+                        diff_localization = None
 
                     transition_rows.append(
                         {
@@ -833,6 +1080,7 @@ def analyze(args: argparse.Namespace) -> int:
                             "curr_translation_len_chars": (
                                 len(curr_state) if curr_state is not None else np.nan
                             ),
+                            "diff_localization": diff_localization,
                         }
                     )
 
@@ -842,7 +1090,8 @@ def analyze(args: argparse.Namespace) -> int:
     step_file = output_dir / "step_states_raw.csv"
     transition_file = output_dir / "transitions_raw.csv"
     steps_df.to_csv(step_file, index=False)
-    transitions_df.to_csv(transition_file, index=False)
+    transitions_export_df = transitions_df.drop(columns=["diff_localization"], errors="ignore")
+    transitions_export_df.to_csv(transition_file, index=False)
 
     by_setting_cols = ["dataset", "lang_pair", "workflow", "model"]
     by_setting_agent_cols = by_setting_cols + ["curr_agent_type"]

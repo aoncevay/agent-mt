@@ -437,6 +437,16 @@ This script reads per-agent output files (`sample_*_agent_*.txt`) and writes:
 Key fields:
 - `pct_unchanged`: percentage of comparable workflow transitions with no translation change
 - `avg_edit_distance_when_changed`: average character-level edit distance for changed transitions
+- In `workflow_agent_langpair_metrics.json`, each sample record now includes:
+  - `prev_char_len`, `curr_char_len`, `char_len_delta`
+  - `sample_char_len` (source/original input length)
+  - `diff_localization` with Git-style hunk localization for:
+    - `myers`
+    - `patience`
+    - `histogram`
+  - each algorithm block also includes:
+    - `hunk_internal_levenshtein_total`
+    - `hunk_internal_levenshtein_per_hunk`
 
 Generate plots (optional):
 

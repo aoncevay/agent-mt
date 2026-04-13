@@ -1,5 +1,10 @@
 {
   "edit_distance_impl": "rapidfuzz",
+  "diff_algorithms": [
+    "myers",
+    "patience",
+    "histogram"
+  ],
   "reports_discovered": 2,
   "reports_processed": 2,
   "reports_skipped_incomplete": 0,
