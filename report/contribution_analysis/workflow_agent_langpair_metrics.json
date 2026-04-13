@@ -1,392 +1,396 @@
 {
   "MaMT_translate_postedit_proofread": {
-    "Agent 1": {
-      "step_name": "translate",
-      "agent_type": "translate",
-      "step_order": 0,
-      "output_index": 0,
-      "translation_mode": "direct",
-      "language_pairs": {
-        "en_it": {
-          "comparable_samples": 0,
-          "changed_samples": 0,
-          "step_change_rate": null,
-          "avg_char_change": null,
-          "avg_char_change_when_changed": null,
-          "char_changes": [],
-          "char_changes_by_sample": []
+    "gpt-4-1": {
+      "Agent 1": {
+        "step_name": "translate",
+        "agent_type": "translate",
+        "step_order": 0,
+        "output_index": 0,
+        "translation_mode": "direct",
+        "language_pairs": {
+          "en_it": {
+            "comparable_samples": 0,
+            "changed_samples": 0,
+            "step_change_rate": null,
+            "avg_char_change": null,
+            "avg_char_change_when_changed": null,
+            "char_changes": [],
+            "char_changes_by_sample": []
+          }
         }
-      }
-    },
-    "Agent 2": {
-      "step_name": "postedit",
-      "agent_type": "postedit",
-      "step_order": 1,
-      "output_index": 1,
-      "translation_mode": "direct",
-      "language_pairs": {
-        "en_it": {
-          "comparable_samples": 13,
-          "changed_samples": 12,
-          "step_change_rate": 0.9230769230769231,
-          "avg_char_change": 280.0,
-          "avg_char_change_when_changed": 303.3333333333333,
-          "char_changes": [
-            61,
-            56,
-            174,
-            0,
-            677,
-            230,
-            497,
-            94,
-            341,
-            668,
-            348,
-            336,
-            158
-          ],
-          "char_changes_by_sample": [
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 0,
-              "sample_id": "561",
-              "char_change": 61,
-              "prev_char_len": 6708,
-              "curr_char_len": 6724,
-              "sample_char_len": 6269,
-              "char_len_delta": 16
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 1,
-              "sample_id": "1449",
-              "char_change": 56,
-              "prev_char_len": 7028,
-              "curr_char_len": 7008,
-              "sample_char_len": 6037,
-              "char_len_delta": -20
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 2,
-              "sample_id": "1504",
-              "char_change": 174,
-              "prev_char_len": 6387,
-              "curr_char_len": 6379,
-              "sample_char_len": 5682,
-              "char_len_delta": -8
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 3,
-              "sample_id": "758",
-              "char_change": 0,
-              "prev_char_len": 14033,
-              "curr_char_len": 14033,
-              "sample_char_len": 13023,
-              "char_len_delta": 0
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 4,
-              "sample_id": "155",
-              "char_change": 677,
-              "prev_char_len": 7786,
-              "curr_char_len": 7773,
-              "sample_char_len": 7171,
-              "char_len_delta": -13
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 5,
-              "sample_id": "109",
-              "char_change": 230,
-              "prev_char_len": 18681,
-              "curr_char_len": 18663,
-              "sample_char_len": 17127,
-              "char_len_delta": -18
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 6,
-              "sample_id": "759",
-              "char_change": 497,
-              "prev_char_len": 10997,
-              "curr_char_len": 11235,
-              "sample_char_len": 10293,
-              "char_len_delta": 238
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 7,
-              "sample_id": "424",
-              "char_change": 94,
-              "prev_char_len": 12456,
-              "curr_char_len": 12435,
-              "sample_char_len": 11050,
-              "char_len_delta": -21
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 8,
-              "sample_id": "509",
-              "char_change": 341,
-              "prev_char_len": 6933,
-              "curr_char_len": 6976,
-              "sample_char_len": 6534,
-              "char_len_delta": 43
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 9,
-              "sample_id": "810",
-              "char_change": 668,
-              "prev_char_len": 7391,
-              "curr_char_len": 7517,
-              "sample_char_len": 6991,
-              "char_len_delta": 126
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 10,
-              "sample_id": "444",
-              "char_change": 348,
-              "prev_char_len": 7532,
-              "curr_char_len": 7541,
-              "sample_char_len": 6677,
-              "char_len_delta": 9
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 11,
-              "sample_id": "760",
-              "char_change": 336,
-              "prev_char_len": 11658,
-              "curr_char_len": 11642,
-              "sample_char_len": 10687,
-              "char_len_delta": -16
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 12,
-              "sample_id": "1519",
-              "char_change": 158,
-              "prev_char_len": 9028,
-              "curr_char_len": 9047,
-              "sample_char_len": 8075,
-              "char_len_delta": 19
-            }
-          ]
+      },
+      "Agent 2": {
+        "step_name": "postedit",
+        "agent_type": "postedit",
+        "step_order": 1,
+        "output_index": 1,
+        "translation_mode": "direct",
+        "language_pairs": {
+          "en_it": {
+            "comparable_samples": 13,
+            "changed_samples": 12,
+            "step_change_rate": 0.9230769230769231,
+            "avg_char_change": 280.0,
+            "avg_char_change_when_changed": 303.3333333333333,
+            "char_changes": [
+              61,
+              56,
+              174,
+              0,
+              677,
+              230,
+              497,
+              94,
+              341,
+              668,
+              348,
+              336,
+              158
+            ],
+            "char_changes_by_sample": [
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 0,
+                "sample_id": "561",
+                "char_change": 61,
+                "prev_char_len": 6708,
+                "curr_char_len": 6724,
+                "sample_char_len": 6269,
+                "char_len_delta": 16
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 1,
+                "sample_id": "1449",
+                "char_change": 56,
+                "prev_char_len": 7028,
+                "curr_char_len": 7008,
+                "sample_char_len": 6037,
+                "char_len_delta": -20
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 2,
+                "sample_id": "1504",
+                "char_change": 174,
+                "prev_char_len": 6387,
+                "curr_char_len": 6379,
+                "sample_char_len": 5682,
+                "char_len_delta": -8
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 3,
+                "sample_id": "758",
+                "char_change": 0,
+                "prev_char_len": 14033,
+                "curr_char_len": 14033,
+                "sample_char_len": 13023,
+                "char_len_delta": 0
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 4,
+                "sample_id": "155",
+                "char_change": 677,
+                "prev_char_len": 7786,
+                "curr_char_len": 7773,
+                "sample_char_len": 7171,
+                "char_len_delta": -13
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 5,
+                "sample_id": "109",
+                "char_change": 230,
+                "prev_char_len": 18681,
+                "curr_char_len": 18663,
+                "sample_char_len": 17127,
+                "char_len_delta": -18
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 6,
+                "sample_id": "759",
+                "char_change": 497,
+                "prev_char_len": 10997,
+                "curr_char_len": 11235,
+                "sample_char_len": 10293,
+                "char_len_delta": 238
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 7,
+                "sample_id": "424",
+                "char_change": 94,
+                "prev_char_len": 12456,
+                "curr_char_len": 12435,
+                "sample_char_len": 11050,
+                "char_len_delta": -21
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 8,
+                "sample_id": "509",
+                "char_change": 341,
+                "prev_char_len": 6933,
+                "curr_char_len": 6976,
+                "sample_char_len": 6534,
+                "char_len_delta": 43
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 9,
+                "sample_id": "810",
+                "char_change": 668,
+                "prev_char_len": 7391,
+                "curr_char_len": 7517,
+                "sample_char_len": 6991,
+                "char_len_delta": 126
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 10,
+                "sample_id": "444",
+                "char_change": 348,
+                "prev_char_len": 7532,
+                "curr_char_len": 7541,
+                "sample_char_len": 6677,
+                "char_len_delta": 9
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 11,
+                "sample_id": "760",
+                "char_change": 336,
+                "prev_char_len": 11658,
+                "curr_char_len": 11642,
+                "sample_char_len": 10687,
+                "char_len_delta": -16
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 12,
+                "sample_id": "1519",
+                "char_change": 158,
+                "prev_char_len": 9028,
+                "curr_char_len": 9047,
+                "sample_char_len": 8075,
+                "char_len_delta": 19
+              }
+            ]
+          }
         }
-      }
-    },
-    "Agent 3": {
-      "step_name": "proofread",
-      "agent_type": "proofread",
-      "step_order": 2,
-      "output_index": 2,
-      "translation_mode": "direct",
-      "language_pairs": {
-        "en_it": {
-          "comparable_samples": 13,
-          "changed_samples": 13,
-          "step_change_rate": 1.0,
-          "avg_char_change": 198.76923076923077,
-          "avg_char_change_when_changed": 198.76923076923077,
-          "char_changes": [
-            88,
-            86,
-            131,
-            113,
-            528,
-            67,
-            260,
-            66,
-            91,
-            252,
-            252,
-            552,
-            98
-          ],
-          "char_changes_by_sample": [
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 0,
-              "sample_id": "561",
-              "char_change": 88,
-              "prev_char_len": 6724,
-              "curr_char_len": 6720,
-              "sample_char_len": 6269,
-              "char_len_delta": -4
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 1,
-              "sample_id": "1449",
-              "char_change": 86,
-              "prev_char_len": 7008,
-              "curr_char_len": 7017,
-              "sample_char_len": 6037,
-              "char_len_delta": 9
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 2,
-              "sample_id": "1504",
-              "char_change": 131,
-              "prev_char_len": 6379,
-              "curr_char_len": 6399,
-              "sample_char_len": 5682,
-              "char_len_delta": 20
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 3,
-              "sample_id": "758",
-              "char_change": 113,
-              "prev_char_len": 14033,
-              "curr_char_len": 14051,
-              "sample_char_len": 13023,
-              "char_len_delta": 18
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 4,
-              "sample_id": "155",
-              "char_change": 528,
-              "prev_char_len": 7773,
-              "curr_char_len": 7651,
-              "sample_char_len": 7171,
-              "char_len_delta": -122
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 5,
-              "sample_id": "109",
-              "char_change": 67,
-              "prev_char_len": 18663,
-              "curr_char_len": 18689,
-              "sample_char_len": 17127,
-              "char_len_delta": 26
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 6,
-              "sample_id": "759",
-              "char_change": 260,
-              "prev_char_len": 11235,
-              "curr_char_len": 11045,
-              "sample_char_len": 10293,
-              "char_len_delta": -190
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 7,
-              "sample_id": "424",
-              "char_change": 66,
-              "prev_char_len": 12435,
-              "curr_char_len": 12385,
-              "sample_char_len": 11050,
-              "char_len_delta": -50
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 8,
-              "sample_id": "509",
-              "char_change": 91,
-              "prev_char_len": 6976,
-              "curr_char_len": 7042,
-              "sample_char_len": 6534,
-              "char_len_delta": 66
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 9,
-              "sample_id": "810",
-              "char_change": 252,
-              "prev_char_len": 7517,
-              "curr_char_len": 7448,
-              "sample_char_len": 6991,
-              "char_len_delta": -69
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 10,
-              "sample_id": "444",
-              "char_change": 252,
-              "prev_char_len": 7541,
-              "curr_char_len": 7543,
-              "sample_char_len": 6677,
-              "char_len_delta": 2
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 11,
-              "sample_id": "760",
-              "char_change": 552,
-              "prev_char_len": 11642,
-              "curr_char_len": 11481,
-              "sample_char_len": 10687,
-              "char_len_delta": -161
-            },
-            {
-              "dataset": "dolfin",
-              "lang_pair": "en_it",
-              "sample_idx": 12,
-              "sample_id": "1519",
-              "char_change": 98,
-              "prev_char_len": 9047,
-              "curr_char_len": 9036,
-              "sample_char_len": 8075,
-              "char_len_delta": -11
-            }
-          ]
+      },
+      "Agent 3": {
+        "step_name": "proofread",
+        "agent_type": "proofread",
+        "step_order": 2,
+        "output_index": 2,
+        "translation_mode": "direct",
+        "language_pairs": {
+          "en_it": {
+            "comparable_samples": 13,
+            "changed_samples": 13,
+            "step_change_rate": 1.0,
+            "avg_char_change": 198.76923076923077,
+            "avg_char_change_when_changed": 198.76923076923077,
+            "char_changes": [
+              88,
+              86,
+              131,
+              113,
+              528,
+              67,
+              260,
+              66,
+              91,
+              252,
+              252,
+              552,
+              98
+            ],
+            "char_changes_by_sample": [
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 0,
+                "sample_id": "561",
+                "char_change": 88,
+                "prev_char_len": 6724,
+                "curr_char_len": 6720,
+                "sample_char_len": 6269,
+                "char_len_delta": -4
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 1,
+                "sample_id": "1449",
+                "char_change": 86,
+                "prev_char_len": 7008,
+                "curr_char_len": 7017,
+                "sample_char_len": 6037,
+                "char_len_delta": 9
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 2,
+                "sample_id": "1504",
+                "char_change": 131,
+                "prev_char_len": 6379,
+                "curr_char_len": 6399,
+                "sample_char_len": 5682,
+                "char_len_delta": 20
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 3,
+                "sample_id": "758",
+                "char_change": 113,
+                "prev_char_len": 14033,
+                "curr_char_len": 14051,
+                "sample_char_len": 13023,
+                "char_len_delta": 18
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 4,
+                "sample_id": "155",
+                "char_change": 528,
+                "prev_char_len": 7773,
+                "curr_char_len": 7651,
+                "sample_char_len": 7171,
+                "char_len_delta": -122
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 5,
+                "sample_id": "109",
+                "char_change": 67,
+                "prev_char_len": 18663,
+                "curr_char_len": 18689,
+                "sample_char_len": 17127,
+                "char_len_delta": 26
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 6,
+                "sample_id": "759",
+                "char_change": 260,
+                "prev_char_len": 11235,
+                "curr_char_len": 11045,
+                "sample_char_len": 10293,
+                "char_len_delta": -190
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 7,
+                "sample_id": "424",
+                "char_change": 66,
+                "prev_char_len": 12435,
+                "curr_char_len": 12385,
+                "sample_char_len": 11050,
+                "char_len_delta": -50
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 8,
+                "sample_id": "509",
+                "char_change": 91,
+                "prev_char_len": 6976,
+                "curr_char_len": 7042,
+                "sample_char_len": 6534,
+                "char_len_delta": 66
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 9,
+                "sample_id": "810",
+                "char_change": 252,
+                "prev_char_len": 7517,
+                "curr_char_len": 7448,
+                "sample_char_len": 6991,
+                "char_len_delta": -69
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 10,
+                "sample_id": "444",
+                "char_change": 252,
+                "prev_char_len": 7541,
+                "curr_char_len": 7543,
+                "sample_char_len": 6677,
+                "char_len_delta": 2
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 11,
+                "sample_id": "760",
+                "char_change": 552,
+                "prev_char_len": 11642,
+                "curr_char_len": 11481,
+                "sample_char_len": 10687,
+                "char_len_delta": -161
+              },
+              {
+                "dataset": "dolfin",
+                "lang_pair": "en_it",
+                "sample_idx": 12,
+                "sample_id": "1519",
+                "char_change": 98,
+                "prev_char_len": 9047,
+                "curr_char_len": 9036,
+                "sample_char_len": 8075,
+                "char_len_delta": -11
+              }
+            ]
+          }
         }
       }
     }
   },
   "zero_shot": {
-    "Agent 1": {
-      "step_name": "translate",
-      "agent_type": "translate",
-      "step_order": 0,
-      "output_index": 0,
-      "translation_mode": "direct",
-      "language_pairs": {
-        "en_es": {
-          "comparable_samples": 0,
-          "changed_samples": 0,
-          "step_change_rate": null,
-          "avg_char_change": null,
-          "avg_char_change_when_changed": null,
-          "char_changes": [],
-          "char_changes_by_sample": []
+    "gpt-4-1": {
+      "Agent 1": {
+        "step_name": "translate",
+        "agent_type": "translate",
+        "step_order": 0,
+        "output_index": 0,
+        "translation_mode": "direct",
+        "language_pairs": {
+          "en_es": {
+            "comparable_samples": 0,
+            "changed_samples": 0,
+            "step_change_rate": null,
+            "avg_char_change": null,
+            "avg_char_change_when_changed": null,
+            "char_changes": [],
+            "char_changes_by_sample": []
+          }
         }
       }
     }

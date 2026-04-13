@@ -492,9 +492,9 @@ def build_workflow_agent_langpair_json(
 ) -> Dict[str, Any]:
     """
     Build nested JSON structure:
-      workflow -> Agent N -> language_pair -> metrics
+      workflow -> model (LLM) -> Agent N -> language_pair -> metrics
 
-    For each workflow/agent/language_pair, include:
+    For each workflow/model/agent/language_pair, include:
       - step_change_rate (0..1, based on comparable transitions)
       - avg_char_change (mean edit distance across comparable transitions, includes zeros)
       - char_changes (list of per-sample edit distances)
@@ -504,21 +504,28 @@ def build_workflow_agent_langpair_json(
     if steps_df.empty:
         return result
 
-    # Use only unique workflow-step metadata (step order is workflow-relative).
+    # Use unique workflow-model-step metadata (step order is workflow-relative).
     step_meta = (
         steps_df.groupby(
-            ["workflow", "step_order", "step_name", "agent_type", "translation_mode", "output_index"],
+            [
+                "workflow",
+                "model",
+                "step_order",
+                "step_name",
+                "agent_type",
+                "translation_mode",
+                "output_index",
+            ],
             dropna=False,
         )
         .size()
         .reset_index(name="n_rows")
-        .sort_values(["workflow", "step_order"])
+        .sort_values(["workflow", "model", "step_order"])
     )
 
     for workflow in sorted(step_meta["workflow"].dropna().unique()):
-        wf_steps = step_meta[step_meta["workflow"] == workflow].copy()
-        wf_lang_pairs = sorted(
-            steps_df.loc[steps_df["workflow"] == workflow, "lang_pair"]
+        wf_models = sorted(
+            step_meta.loc[step_meta["workflow"] == workflow, "model"]
             .dropna()
             .astype(str)
             .unique()
@@ -526,103 +533,123 @@ def build_workflow_agent_langpair_json(
         )
 
         workflow_dict: Dict[str, Any] = {}
-        for _, step in wf_steps.iterrows():
-            step_order = int(step["step_order"])
-            agent_label = f"Agent {step_order + 1}"
-            step_name = str(step["step_name"])
-            agent_type = str(step["agent_type"])
-            translation_mode = str(step["translation_mode"])
-            output_index = int(step["output_index"])
+        for model in wf_models:
+            wf_model_steps = step_meta[
+                (step_meta["workflow"] == workflow) & (step_meta["model"].astype(str) == model)
+            ].copy()
 
-            agent_entry: Dict[str, Any] = {
-                "step_name": step_name,
-                "agent_type": agent_type,
-                "step_order": step_order,
-                "output_index": output_index,
-                "translation_mode": translation_mode,
-                "language_pairs": {},
-            }
+            wf_model_lang_pairs = sorted(
+                steps_df.loc[
+                    (steps_df["workflow"] == workflow) & (steps_df["model"].astype(str) == model),
+                    "lang_pair",
+                ]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
 
-            for lang_pair in wf_lang_pairs:
-                subset = transitions_df[
-                    (transitions_df["workflow"] == workflow)
-                    & (transitions_df["lang_pair"] == lang_pair)
-                    & (transitions_df["transition_order"] == step_order)
-                    & (transitions_df["is_comparable"] == True)
-                ].copy()
+            model_dict: Dict[str, Any] = {}
+            for _, step in wf_model_steps.iterrows():
+                step_order = int(step["step_order"])
+                agent_label = f"Agent {step_order + 1}"
+                step_name = str(step["step_name"])
+                agent_type = str(step["agent_type"])
+                translation_mode = str(step["translation_mode"])
+                output_index = int(step["output_index"])
 
-                if not subset.empty:
-                    subset = subset.sort_values(["sample_idx", "sample_id"])
-                    edit_values = [int(v) for v in subset["edit_distance"].dropna().tolist()]
-                    changed_values = [v for v in edit_values if v > 0]
-                    comparable_samples = len(edit_values)
-                    changed_samples = len(changed_values)
-                    step_change_rate = (
-                        float(changed_samples) / float(comparable_samples)
-                        if comparable_samples > 0
-                        else None
-                    )
-                    avg_char_change = (
-                        float(np.mean(edit_values)) if comparable_samples > 0 else None
-                    )
-                    avg_char_change_when_changed = (
-                        float(np.mean(changed_values)) if changed_values else None
-                    )
-
-                    char_changes_by_sample = [
-                        {
-                            "dataset": str(row["dataset"]),
-                            "lang_pair": str(row["lang_pair"]),
-                            "sample_idx": int(row["sample_idx"]),
-                            "sample_id": str(row["sample_id"]),
-                            "char_change": int(row["edit_distance"]),
-                            "prev_char_len": (
-                                int(row["prev_translation_len_chars"])
-                                if pd.notna(row["prev_translation_len_chars"])
-                                else None
-                            ),
-                            "curr_char_len": (
-                                int(row["curr_translation_len_chars"])
-                                if pd.notna(row["curr_translation_len_chars"])
-                                else None
-                            ),
-                            "sample_char_len": (
-                                source_len_resolver.get_source_char_len(
-                                    dataset=str(row["dataset"]),
-                                    lang_pair=str(row["lang_pair"]),
-                                    sample_id=row["sample_id"],
-                                    sample_idx=row["sample_idx"],
-                                )
-                            ),
-                            "char_len_delta": (
-                                int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
-                                if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
-                                else None
-                            ),
-                        }
-                        for _, row in subset.iterrows()
-                        if pd.notna(row["edit_distance"])
-                    ]
-                else:
-                    edit_values = []
-                    comparable_samples = 0
-                    changed_samples = 0
-                    step_change_rate = None
-                    avg_char_change = None
-                    avg_char_change_when_changed = None
-                    char_changes_by_sample = []
-
-                agent_entry["language_pairs"][lang_pair] = {
-                    "comparable_samples": comparable_samples,
-                    "changed_samples": changed_samples,
-                    "step_change_rate": step_change_rate,
-                    "avg_char_change": avg_char_change,
-                    "avg_char_change_when_changed": avg_char_change_when_changed,
-                    "char_changes": edit_values,
-                    "char_changes_by_sample": char_changes_by_sample,
+                agent_entry: Dict[str, Any] = {
+                    "step_name": step_name,
+                    "agent_type": agent_type,
+                    "step_order": step_order,
+                    "output_index": output_index,
+                    "translation_mode": translation_mode,
+                    "language_pairs": {},
                 }
 
-            workflow_dict[agent_label] = agent_entry
+                for lang_pair in wf_model_lang_pairs:
+                    subset = transitions_df[
+                        (transitions_df["workflow"] == workflow)
+                        & (transitions_df["model"].astype(str) == model)
+                        & (transitions_df["lang_pair"] == lang_pair)
+                        & (transitions_df["transition_order"] == step_order)
+                        & (transitions_df["is_comparable"] == True)
+                    ].copy()
+
+                    if not subset.empty:
+                        subset = subset.sort_values(["sample_idx", "sample_id"])
+                        edit_values = [int(v) for v in subset["edit_distance"].dropna().tolist()]
+                        changed_values = [v for v in edit_values if v > 0]
+                        comparable_samples = len(edit_values)
+                        changed_samples = len(changed_values)
+                        step_change_rate = (
+                            float(changed_samples) / float(comparable_samples)
+                            if comparable_samples > 0
+                            else None
+                        )
+                        avg_char_change = (
+                            float(np.mean(edit_values)) if comparable_samples > 0 else None
+                        )
+                        avg_char_change_when_changed = (
+                            float(np.mean(changed_values)) if changed_values else None
+                        )
+
+                        char_changes_by_sample = [
+                            {
+                                "dataset": str(row["dataset"]),
+                                "lang_pair": str(row["lang_pair"]),
+                                "sample_idx": int(row["sample_idx"]),
+                                "sample_id": str(row["sample_id"]),
+                                "char_change": int(row["edit_distance"]),
+                                "prev_char_len": (
+                                    int(row["prev_translation_len_chars"])
+                                    if pd.notna(row["prev_translation_len_chars"])
+                                    else None
+                                ),
+                                "curr_char_len": (
+                                    int(row["curr_translation_len_chars"])
+                                    if pd.notna(row["curr_translation_len_chars"])
+                                    else None
+                                ),
+                                "sample_char_len": (
+                                    source_len_resolver.get_source_char_len(
+                                        dataset=str(row["dataset"]),
+                                        lang_pair=str(row["lang_pair"]),
+                                        sample_id=row["sample_id"],
+                                        sample_idx=row["sample_idx"],
+                                    )
+                                ),
+                                "char_len_delta": (
+                                    int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
+                                    if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
+                                    else None
+                                ),
+                            }
+                            for _, row in subset.iterrows()
+                            if pd.notna(row["edit_distance"])
+                        ]
+                    else:
+                        edit_values = []
+                        comparable_samples = 0
+                        changed_samples = 0
+                        step_change_rate = None
+                        avg_char_change = None
+                        avg_char_change_when_changed = None
+                        char_changes_by_sample = []
+
+                    agent_entry["language_pairs"][lang_pair] = {
+                        "comparable_samples": comparable_samples,
+                        "changed_samples": changed_samples,
+                        "step_change_rate": step_change_rate,
+                        "avg_char_change": avg_char_change,
+                        "avg_char_change_when_changed": avg_char_change_when_changed,
+                        "char_changes": edit_values,
+                        "char_changes_by_sample": char_changes_by_sample,
+                    }
+
+                model_dict[agent_label] = agent_entry
+
+            workflow_dict[str(model)] = model_dict
 
         result[str(workflow)] = workflow_dict
 
