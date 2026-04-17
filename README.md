@@ -424,6 +424,17 @@ To quantify when intermediate agents meaningfully change the translation, run:
 python report/analyze_agent_contributions.py --outputs_dirs outputs
 ```
 
+Optional filters are supported:
+
+```bash
+python report/analyze_agent_contributions.py \
+  --outputs_dirs outputs \
+  --datasets dolfin \
+  --workflows MaMT_translate_postedit_proofread \
+  --models gpt-4-1 \
+  --lang_pairs en_it en_es
+```
+
 This script reads per-agent output files (`sample_*_agent_*.txt`) and writes:
 
 - `report/contribution_analysis/step_states_raw.csv`

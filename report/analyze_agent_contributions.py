@@ -111,6 +111,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional model filter",
     )
     parser.add_argument(
+        "--lang_pairs",
+        nargs="+",
+        default=None,
+        help="Optional language pair filter (e.g., en_it en_es en-zht)",
+    )
+    parser.add_argument(
         "--require_complete_reports",
         action="store_true",
         help="Only include reports where total_samples == successful_samples and > 0",
@@ -201,11 +207,20 @@ def _matches_filters(
     datasets: Optional[set],
     workflows: Optional[set],
     models: Optional[set],
+    lang_pairs: Optional[set],
 ) -> bool:
     if datasets and metadata["dataset"] not in datasets:
         return False
     if models and metadata["model"] not in models:
         return False
+    if lang_pairs:
+        lang_pair_candidates = {
+            metadata["lang_pair"],
+            metadata["lang_pair"].replace("-", "_"),
+            metadata["lang_pair"].replace("_", "-"),
+        }
+        if lang_pair_candidates.isdisjoint(lang_pairs):
+            return False
     if workflows:
         workflow_candidates = {
             workflow_name,
@@ -1013,6 +1028,11 @@ def analyze(args: argparse.Namespace) -> int:
     datasets_filter = set(args.datasets) if args.datasets else None
     workflows_filter = set(args.workflows) if args.workflows else None
     models_filter = set(args.models) if args.models else None
+    lang_pairs_filter = (
+        set(args.lang_pairs) | {lp.replace("-", "_") for lp in args.lang_pairs} | {lp.replace("_", "-") for lp in args.lang_pairs}
+        if args.lang_pairs
+        else None
+    )
     diff_algorithms = [a.strip().lower() for a in args.diff_algorithms if str(a).strip()]
     invalid_algos = sorted(set(diff_algorithms) - SUPPORTED_GIT_DIFF_ALGORITHMS)
     if invalid_algos:
@@ -1066,6 +1086,7 @@ def analyze(args: argparse.Namespace) -> int:
                 datasets_filter,
                 workflows_filter,
                 models_filter,
+                lang_pairs_filter,
             ):
                 continue
 
