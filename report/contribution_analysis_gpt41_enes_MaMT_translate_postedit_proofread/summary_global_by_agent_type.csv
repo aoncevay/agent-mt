@@ -1,0 +1,3 @@
+curr_agent_type,observed_transitions,analyzable_transitions,changed_steps,unchanged_steps,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed,non_comparable_transitions,pct_unchanged
+postedit,17,17,17,0,329.8235294117647,292.0,0.042391992145595914,0,0.0
+proofread,17,17,17,0,270.29411764705884,198.0,0.03498689604025887,0,0.0
