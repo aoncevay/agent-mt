@@ -469,6 +469,52 @@ Auto-run after (optional) `run/run_all_per_model.sh`:
 RUN_CONTRIBUTION_ANALYSIS=true ./run/run_all_per_model.sh
 ```
 
+Flag unusually large per-sample changes (e.g., > 2x mean):
+
+```bash
+python report/flag_high_modification_samples.py \
+  --input_json report/contribution_analysis/workflow_agent_langpair_metrics.json \
+  --multiplier 2.0
+```
+
+Example scoped to one setting:
+
+```bash
+python report/flag_high_modification_samples.py \
+  --workflow MaMT_translate_postedit_proofread \
+  --model gpt-4-1 \
+  --lang_pair en_it \
+  --multiplier 2.0
+```
+
+Outputs:
+- `report/contribution_analysis/high_modification_flags.json`
+- `report/contribution_analysis/high_modification_flags.csv`
+
+Export a compact per-setting summary:
+
+```bash
+python report/export_simple_agent_changes.py
+```
+
+Example:
+
+```bash
+python report/export_simple_agent_changes.py \
+  --workflow MaMT_translate_postedit_proofread \
+  --model gpt-4-1 \
+  --lang_pair en_it
+```
+
+Output:
+- `report/contribution_analysis/simple_agent_changes.json`
+
+Notes:
+- `num_samples_in_language_pair` and `sample_order` are included.
+- `agent_char_changes` has one list per agent aligned to `sample_order`.
+- For first workflow step (`Agent 1`) values are often `null` because no previous translation state exists for comparison.
+- Use `--missing_value zero` if you prefer `0` instead of `null`.
+
 ## Configuration
 
 ### Temperature Setting
