@@ -1,2 +1,5 @@
 dataset,lang_pair,workflow,model,observed_transitions,analyzable_transitions,changed_steps,unchanged_steps,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed,non_comparable_transitions,pct_unchanged
+dolfin,en_it,IRB_refine,gpt-4-1,13,13,10,3,111.9,90.0,0.013766618779608225,0,23.076923076923077
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,104,104,13,91,813.3076923076923,667.0,0.08129105978528234,0,87.5
 dolfin,en_it,MaMT_translate_postedit_proofread,gpt-4-1,26,26,25,1,248.96,174.0,0.028697242497441103,0,3.8461538461538463
+dolfin,en_it,SbS_chat_step_by_step,gpt-4-1,39,26,24,2,85.83333333333333,72.5,0.00960120640648952,13,7.6923076923076925

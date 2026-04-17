@@ -712,13 +712,14 @@ class SourceLengthResolver:
 def build_workflow_agent_langpair_json(
     steps_df: pd.DataFrame,
     transitions_df: pd.DataFrame,
+    final_vs_first_df: pd.DataFrame,
     source_len_resolver: SourceLengthResolver,
 ) -> Dict[str, Any]:
     """
     Build nested JSON structure:
       workflow -> model (LLM) -> Agent N -> language_pair -> metrics
 
-    For each workflow/model/agent/language_pair, include:
+    For each workflow/model/agent-or-comparison/language_pair, include:
       - step_change_rate (0..1, based on comparable transitions)
       - avg_char_change (mean edit distance across comparable transitions, includes zeros)
       - char_changes (list of per-sample edit distances)
@@ -879,6 +880,125 @@ def build_workflow_agent_langpair_json(
 
                 model_dict[agent_label] = agent_entry
 
+            # Additional comparison: final output vs first output (non-adjacent).
+            if not final_vs_first_df.empty:
+                final_entry: Dict[str, Any] = {
+                    "step_name": "final_vs_first",
+                    "agent_type": "cross_step_comparison",
+                    "step_order": None,
+                    "output_index": None,
+                    "translation_mode": "direct_vs_direct",
+                    "language_pairs": {},
+                }
+                for lang_pair in wf_model_lang_pairs:
+                    subset = final_vs_first_df[
+                        (final_vs_first_df["workflow"] == workflow)
+                        & (final_vs_first_df["model"].astype(str) == model)
+                        & (final_vs_first_df["lang_pair"] == lang_pair)
+                        & (final_vs_first_df["is_comparable"] == True)
+                    ].copy()
+
+                    if not subset.empty:
+                        subset = subset.sort_values(["sample_idx", "sample_id"])
+                        edit_values = [int(v) for v in subset["edit_distance"].dropna().tolist()]
+                        changed_values = [v for v in edit_values if v > 0]
+                        comparable_samples = len(edit_values)
+                        changed_samples = len(changed_values)
+                        step_change_rate = (
+                            float(changed_samples) / float(comparable_samples)
+                            if comparable_samples > 0
+                            else None
+                        )
+                        avg_char_change = (
+                            float(np.mean(edit_values)) if comparable_samples > 0 else None
+                        )
+                        avg_char_change_when_changed = (
+                            float(np.mean(changed_values)) if changed_values else None
+                        )
+
+                        char_changes_by_sample: List[Dict[str, Any]] = []
+                        for _, row in subset.iterrows():
+                            if not pd.notna(row["edit_distance"]):
+                                continue
+                            diff_localization = row.get("diff_localization")
+                            if not isinstance(diff_localization, dict):
+                                diff_localization = None
+                            char_changes_by_sample.append(
+                                {
+                                    "dataset": str(row["dataset"]),
+                                    "lang_pair": str(row["lang_pair"]),
+                                    "sample_idx": int(row["sample_idx"]),
+                                    "sample_id": str(row["sample_id"]),
+                                    "char_change": int(row["edit_distance"]),
+                                    "prev_char_len": (
+                                        int(row["prev_translation_len_chars"])
+                                        if pd.notna(row["prev_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "curr_char_len": (
+                                        int(row["curr_translation_len_chars"])
+                                        if pd.notna(row["curr_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "sample_char_len": (
+                                        source_len_resolver.get_source_char_len(
+                                            dataset=str(row["dataset"]),
+                                            lang_pair=str(row["lang_pair"]),
+                                            sample_id=row["sample_id"],
+                                            sample_idx=row["sample_idx"],
+                                        )
+                                    ),
+                                    "char_len_delta": (
+                                        int(row["curr_translation_len_chars"]) - int(row["prev_translation_len_chars"])
+                                        if pd.notna(row["curr_translation_len_chars"]) and pd.notna(row["prev_translation_len_chars"])
+                                        else None
+                                    ),
+                                    "first_step_name": row.get("first_step_name"),
+                                    "first_step_order": (
+                                        int(row["first_step_order"])
+                                        if pd.notna(row.get("first_step_order"))
+                                        else None
+                                    ),
+                                    "final_step_name": row.get("final_step_name"),
+                                    "final_step_order": (
+                                        int(row["final_step_order"])
+                                        if pd.notna(row.get("final_step_order"))
+                                        else None
+                                    ),
+                                    "diff_localization": diff_localization,
+                                }
+                            )
+                    else:
+                        edit_values = []
+                        comparable_samples = 0
+                        changed_samples = 0
+                        step_change_rate = None
+                        avg_char_change = None
+                        avg_char_change_when_changed = None
+                        char_changes_by_sample = []
+
+                    first_steps = sorted(
+                        {str(v) for v in subset.get("first_step_name", pd.Series([], dtype=object)).dropna().tolist()}
+                    ) if not subset.empty else []
+                    final_steps = sorted(
+                        {str(v) for v in subset.get("final_step_name", pd.Series([], dtype=object)).dropna().tolist()}
+                    ) if not subset.empty else []
+
+                    final_entry["language_pairs"][lang_pair] = {
+                        "comparable_samples": comparable_samples,
+                        "changed_samples": changed_samples,
+                        "step_change_rate": step_change_rate,
+                        "avg_char_change": avg_char_change,
+                        "avg_char_change_when_changed": avg_char_change_when_changed,
+                        "char_changes": edit_values,
+                        "first_step_names": first_steps,
+                        "final_step_names": final_steps,
+                        "char_changes_by_sample": char_changes_by_sample,
+                    }
+
+                if final_entry["language_pairs"]:
+                    model_dict["final_vs_first"] = final_entry
+
             workflow_dict[str(model)] = model_dict
 
         result[str(workflow)] = workflow_dict
@@ -916,6 +1036,7 @@ def analyze(args: argparse.Namespace) -> int:
 
     step_rows: List[Dict[str, Any]] = []
     transition_rows: List[Dict[str, Any]] = []
+    final_vs_first_rows: List[Dict[str, Any]] = []
 
     outputs_dirs = [Path(p).resolve() for p in args.outputs_dirs]
     for outputs_dir in outputs_dirs:
@@ -1084,14 +1205,75 @@ def analyze(args: argparse.Namespace) -> int:
                         }
                     )
 
+                # Additional non-adjacent comparison: final translation-bearing output vs first.
+                translation_rows = [
+                    r for r in sample_step_rows
+                    if r.get("translation_state") is not None
+                ]
+                if len(translation_rows) >= 2:
+                    first_row = translation_rows[0]
+                    final_row = translation_rows[-1]
+                    first_state = first_row["translation_state"]
+                    final_state = final_row["translation_state"]
+                    is_comparable = first_state is not None and final_state is not None
+
+                    if is_comparable:
+                        edit_distance = char_edit_distance(first_state, final_state)
+                        normalized_edit_distance = float(edit_distance) / float(max(len(first_state), len(final_state), 1))
+                        diff_localization = compute_diff_localization(
+                            old_text=first_state,
+                            new_text=final_state,
+                            algorithms=diff_algorithms,
+                        )
+                        changed = edit_distance != 0
+                    else:
+                        edit_distance = None
+                        normalized_edit_distance = None
+                        diff_localization = None
+                        changed = None
+
+                    final_vs_first_rows.append(
+                        {
+                            "dataset": metadata["dataset"],
+                            "lang_pair": metadata["lang_pair"],
+                            "workflow": workflow_name,
+                            "workflow_dir": metadata["workflow_dir"],
+                            "workflow_acronym": metadata["workflow_acronym"],
+                            "model": metadata["model"],
+                            "report_file": str(report_path),
+                            "sample_idx": sample_idx,
+                            "sample_id": str(sample_id),
+                            "first_step_name": first_row["step_name"],
+                            "first_step_order": first_row["step_order"],
+                            "final_step_name": final_row["step_name"],
+                            "final_step_order": final_row["step_order"],
+                            "is_comparable": is_comparable,
+                            "changed": changed,
+                            "unchanged": (not changed) if changed is not None else None,
+                            "edit_distance": edit_distance,
+                            "normalized_edit_distance": normalized_edit_distance,
+                            "prev_translation_len_chars": (
+                                len(first_state) if first_state is not None else np.nan
+                            ),
+                            "curr_translation_len_chars": (
+                                len(final_state) if final_state is not None else np.nan
+                            ),
+                            "diff_localization": diff_localization,
+                        }
+                    )
+
     steps_df = pd.DataFrame(step_rows)
     transitions_df = pd.DataFrame(transition_rows)
+    final_vs_first_df = pd.DataFrame(final_vs_first_rows)
 
     step_file = output_dir / "step_states_raw.csv"
     transition_file = output_dir / "transitions_raw.csv"
+    final_vs_first_file = output_dir / "final_vs_first_raw.csv"
     steps_df.to_csv(step_file, index=False)
     transitions_export_df = transitions_df.drop(columns=["diff_localization"], errors="ignore")
     transitions_export_df.to_csv(transition_file, index=False)
+    final_vs_first_export_df = final_vs_first_df.drop(columns=["diff_localization"], errors="ignore")
+    final_vs_first_export_df.to_csv(final_vs_first_file, index=False)
 
     by_setting_cols = ["dataset", "lang_pair", "workflow", "model"]
     by_setting_agent_cols = by_setting_cols + ["curr_agent_type"]
@@ -1114,6 +1296,7 @@ def analyze(args: argparse.Namespace) -> int:
     nested_metrics = build_workflow_agent_langpair_json(
         steps_df=steps_df,
         transitions_df=transitions_df,
+        final_vs_first_df=final_vs_first_df,
         source_len_resolver=source_len_resolver,
     )
     nested_json_file = output_dir / "workflow_agent_langpair_metrics.json"
@@ -1124,14 +1307,24 @@ def analyze(args: argparse.Namespace) -> int:
 
     stats["step_rows"] = int(len(steps_df))
     stats["transition_rows"] = int(len(transitions_df))
+    stats["final_vs_first_rows"] = int(len(final_vs_first_df))
     stats["comparable_transition_rows"] = int(
         transitions_df["is_comparable"].sum() if not transitions_df.empty else 0
+    )
+    stats["comparable_final_vs_first_rows"] = int(
+        final_vs_first_df["is_comparable"].sum() if not final_vs_first_df.empty else 0
     )
     stats["changed_transition_rows"] = int(
         transitions_df["changed"].fillna(False).sum() if not transitions_df.empty else 0
     )
+    stats["changed_final_vs_first_rows"] = int(
+        final_vs_first_df["changed"].fillna(False).sum() if not final_vs_first_df.empty else 0
+    )
     stats["unchanged_transition_rows"] = int(
         transitions_df["unchanged"].fillna(False).sum() if not transitions_df.empty else 0
+    )
+    stats["unchanged_final_vs_first_rows"] = int(
+        final_vs_first_df["unchanged"].fillna(False).sum() if not final_vs_first_df.empty else 0
     )
 
     metadata_file = output_dir / "analysis_metadata.json"
@@ -1150,11 +1343,16 @@ def analyze(args: argparse.Namespace) -> int:
     print(f"Samples missing outputs: {stats['samples_missing_outputs']}")
     print(f"Step rows: {stats['step_rows']}")
     print(f"Transition rows: {stats['transition_rows']}")
+    print(f"Final-vs-first rows: {stats['final_vs_first_rows']}")
     print(f"Comparable transitions: {stats['comparable_transition_rows']}")
+    print(f"Comparable final-vs-first: {stats['comparable_final_vs_first_rows']}")
     print(f"Changed transitions: {stats['changed_transition_rows']}")
+    print(f"Changed final-vs-first: {stats['changed_final_vs_first_rows']}")
     print(f"Unchanged transitions: {stats['unchanged_transition_rows']}")
+    print(f"Unchanged final-vs-first: {stats['unchanged_final_vs_first_rows']}")
     print(f"\nWrote raw step states to: {step_file}")
     print(f"Wrote raw transitions to: {transition_file}")
+    print(f"Wrote raw final-vs-first to: {final_vs_first_file}")
     print(f"Wrote nested workflow-step-language metrics JSON to: {nested_json_file}")
     print(f"Wrote summaries to: {output_dir}")
 

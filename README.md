@@ -428,6 +428,7 @@ This script reads per-agent output files (`sample_*_agent_*.txt`) and writes:
 
 - `report/contribution_analysis/step_states_raw.csv`
 - `report/contribution_analysis/transitions_raw.csv`
+- `report/contribution_analysis/final_vs_first_raw.csv`
 - `report/contribution_analysis/summary_by_setting.csv`
 - `report/contribution_analysis/summary_by_agent_type.csv`
 - `report/contribution_analysis/summary_by_step.csv`
@@ -447,6 +448,10 @@ Key fields:
   - each algorithm block also includes:
     - `hunk_internal_levenshtein_total`
     - `hunk_internal_levenshtein_per_hunk`
+- Each workflow/model now also includes a `final_vs_first` block:
+  - compares final translation-bearing output vs first translation-bearing output
+  - includes the same metrics fields as regular agent blocks
+  - plus `first_step_name(s)` and `final_step_name(s)`
 
 Generate plots (optional):
 

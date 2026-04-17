@@ -1,3 +1,15 @@
 dataset,lang_pair,workflow,model,curr_step_name,observed_transitions,analyzable_transitions,changed_steps,unchanged_steps,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed,non_comparable_transitions,pct_unchanged
+dolfin,en_it,IRB_refine,gpt-4-1,refinement,13,13,10,3,111.9,90.0,0.013766618779608225,0,23.076923076923077
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,accuracy_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,audience_appropriateness_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,design_and_markup_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,linguistic_conventions_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,locale_conventions_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,refinement,13,13,13,0,813.3076923076923,667.0,0.08129105978528234,0,0.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,style_eval,13,13,0,13,,,,0,100.0
+dolfin,en_it,MAATS_multi_agents,gpt-4-1,terminology_eval,13,13,0,13,,,,0,100.0
 dolfin,en_it,MaMT_translate_postedit_proofread,gpt-4-1,postedit,13,13,12,1,303.3333333333333,283.0,0.035459149176362205,0,7.6923076923076925
 dolfin,en_it,MaMT_translate_postedit_proofread,gpt-4-1,proofread,13,13,13,0,198.76923076923077,113.0,0.022455482486129323,0,0.0
+dolfin,en_it,SbS_chat_step_by_step,gpt-4-1,draft,13,0,0,0,,,,13,
+dolfin,en_it,SbS_chat_step_by_step,gpt-4-1,proofread,13,13,11,2,41.27272727272727,17.0,0.004475523222279238,0,15.384615384615385
+dolfin,en_it,SbS_chat_step_by_step,gpt-4-1,refinement,13,13,13,0,123.53846153846153,113.0,0.013938322946975142,0,0.0
