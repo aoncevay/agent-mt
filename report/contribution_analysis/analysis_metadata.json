@@ -1,0 +1,23 @@
+{
+  "edit_distance_impl": "rapidfuzz",
+  "diff_algorithms": [
+    "myers",
+    "patience",
+    "histogram"
+  ],
+  "reports_discovered": 4,
+  "reports_processed": 4,
+  "reports_skipped_incomplete": 0,
+  "samples_seen": 52,
+  "samples_processed": 52,
+  "samples_missing_outputs": 0,
+  "step_rows": 234,
+  "transition_rows": 182,
+  "final_vs_first_rows": 52,
+  "comparable_transition_rows": 169,
+  "comparable_final_vs_first_rows": 52,
+  "changed_transition_rows": 72,
+  "changed_final_vs_first_rows": 49,
+  "unchanged_transition_rows": 97,
+  "unchanged_final_vs_first_rows": 3
+}

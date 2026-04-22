@@ -26,6 +26,14 @@ except ImportError:
     CDAO_AVAILABLE = False
     cdao = None
 
+# Try to import OpenAI client (optional, for standard OpenAI API access)
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    OpenAI = None
+
 try:
     from .utils import render_translation_prompt
     from .vars import language_id2name, model_name2openai_id
@@ -175,6 +183,120 @@ class CDAOResponse:
         self.response_metadata = response_metadata
 
 
+class OpenAIResponse:
+    """
+    Response object that mimics ChatBedrock response interface for OpenAI.
+    """
+    
+    def __init__(self, content: str, response_metadata: Dict[str, Any]):
+        self.content = content
+        self.response_metadata = response_metadata
+
+
+class ChatOpenAICompat:
+    """
+    Wrapper class for the standard OpenAI client that mimics ChatBedrock interface.
+    """
+    
+    def __init__(
+        self,
+        model_id: str,
+        temperature: float = 0.0,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        organization: Optional[str] = None
+    ):
+        if not OPENAI_AVAILABLE:
+            raise ImportError(
+                "openai library is not available. "
+                "Install it with: pip install openai"
+            )
+        
+        self.model_id = model_id
+        self.temperature = temperature
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            organization=organization
+        )
+        self._last_response_metadata = {}
+    
+    def invoke(self, messages: List[BaseMessage]) -> OpenAIResponse:
+        """
+        Invoke the OpenAI model with messages.
+        
+        Args:
+            messages: List of LangChain messages (HumanMessage, AIMessage, etc.)
+        
+        Returns:
+            OpenAIResponse object with .content and .response_metadata
+        """
+        openai_messages = []
+        for msg in messages:
+            if hasattr(msg, 'content'):
+                content = msg.content
+            else:
+                content = str(msg)
+            
+            if not content or not str(content).strip():
+                continue
+            
+            if isinstance(msg, HumanMessage):
+                openai_messages.append({"role": "user", "content": str(content)})
+            elif isinstance(msg, AIMessage):
+                openai_messages.append({"role": "assistant", "content": str(content)})
+            else:
+                openai_messages.append({"role": "user", "content": str(content)})
+        
+        if not openai_messages:
+            raise ValueError("No messages provided to ChatOpenAICompat.invoke()")
+        
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model_id,
+                messages=openai_messages,
+                temperature=self.temperature
+            )
+        except Exception as e:
+            error_msg = str(e)
+            raise RuntimeError(
+                f"OpenAI chat completion failed for model {self.model_id}: {error_msg}"
+            ) from e
+        
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError(
+                f"API returned None content for model {self.model_id}. "
+                "This may indicate the model failed to generate a response. "
+                "Consider retrying the request."
+            )
+        
+        # Token usage (if provided)
+        usage = getattr(response, "usage", None)
+        if usage:
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        else:
+            # Fallback estimation if usage is missing
+            total_chars = sum(len(msg.get("content", "")) for msg in openai_messages)
+            prompt_tokens = total_chars // 4
+            completion_tokens = len(content) // 4
+        
+        self._last_response_metadata = {
+            'token_usage': {
+                'prompt_tokens': prompt_tokens,
+                'completion_tokens': completion_tokens,
+                'total_tokens': prompt_tokens + completion_tokens
+            }
+        }
+        
+        return OpenAIResponse(content, self._last_response_metadata)
+    
+    @property
+    def response_metadata(self):
+        return self._last_response_metadata
+
+
 def create_llm(
     model_id: str, 
     region: Optional[str] = None, 
@@ -216,18 +338,33 @@ def create_llm(
 def create_openai_llm(
     model_id: str,
     temperature: float = 0.0
-) -> ChatCDAO:
+) -> Union[ChatCDAO, ChatOpenAICompat]:
     """
-    Create an OpenAI LLM instance via cdao with configurable temperature.
+    Create an OpenAI LLM instance via cdao (internal) or the standard OpenAI SDK.
     
     Args:
         model_id: OpenAI model ID (e.g., "gpt-4.1-mini-2025-04-14")
         temperature: Sampling temperature (default: 0.0 for reproducibility)
     
     Returns:
-        ChatCDAO instance
+        ChatCDAO or ChatOpenAICompat instance
     """
-    return ChatCDAO(model_id, temperature)
+    if CDAO_AVAILABLE:
+        return ChatCDAO(model_id, temperature)
+    
+    if not OPENAI_AVAILABLE:
+        raise ImportError(
+            "Neither cdao nor openai libraries are available. "
+            "Install openai with: pip install openai"
+        )
+    
+    return ChatOpenAICompat(
+        model_id=model_id,
+        temperature=temperature,
+        api_key=os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL"),
+        organization=os.getenv("OPENAI_ORG")
+    )
 
 
 def create_bedrock_llm(
@@ -434,4 +571,3 @@ def translate_text(
     if last_exception:
         raise RuntimeError("Translation failed after all retries") from last_exception
     raise RuntimeError("Translation failed for unknown reason")
-

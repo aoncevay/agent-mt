@@ -1,0 +1,2 @@
+observed_transitions,analyzable_transitions,non_comparable_transitions,changed_steps,unchanged_steps,pct_unchanged,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed
+34,34,0,34,0,0.0,300.05882352941177,240.0,0.03868944409292739

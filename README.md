@@ -416,6 +416,121 @@ Each experiment computes:
 
 Metrics are computed per sample and aggregated in the report summary.
 
+## Agent Contribution Analysis
+
+To quantify when intermediate agents meaningfully change the translation, run:
+
+```bash
+python report/analyze_agent_contributions.py --outputs_dirs outputs
+```
+
+Optional filters are supported:
+
+```bash
+python report/analyze_agent_contributions.py \
+  --outputs_dirs outputs \
+  --datasets dolfin \
+  --workflows MaMT_translate_postedit_proofread \
+  --models gpt-4-1 \
+  --lang_pairs en_it en_es
+```
+
+This script reads per-agent output files (`sample_*_agent_*.txt`) and writes:
+
+- `report/contribution_analysis/step_states_raw.csv`
+- `report/contribution_analysis/transitions_raw.csv`
+- `report/contribution_analysis/final_vs_first_raw.csv`
+- `report/contribution_analysis/summary_by_setting.csv`
+- `report/contribution_analysis/summary_by_agent_type.csv`
+- `report/contribution_analysis/summary_by_step.csv`
+- `report/contribution_analysis/summary_global_by_agent_type.csv`
+- `report/contribution_analysis/summary_global_overall.csv`
+
+Key fields:
+- `pct_unchanged`: percentage of comparable workflow transitions with no translation change
+- `avg_edit_distance_when_changed`: average character-level edit distance for changed transitions
+- In `workflow_agent_langpair_metrics.json`, each sample record now includes:
+  - `prev_char_len`, `curr_char_len`, `char_len_delta`
+  - `sample_char_len` (source/original input length)
+  - `diff_localization` with Git-style hunk localization for:
+    - `myers`
+    - `patience`
+    - `histogram`
+  - each algorithm block also includes:
+    - `hunk_internal_levenshtein_total`
+    - `hunk_internal_levenshtein_per_hunk`
+- Each workflow/model now also includes a `final_vs_first` block:
+  - compares final translation-bearing output vs first translation-bearing output
+  - includes the same metrics fields as regular agent blocks
+  - plus `first_step_name(s)` and `final_step_name(s)`
+
+Generate plots (optional):
+
+```bash
+python report/plot_agent_contributions.py --analysis_dir report/contribution_analysis
+```
+
+This now includes:
+- Global bars by agent type:
+  - `agent_type_pct_unchanged.png`
+  - `agent_type_avg_edit_distance_when_changed.png`
+- One figure per workflow with bars per step/agent:
+  - `workflow_<workflow_name>_step_contributions.png`
+- Plot-ready per-workflow-step summary:
+  - `summary_by_workflow_step_for_plots.csv`
+
+Auto-run after (optional) `run/run_all_per_model.sh`:
+
+```bash
+RUN_CONTRIBUTION_ANALYSIS=true ./run/run_all_per_model.sh
+```
+
+Flag unusually large per-sample changes (e.g., > 2x mean):
+
+```bash
+python report/flag_high_modification_samples.py \
+  --input_json report/contribution_analysis/workflow_agent_langpair_metrics.json \
+  --multiplier 2.0
+```
+
+Example scoped to one setting:
+
+```bash
+python report/flag_high_modification_samples.py \
+  --workflow MaMT_translate_postedit_proofread \
+  --model gpt-4-1 \
+  --lang_pair en_it \
+  --multiplier 2.0
+```
+
+Outputs:
+- `report/contribution_analysis/high_modification_flags.json`
+- `report/contribution_analysis/high_modification_flags.csv`
+
+Export a compact per-setting summary:
+
+```bash
+python report/export_simple_agent_changes.py
+```
+
+Example:
+
+```bash
+python report/export_simple_agent_changes.py \
+  --workflow MaMT_translate_postedit_proofread \
+  --model gpt-4-1 \
+  --lang_pair en_it
+```
+
+Output:
+- `report/contribution_analysis/simple_agent_changes.json`
+
+Notes:
+- `num_samples_in_language_pair` and `sample_order` are included.
+- `agent_char_changes` has one list per agent aligned to `sample_order`.
+- For first workflow step (`Agent 1`) values are often `null` because no previous translation state exists for comparison.
+- Use `--missing_value zero` if you prefer `0` instead of `null`.
+
 ## Configuration
 
 ### Temperature Setting
@@ -472,4 +587,3 @@ When adding new workflows or features:
 2. Add error handling and token counting
 3. Update this README
 4. Test with `run_samples_per_model.sh` first or create a specific script
-

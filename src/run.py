@@ -1154,14 +1154,28 @@ def main():
             model_id = model_name2openai_id[args.model]
             model_name = args.model
             model_type = "openai"
-            # Check if cdao is available
+            # Check if cdao or openai SDK is available
             try:
                 import cdao  # noqa: F401
+                cdao_available = True
             except ImportError:
-                print(f"Error: OpenAI model '{args.model}' requires 'cdao' library.")
-                print(f"  This library is only available in internal environments.")
-                print(f"  Please use a Bedrock model instead, or ensure cdao is installed.")
-                return 1
+                cdao_available = False
+            
+            if not cdao_available:
+                try:
+                    from openai import OpenAI as _OpenAI  # noqa: F401
+                    openai_available = True
+                except ImportError:
+                    openai_available = False
+                
+                if not openai_available:
+                    print(f"Error: OpenAI model '{args.model}' requires either 'cdao' or 'openai' library.")
+                    print(f"  Install the standard OpenAI SDK with: pip install openai")
+                    return 1
+                
+                # Warn if API key is missing (OpenAI SDK uses env var)
+                if not os.getenv("OPENAI_API_KEY"):
+                    print(f"Warning: OPENAI_API_KEY is not set. OpenAI API calls may fail.")
         # Check if it's a Bedrock ARN model
         elif args.model in model_name2bedrock_arn:
             model_id = model_name2bedrock_arn[args.model]  # Use ARN as model_id
@@ -1604,4 +1618,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

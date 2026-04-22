@@ -1,0 +1,118 @@
+{
+  "settings_count": 1,
+  "missing_value_mode": "null",
+  "blocks": [
+    {
+      "workflow": "MaMT_translate_postedit_proofread",
+      "model": "gpt-4-1",
+      "language_pair": "en_it",
+      "agents_in_workflow": [
+        "Agent 1",
+        "Agent 2",
+        "Agent 3"
+      ],
+      "num_samples_in_language_pair": 13,
+      "sample_order": [
+        {
+          "sample_idx": 0,
+          "sample_id": "561"
+        },
+        {
+          "sample_idx": 1,
+          "sample_id": "1449"
+        },
+        {
+          "sample_idx": 2,
+          "sample_id": "1504"
+        },
+        {
+          "sample_idx": 3,
+          "sample_id": "758"
+        },
+        {
+          "sample_idx": 4,
+          "sample_id": "155"
+        },
+        {
+          "sample_idx": 5,
+          "sample_id": "109"
+        },
+        {
+          "sample_idx": 6,
+          "sample_id": "759"
+        },
+        {
+          "sample_idx": 7,
+          "sample_id": "424"
+        },
+        {
+          "sample_idx": 8,
+          "sample_id": "509"
+        },
+        {
+          "sample_idx": 9,
+          "sample_id": "810"
+        },
+        {
+          "sample_idx": 10,
+          "sample_id": "444"
+        },
+        {
+          "sample_idx": 11,
+          "sample_id": "760"
+        },
+        {
+          "sample_idx": 12,
+          "sample_id": "1519"
+        }
+      ],
+      "agent_char_changes": {
+        "Agent 1": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "Agent 2": [
+          61,
+          56,
+          174,
+          0,
+          677,
+          230,
+          497,
+          94,
+          341,
+          668,
+          348,
+          336,
+          158
+        ],
+        "Agent 3": [
+          88,
+          86,
+          131,
+          113,
+          528,
+          67,
+          260,
+          66,
+          91,
+          252,
+          252,
+          552,
+          98
+        ]
+      }
+    }
+  ]
+}

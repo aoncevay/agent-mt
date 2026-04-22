@@ -1,0 +1,6 @@
+curr_agent_type,observed_transitions,analyzable_transitions,changed_steps,unchanged_steps,avg_edit_distance_when_changed,median_edit_distance_when_changed,avg_normalized_edit_when_changed,non_comparable_transitions,pct_unchanged
+draft,13,0,0,0,,,,13,
+mqm_evaluator,91,91,0,91,,,,0,100.0
+postedit,13,13,12,1,303.3333333333333,283.0,0.035459149176362205,0,7.6923076923076925
+proofread,26,26,24,2,126.58333333333333,81.5,0.014214667823531368,0,7.6923076923076925
+refine,39,39,36,3,369.3888888888889,175.0,0.03821244898098415,0,7.6923076923076925
